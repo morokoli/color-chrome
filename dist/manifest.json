@@ -1,0 +1,23 @@
+{
+  "name": "Color pick into sheet",
+  "description": "Capture colors using a color-picker from any webpage and seamlessly save them to your Google Sheets for easy organization and access",
+  "version": "1.1.1",
+  "manifest_version": 3,
+  "permissions": ["cookies", "tabs"],
+  "host_permissions": [
+    "http://localhost:3000/",
+    "https://api.colorpickintosheet.com/"
+  ],
+  "cross_origin_opener_policy": {
+    "value": "unsafe-none"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Color pick into sheet"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
