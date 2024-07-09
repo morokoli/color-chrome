@@ -62,7 +62,7 @@ export async function eraseAllCookies() {
     chrome.cookies
       .remove({
         name: config.cookie.cookieName,
-        url: import.meta.env.VITE_API_URL_PROD,
+        url: import.meta.env.VITE_API_URL,
       })
       .then(() => resolve())
   })

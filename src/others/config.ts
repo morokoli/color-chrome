@@ -3,7 +3,7 @@ export const config = {
     cookieName: "auth.user",
   },
   api: {
-    baseURL: import.meta.env.VITE_API_URL_PROD,
+    baseURL: import.meta.env.VITE_API_URL,
     timeout: 10_000,
     endpoints: {
       auth: "/auth",

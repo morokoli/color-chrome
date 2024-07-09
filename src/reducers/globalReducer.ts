@@ -224,6 +224,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "SET_SUBMIT_MODE":
       return produce(state, (draft) => {
+        console.log(state, draft)
         if (action.payload.add) {
           draft.submitMode = "add"
           draft.updateRowIndex = -1

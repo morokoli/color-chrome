@@ -1,12 +1,14 @@
 {
-  "name": "Color pick into sheet",
-  "description": "Capture colors using a color-picker from any webpage and seamlessly save them to your Google Sheets for easy organization and access",
-  "version": "1.1.1",
+  "name": "Color with You",
+  "description": "Capture colors using a color-picker from anywhere on your computer and seamlessly save them to your Google Sheets for easy access.",
+  "version": "1.1.2",
   "manifest_version": 3,
   "permissions": ["cookies", "tabs"],
   "host_permissions": [
     "http://localhost:3000/",
-    "https://api.colorpickintosheet.com/"
+    "http://localhost:5000/",
+    "https://api.colorpickintosheet.com/",
+    "https://api.colorwithyou.com/"
   ],
   "cross_origin_opener_policy": {
     "value": "unsafe-none"
