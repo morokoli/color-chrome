@@ -13,13 +13,32 @@ export async function getAuthCookie(): Promise<AuthUser | null> {
   }
 
   const cookie = await chrome.cookies.get({
-    name: config.cookie.cookieName,
+    name: config.cookie.cookieNameAuth,
     url: config.api.baseURL + "/",
   })
   if (!cookie) return null
 
   /** cookie value us URL encoded */
   return JSON.parse(decodeURIComponent(cookie.value)) as AuthUser
+}
+
+export async function getSheetUrlCookie(): Promise<string | null> {
+  const cookie = await chrome.cookies.get({
+    name: config.cookie.cookieNameSheetUrl,
+    url: config.api.baseURL + "/",
+  })
+  if (!cookie) return null;
+
+  return cookie.value;
+}
+
+export function setCookie(cookieName: string, cookieValue: string) {
+  chrome.cookies.set({
+      name: cookieName,
+      value: cookieValue,
+      url: config.api.baseURL + "/",
+      expirationDate: new Date().getTime() / 1000 + (30 * 24 * 60 * 60) // 30 days in seconds
+  });
 }
 
 function parseDocumentCookie() {
@@ -34,11 +53,11 @@ function parseDocumentCookie() {
       {} as Record<string, string>,
     )
 
-  if (!parseCookies[config.cookie.cookieName]) {
+  if (!parseCookies[config.cookie.cookieNameAuth]) {
     return null
   }
 
-  return JSON.parse(parseCookies[config.cookie.cookieName]) as AuthUser
+  return JSON.parse(parseCookies[config.cookie.cookieNameAuth]) as AuthUser
 }
 
 /**
@@ -61,7 +80,7 @@ export async function eraseAllCookies() {
 
     chrome.cookies
       .remove({
-        name: config.cookie.cookieName,
+        name: config.cookie.cookieNameAuth,
         url: import.meta.env.VITE_API_URL,
       })
       .then(() => resolve())

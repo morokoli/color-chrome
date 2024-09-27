@@ -1,6 +1,6 @@
 import { useReducer, useEffect } from "react"
 import { initGlobalState, globalReducer } from "@/reducers/globalReducer"
-import { ExtentionContainer } from "@/components/ExtensionContainer"
+import { ExtensionContainer } from "@/components/ExtensionContainer"
 import { modeTabs } from "@/others/static"
 import { Tabs } from "@/components/Tabs"
 import { ModeTab } from "@/types/general"
@@ -20,20 +20,26 @@ export function App() {
   const [toastState, toastDispatch] = useReducer(toastReducer, initToastState)
 
   useEffect(() => {
-    /** check if user is logged in  */
-    getAuthCookie().then((user) => {
-      dispatch({ type: "SET_USER", payload: user })
-
-      /** refresh auth tokens in background */
-      if (user && user.refreshToken) {
-        const now = new Date().getTime()
-        if (now > user.expiry) {
-          Auth.refreshAuthToken(user.refreshToken, (data) => {
-            dispatch({ type: "UPDATE_ACCESS_TOKEN", payload: data })
-          })
+    /** check if user is logged in */
+    const intervalId = setInterval(() => {
+      getAuthCookie().then((user) => {
+        dispatch({ type: "SET_USER", payload: user })
+        
+        if (user) {
+          clearInterval(intervalId);
+          
+          /** refresh auth tokens in background */
+          if (user.refreshToken) {
+            const now = new Date().getTime()
+            if (now > user.expiry) {
+              Auth.refreshAuthToken(user.refreshToken, (data) => {
+                dispatch({ type: "UPDATE_ACCESS_TOKEN", payload: data })
+              })
+            }
+          }
         }
-      }
-    })
+      })
+    }, 2000);
 
     /** if state was in update color mode, revert it back to add color mode */
     dispatch({ type: "SET_SUBMIT_MODE", payload: { add: true } })
@@ -45,7 +51,7 @@ export function App() {
       <ToastContext.Provider
         value={{ state: toastState, dispatch: toastDispatch }}
       >
-        <ExtentionContainer>
+        <ExtensionContainer>
           <Show if={state.user === null}>
             <GoogleSignInScreen />
           </Show>
@@ -84,7 +90,7 @@ export function App() {
               </Show>
             </div>
           </Show>
-        </ExtentionContainer>
+        </ExtensionContainer>
       </ToastContext.Provider>
     </GlobalStateContext.Provider>
   )

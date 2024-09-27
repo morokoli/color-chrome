@@ -1,6 +1,7 @@
 export const config = {
   cookie: {
-    cookieName: "auth.user",
+    cookieNameAuth: "auth.user",
+    cookieNameSheetUrl: "sheet.url",
   },
   api: {
     baseURL: import.meta.env.VITE_API_URL,

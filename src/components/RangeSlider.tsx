@@ -6,16 +6,16 @@ type Props = {
 }
 
 export const RangeSlider: FC<Props> = (props) => {
-  const [rangeNumber, setRangeNumber] = useState<string>("");
+  const [rangeNumber, setRangeNumber] = useState<number>(0);
   
   useEffect(() => {
-      setRangeNumber(props.rankingRange)
-  },[])
+    setRangeNumber(+props.rankingRange)
+  }, [])
 
   const onChangeRangeSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     props.setRankingRange(value);
-    setRangeNumber(value);
+    setRangeNumber(+value);
   }
 
 
@@ -31,6 +31,7 @@ export const RangeSlider: FC<Props> = (props) => {
           fill="black"
           value={rangeNumber}
           onChange={onChangeRangeSlider}
+          /* eslint-disable  @typescript-eslint/no-explicit-any */
           {...({ orient: "vertical" } as any)}  
         />
         

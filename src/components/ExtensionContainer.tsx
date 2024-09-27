@@ -6,7 +6,7 @@ export type Props = {
   children: JSX.Element | JSX.Element[]
 }
 
-export const ExtentionContainer: FC<Props> = (props) => {
+export const ExtensionContainer: FC<Props> = (props) => {
   const toast = useToast()
 
   return (
