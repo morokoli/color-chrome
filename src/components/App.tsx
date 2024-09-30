@@ -23,9 +23,8 @@ export function App() {
     /** check if user is logged in */
     const intervalId = setInterval(() => {
       getAuthCookie().then((user) => {
-        dispatch({ type: "SET_USER", payload: user })
-        
         if (user) {
+          dispatch({ type: "SET_USER", payload: user })
           clearInterval(intervalId);
           
           /** refresh auth tokens in background */

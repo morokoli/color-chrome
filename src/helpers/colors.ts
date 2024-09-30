@@ -14,7 +14,7 @@ export const colors = {
     return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
   },
 
-  hextToHSL(hex: string): string {
+  hexToHSL(hex: string): string {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
     if (!result) return "-"
 

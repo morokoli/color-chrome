@@ -53,9 +53,9 @@ export const ColorCodeButtons: FC<Props> = (props) => {
           "bg-emerald-200": selected === "HSL",
         })}
         title="Copy HSL to clipboard"
-        onClick={() => copyToClipboard(colors.hextToHSL(props.color), "HSL")}
+        onClick={() => copyToClipboard(colors.hexToHSL(props.color), "HSL")}
       >
-        {selected === "HSL" ? "Copied" : colors.hextToHSL(props.color)}
+        {selected === "HSL" ? "Copied" : colors.hexToHSL(props.color)}
       </button>
     </div>
   )

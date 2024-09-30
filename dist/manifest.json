@@ -1,7 +1,7 @@
 {
   "name": "Color with You",
   "description": "Capture colors using a color-picker from anywhere on your computer and seamlessly save them to your Google Sheets for easy access.",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "manifest_version": 3,
   "permissions": ["cookies", "tabs"],
   "host_permissions": [

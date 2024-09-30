@@ -1,8 +1,8 @@
 import { FC, useState, useEffect } from "react";
 
 type Props = {
-  rankingRange: string,
-  setRankingRange: (value: string) => void
+  rankingRange: number | string,
+  setRankingRange: (value: number) => void
 }
 
 export const RangeSlider: FC<Props> = (props) => {
@@ -10,11 +10,11 @@ export const RangeSlider: FC<Props> = (props) => {
   
   useEffect(() => {
     setRangeNumber(+props.rankingRange)
-  }, [])
+  }, [props.rankingRange])
 
   const onChangeRangeSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    props.setRankingRange(value);
+    props.setRankingRange(+value);
     setRangeNumber(+value);
   }
 

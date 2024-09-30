@@ -1,16 +1,17 @@
 import { produce } from "immer"
-import { GlobalState, Column, DriveFile, ModeTab, Sheet } from "@/types/general"
+import { GlobalState, FileDataObj, Column, DriveFile, ModeTab, Sheet } from "@/types/general"
 import { Storage } from "@/helpers/storage"
 
 const storedState = Storage.fetchState()
 const initState: GlobalState = {
   user: null,
-  color: "#ffffff",
+  color: "",
   selectedTab: "ADD",
   files: [],
   selectedFile: null,
   submitMode: "add",
   updateRowIndex: -1,
+  parsedData: [],
   colorHistory: {
     max: 16,
     recent: [],
@@ -26,6 +27,9 @@ export type Action =
       payload: { accessToken: string; expiry: number }
     }
   | { type: "SET_COLOR"; payload: string }
+  | { type: "SET_PARSED_DATA"; payload: FileDataObj[] }
+  | { type: "SET_COMMENT_PARSED_DATA"; payload: {value: string, currentColorId: number} }
+  | { type: "SET_RANKING_RANGE_PARSED_DATA"; payload: {value: number, currentColorId: number} }
   | { type: "SWITCH_TAB"; payload: ModeTab }
   | {
       type: "ADD_DRIVE_FILE"
@@ -39,11 +43,11 @@ export type Action =
   | { type: "REMOVE_SELECTED_FILE" }
   | { type: "CHANGE_SELECTED_FILE"; payload: string }
   | { type: "SET_COMMENT"; payload: string }
-  | { type: "SET_RankingRange"; payload: string}
+  | { type: "SET_RANKING_RANGE"; payload: string}
   | { type: "ADD_COLUMN"; payload: { columnName: string } }
   | { type: "REMOVE_COLUMN"; payload: { columnId: string } }
   | { type: "SET_COLUMN_VALUE"; payload: { columnId: string; value: string } }
-  | { type: "ADD_COLOR_HISTORY"; payload: string }
+  // | { type: "ADD_COLOR_HISTORY"; payload: any[] }
   | { type: "CLEAR_COLOR_HISTORY" }
   | {
       type: "SET_SUBMIT_MODE"
@@ -52,7 +56,7 @@ export type Action =
         | {
             add: false
             rowIndex: number
-            row: {ranking: string,  comment: string; additionalColumns: Omit<Column, "id">[] }
+            row: {ranking: string | number,  comment: string; additionalColumns: Omit<Column, "id">[] }
           }
     }
   | { type: "RESET_ADDITIONAL_FIELDS" }
@@ -76,6 +80,27 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "SET_COLOR":
       return produce(state, (draft) => {
         draft.color = action.payload
+      })
+
+    case "SET_PARSED_DATA":
+      return produce(state, (draft) => {
+        const colorsArr = action.payload?.map(color => color.HEX);
+        const colorArrMax = colorsArr.slice(0, state.colorHistory.max);
+
+        draft.parsedData = action.payload
+        draft.colorHistory.recent = colorArrMax;
+      })
+
+    case "SET_COMMENT_PARSED_DATA":
+      return produce(state, (draft) => {
+        const {value, currentColorId} = action.payload;
+        draft.parsedData[currentColorId].Comments = value;
+      })
+
+    case "SET_RANKING_RANGE_PARSED_DATA":
+      return produce(state, (draft) => {
+      const {value, currentColorId} = action.payload;
+      draft.parsedData[currentColorId].Ranking = value;
       })
 
     case "SWITCH_TAB":
@@ -141,7 +166,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         if (!draft.selectedFile) return
         draft.selectedFile.comment = action.payload
       })
-    case "SET_RankingRange":
+    case "SET_RANKING_RANGE":
         return produce(state, (draft) => {
           if (!draft.selectedFile) return
           draft.selectedFile.ranking = action.payload
@@ -204,19 +229,6 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
           })
       })
 
-    case "ADD_COLOR_HISTORY":
-      return produce(state, (draft) => {
-        if (!draft.colorHistory.recent.includes(action.payload)) {
-          draft.colorHistory.recent = [
-            action.payload,
-            ...[...draft.colorHistory.recent].splice(
-              0,
-              state.colorHistory.max - 1,
-            ),
-          ]
-        }
-      })
-
     case "CLEAR_COLOR_HISTORY":
       return produce(state, (draft) => {
         draft.colorHistory.recent = []
@@ -224,7 +236,6 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "SET_SUBMIT_MODE":
       return produce(state, (draft) => {
-        console.log(state, draft)
         if (action.payload.add) {
           draft.submitMode = "add"
           draft.updateRowIndex = -1

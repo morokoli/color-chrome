@@ -85,7 +85,7 @@ export type AddColorRequest = {
     hex: string
     hsl: string
     rgb: string
-    ranking?: string | undefined
+    ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]
   }
@@ -107,7 +107,7 @@ export type UpdateRowRequest = {
     hex: string
     hsl: string
     rgb: string
-    ranking?: string | undefined
+    ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]
   }

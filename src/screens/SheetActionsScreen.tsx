@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { useGlobalState } from "@/hooks/useGlobalState"
 import { ColorPicker } from "@/components/ColorPicker"
 import { SelectFile } from "@/components/SelectFile"
@@ -22,13 +23,33 @@ import {
   GetAdditionalColumnsRequest,
   GetAdditionalColumnsResponse,
 } from "@/types/api"
-import { useEffect } from "react"
+import { FileDataObj } from '@/types/general'
 import { getAuthCookie } from "@/helpers/cookie"
 import { Auth } from "@/helpers/auth"
+import PublicGoogleSheetsParser from 'public-google-sheets-parser'
+
+interface Column {
+  name: string;
+  value: string;
+}
 
 export function SheetActionsScreen() {
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
+  const [currentColorId, setCurrentColorId] = useState<number | null>(null);
+
+  const getParsedDataFromFile = () => {
+    if (state.selectedFile?.id) {
+      const parser = new PublicGoogleSheetsParser(state.selectedFile?.id);
+      parser.parse().then((data: FileDataObj[]) => {
+        dispatch({ type: "SET_PARSED_DATA", payload: data })
+      });
+    }
+  };
+
+  useEffect(() => {
+    getParsedDataFromFile();
+  }, [])
 
   const checkAddOrUpdate = useAPI<
     CheckColorAddOrUpdateRequest,
@@ -102,6 +123,8 @@ export function SheetActionsScreen() {
       }
       if (!state.selectedFile) return
 
+      const requestRanking = (state.parsedData?.[currentColorId!]?.Ranking && String(state.parsedData?.[currentColorId!]?.Ranking)) || '0';
+
       checkAddOrUpdate
         .call({
           spreadsheetId: state.selectedFile.id,
@@ -120,10 +143,10 @@ export function SheetActionsScreen() {
                   timestamp: new Date().valueOf(),
                   url,
                   hex: state.color,
-                  hsl: colors.hextToHSL(state.color),
+                  hsl: colors.hexToHSL(state.color),
                   rgb: colors.hexToRGB(state.color),
-                  ranking: state.selectedFile!.ranking,
-                  comments: state.selectedFile!.comment,
+                  comments: state.parsedData?.[currentColorId!]?.Comments || '',
+                  ranking: requestRanking,
                   additionalColumns: state.selectedFile!.additionalColumns.map(
                     (col) => ({
                       name: col.name,
@@ -134,8 +157,10 @@ export function SheetActionsScreen() {
               })
               .then(() => {
                 toast.display("success", "Color saved successfully")
-                dispatch({ type: "ADD_COLOR_HISTORY", payload: state.color })
-                dispatch({ type: "RESET_ADDITIONAL_FIELDS" })
+                dispatch({ type: "RESET_ADDITIONAL_FIELDS" });
+                dispatch({ type: "SET_COLOR", payload: '' });
+                setCurrentColorId(null);
+                getParsedDataFromFile();
               })
               .catch((err) => toast.display("error", err))
           } else {
@@ -145,8 +170,8 @@ export function SheetActionsScreen() {
                 add: false,
                 rowIndex: data.rowIndex,
                 row: {
-                  ranking: data.row.ranking ?? "",
-                  comment: data.row.comments ?? "",
+                  comment: state.parsedData?.[currentColorId!]?.Comments || '',
+                  ranking: requestRanking,
                   additionalColumns: data.row.additionalColumns,
                 },
               },
@@ -165,6 +190,8 @@ export function SheetActionsScreen() {
       }
       if (!state.selectedFile) return
 
+      const requestRanking = (state.parsedData?.[currentColorId!]?.Ranking && String(state.parsedData?.[currentColorId!]?.Ranking)) || '0';
+
       updateRow
         .call({
           spreadsheetId: state.selectedFile!.id,
@@ -175,10 +202,10 @@ export function SheetActionsScreen() {
             timestamp: new Date().valueOf(),
             url,
             hex: state.color,
-            hsl: colors.hextToHSL(state.color),
+            hsl: colors.hexToHSL(state.color),
             rgb: colors.hexToRGB(state.color),
-            comments: state.selectedFile!.comment,
-            ranking: state.selectedFile!.ranking,
+            comments: state.parsedData?.[currentColorId!]?.Comments || '',
+            ranking: requestRanking,
             additionalColumns: state.selectedFile!.additionalColumns.map(
               (col) => ({
                 name: col.name,
@@ -190,8 +217,10 @@ export function SheetActionsScreen() {
         .then(() => {
           toast.display("success", "Color updated successfully")
           dispatch({ type: "SET_SUBMIT_MODE", payload: { add: true } })
-          dispatch({ type: "RESET_ADDITIONAL_FIELDS" })
-          dispatch({ type: "ADD_COLOR_HISTORY", payload: state.color })
+          dispatch({ type: "RESET_ADDITIONAL_FIELDS" });
+          dispatch({ type: "SET_COLOR", payload: '' });
+          setCurrentColorId(null);
+          getParsedDataFromFile();
         })
         .catch(() => toast.display("error", "Failed to update color"))
     })
@@ -223,11 +252,13 @@ export function SheetActionsScreen() {
 
             <div className="pt-3">
               <ColorHistory
+                currentColorId={currentColorId!}
+                setCurrentColorId={setCurrentColorId}
                 currentColor={state.color}
                 previousColors={state.colorHistory.recent}
                 max={state.colorHistory.max}
                 clearHistory={() => dispatch({ type: "CLEAR_COLOR_HISTORY" })}
-                setCurrentColor={(color: string) => {
+                setCurrentColor={(color: string, colorIndex: number) => {
                   dispatch({ type: "SET_COLOR", payload: color })
 
                   // when user selects a previous color, get details of that color
@@ -251,27 +282,28 @@ export function SheetActionsScreen() {
                         // if the selected color from the color history no longer
                         // exists inside the linked sheet, no further action is
                         //  required.
-                        if (data.add) return
-                        interface Column {
-                          name: string;
-                          value: string;
-                        }
-                        let additionalComment: Omit<Column, "id">[] = data.row.additionalColumns;
-                        if (additionalComment.length > 0) {
-                          additionalComment.forEach(obj => obj.value = '');
-                        }
-                        dispatch({
-                          type: "SET_SUBMIT_MODE",
-                          payload: {
-                            add: false,
-                            rowIndex: data.rowIndex,
-                            row: {
-                              ranking: "",
-                              comment: "",
-                              additionalColumns: additionalComment,
+                        // not data.add and if URL from file === current url is update
+                        if (!data.add && state.parsedData?.[colorIndex!]?.URL === url) {
+                          const additionalComment: Omit<Column, "id">[] = data.row.additionalColumns;
+                          if (additionalComment.length > 0) {
+                            additionalComment.forEach(obj => obj.value = '');
+                          }
+                          dispatch({
+                            type: "SET_SUBMIT_MODE",
+                            payload: {
+                              add: false,
+                              rowIndex: data.rowIndex,
+                              row: {
+                                ranking: 0,
+                                comment: "",
+                                additionalColumns: additionalComment,
+                              },
                             },
-                          },
-                        })
+                          })
+                        } else {
+                        // data.add is add
+                          dispatch({ type: "SET_SUBMIT_MODE", payload: { add: true }})
+                        }
                       })
                   })
                 }}
@@ -286,9 +318,9 @@ export function SheetActionsScreen() {
           <div className="justify-start space-y-1 h-24 overflow-y-auto">
             <div className="flex flex-col">
               <CommentInput
-                currentValue={state.selectedFile.comment}
+                currentValue={state.parsedData?.[currentColorId!]?.Comments || ''}
                 setCurrentValue={(value: string) =>
-                  dispatch({ type: "SET_COMMENT", payload: value })
+                  dispatch({ type: "SET_COMMENT_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
                 }
               />
             </div>
@@ -324,6 +356,7 @@ export function SheetActionsScreen() {
               <div className="flex space-x-2">
                 <Show if={state.submitMode === "add"}>
                   <button
+                    disabled={!state.color}
                     className="px-3 py-2 text-xs text-white bg-slate-800 hover:enabled:bg-slate-700 disabled:opacity-75 rounded"
                     onClick={handleSave}
                   >
@@ -374,9 +407,9 @@ export function SheetActionsScreen() {
       {state.selectedFile && (
         <div className="h-full ranking-slider">
           <RangeSlider 
-            rankingRange={state.selectedFile.ranking}
-            setRankingRange={(value: string) =>
-              dispatch({ type: "SET_RankingRange", payload: value })
+            rankingRange={state.parsedData?.[currentColorId!]?.Ranking || 0}
+            setRankingRange={(value: number) =>
+              dispatch({ type: "SET_RANKING_RANGE_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
             }
           />
         </div>
