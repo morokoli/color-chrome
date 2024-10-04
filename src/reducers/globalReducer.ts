@@ -5,7 +5,7 @@ import { Storage } from "@/helpers/storage"
 const storedState = Storage.fetchState()
 const initState: GlobalState = {
   user: null,
-  color: "",
+  color: "#000000",
   selectedTab: "ADD",
   files: [],
   selectedFile: null,
@@ -84,7 +84,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "SET_PARSED_DATA":
       return produce(state, (draft) => {
-        const colorsArr = action.payload?.map(color => color.HEX);
+        const colorsArr = action.payload?.map(color => color.HEX!);
         const colorArrMax = colorsArr.slice(0, state.colorHistory.max);
 
         draft.parsedData = action.payload
@@ -93,14 +93,22 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "SET_COMMENT_PARSED_DATA":
       return produce(state, (draft) => {
-        const {value, currentColorId} = action.payload;
-        draft.parsedData[currentColorId].Comments = value;
+        const { value, currentColorId } = action.payload;
+        if (!currentColorId) {
+          draft.selectedFile!.comment = value
+        } else {
+          draft.parsedData[currentColorId].Comments = value;
+        }
       })
 
     case "SET_RANKING_RANGE_PARSED_DATA":
       return produce(state, (draft) => {
-      const {value, currentColorId} = action.payload;
-      draft.parsedData[currentColorId].Ranking = value;
+      const { value, currentColorId } = action.payload;
+      if (!currentColorId) {
+        draft.selectedFile!.ranking = value
+      } else {
+        draft.parsedData[currentColorId].Ranking = value;
+      }
       })
 
     case "SWITCH_TAB":

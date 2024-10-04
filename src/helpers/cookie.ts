@@ -1,5 +1,5 @@
 import { config } from "@/others/config"
-import { AuthUser } from "@/types/general"
+import { AuthUser, DriveFileCreateFormFieldsWithId } from "@/types/general"
 
 /**
  * inside the context of a chrome extension, received cookies are not stored
@@ -22,20 +22,20 @@ export async function getAuthCookie(): Promise<AuthUser | null> {
   return JSON.parse(decodeURIComponent(cookie.value)) as AuthUser
 }
 
-export async function getSheetUrlCookie(): Promise<string | null> {
+export async function getSheetFileDataCookie(): Promise<DriveFileCreateFormFieldsWithId | null> {
   const cookie = await chrome.cookies.get({
-    name: config.cookie.cookieNameSheetUrl,
+    name: config.cookie.cookieNameSheetFileData,
     url: config.api.baseURL + "/",
   })
   if (!cookie) return null;
 
-  return cookie.value;
+  return JSON.parse(cookie.value);
 }
 
-export function setCookie(cookieName: string, cookieValue: string) {
+export function setCookie(cookieName: string, cookieValue: DriveFileCreateFormFieldsWithId) {
   chrome.cookies.set({
       name: cookieName,
-      value: cookieValue,
+      value: JSON.stringify(cookieValue),
       url: config.api.baseURL + "/",
       expirationDate: new Date().getTime() / 1000 + (30 * 24 * 60 * 60) // 30 days in seconds
   });

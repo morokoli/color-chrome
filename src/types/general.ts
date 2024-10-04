@@ -75,16 +75,16 @@ export type RowData = {
 }
 
 export type FileDataObj = {
-  Year: number | string
-  Month: number | string
-  Day: number | string
-  Hours: number | string
-  Minutes: number | string
-  URL: string
-  HEX: string
-  HSL: string
-  RGB: string
-  "Added By": string
+  Year?: number | string
+  Month?: number | string
+  Day?: number | string
+  Hours?: number | string
+  Minutes?: number | string
+  URL?: string
+  HEX?: string
+  HSL?: string
+  RGB?: string
+  "Added By"?: string
   Ranking?: string | number
   Comments?: string
 }

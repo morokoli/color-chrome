@@ -1,4 +1,4 @@
-import { FC, useState } from "react"
+import { FC, useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { ErrorMessage } from "@hookform/error-message"
 import { InputError } from "@/components/InputError"
@@ -11,6 +11,8 @@ import { Loader } from "./Loader"
 import { Show } from "./Show"
 import { Sheet } from "@/types/general"
 import { useToast } from "@/hooks/useToast"
+import { useGlobalState } from "@/hooks/useGlobalState"
+import { setCookie, getSheetFileDataCookie } from '@/helpers/cookie'
 
 type Props = {
   currentFileCount: number
@@ -36,8 +38,9 @@ const initOpenDriveFileState: OpenDriveFileState = {
 }
 
 export const DriveFileOpenForm: FC<Props> = (props) => {
+  const { state, dispatch } = useGlobalState()
   const toast = useToast()
-  const [state, setState] = useState<OpenDriveFileState>(initOpenDriveFileState)
+  const [stateOpenDrive, setState] = useState<OpenDriveFileState>(initOpenDriveFileState)
 
   const checkSheetValid = useAPI<
     CheckSheetValidRequest,
@@ -50,9 +53,61 @@ export const DriveFileOpenForm: FC<Props> = (props) => {
   const {
     register,
     handleSubmit,
-    reset,
+    // reset,
     formState: { errors },
   } = useForm<{ sheetName: string }>()
+
+  const openFile = (form: { sheetName: string, fileData?: DriveFileCreateFormFieldsWithId }) => {
+    if (props.currentFileCount === config.limitations.maxFiles) {
+      toast.display("info", "Please purchase this extension to continue")
+      return
+    }
+
+    checkSheetValid
+      .call({
+        spreadsheetId: form.fileData?.spreadsheetId || stateOpenDrive.spreadsheetId,
+        sheetId: form.fileData?.sheetId || parseInt(form.sheetName),
+        sheetName:
+          form.fileData?.sheetName ||
+          stateOpenDrive.sheets.find((s) => s.id == parseInt(form.sheetName))?.name ||
+          "Unnamed",
+      })
+      .then((data) => {
+        const fileData = {
+          fileName: form.fileData?.fileName || stateOpenDrive.fileName,
+          sheetName:
+            form.fileData?.sheetName ||
+            stateOpenDrive.sheets.find((s) => s.id == parseInt(form.sheetName))?.name ||
+            "Unnamed",
+          spreadsheetId: form.fileData?.spreadsheetId || stateOpenDrive.spreadsheetId,
+          sheetId: form.fileData?.sheetId || parseInt(form.sheetName),
+          additionalColumns: data.additionalColumns,
+        };
+
+        props.onSubmit(fileData)
+        setCookie(config.cookie.cookieNameSheetFileData, fileData);
+        dispatch({ type: "SWITCH_TAB", payload: "SELECT" })
+        toast.display("success", "Spreadsheet added successfully")
+      })
+      .catch(() =>
+        toast.display(
+          "error",
+          "Provided spreadsheet does not have valid format",
+        ),
+      )
+  };
+
+  useEffect(() => {
+    async function getCookieAndOpenFile() {
+      const sheetFileData = await getSheetFileDataCookie();
+      if (sheetFileData) {
+        openFile({ sheetName: sheetFileData.sheetName, fileData: sheetFileData })
+      }
+    }
+    if (!state.selectedFile?.id) {
+      getCookieAndOpenFile();
+    }
+  }, []);
 
   return (
     <div className="flex flex-col space-y-2">
@@ -69,50 +124,17 @@ export const DriveFileOpenForm: FC<Props> = (props) => {
 
       <form
         className="flex flex-col space-y-3"
-        onSubmit={handleSubmit((form) => {
-          if (props.currentFileCount === config.limitations.maxFiles) {
-            toast.display("info", "Please purchase this extension to continue")
-            return
-          }
-
-          checkSheetValid
-            .call({
-              spreadsheetId: state.spreadsheetId,
-              sheetId: parseInt(form.sheetName),
-              sheetName:
-                state.sheets.find((s) => s.id == parseInt(form.sheetName))
-                  ?.name ?? "Unnamed",
-            })
-            .then((data) => {
-              props.onSubmit({
-                fileName: state.fileName,
-                sheetName:
-                  state.sheets.find((s) => s.id == parseInt(form.sheetName))
-                    ?.name ?? "Unnamed",
-                spreadsheetId: state.spreadsheetId,
-                sheetId: parseInt(form.sheetName),
-                additionalColumns: data.additionalColumns,
-              })
-              reset()
-              toast.display("success", "Spreadsheet added successfully")
-            })
-            .catch(() =>
-              toast.display(
-                "error",
-                "Provided spreadsheet does not have valid format",
-              ),
-            )
-        })}
+        onSubmit={handleSubmit((form) => openFile(form))}
       >
         <fieldset className="flex flex-col space-y-1">
           <select
             className="px-3 py-2 text-xs text-slate-800 bg-slate-200 rounded disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none border border-slate-200 focus:border-slate-700"
             required
-            disabled={state.sheets.length === 0}
+            disabled={stateOpenDrive.sheets.length === 0}
             {...register("sheetName", formValidators.sheetName)}
           >
             <option value="">Available sheets</option>
-            {state.sheets.map((sheet) => (
+            {stateOpenDrive.sheets.map((sheet) => (
               <option value={sheet.id} key={sheet.id}>
                 {sheet.name}
               </option>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useGlobalState } from "@/hooks/useGlobalState"
 import { ColorPicker } from "@/components/ColorPicker"
 import { SelectFile } from "@/components/SelectFile"
@@ -50,6 +50,16 @@ export function SheetActionsScreen() {
   useEffect(() => {
     getParsedDataFromFile();
   }, [])
+
+  const { finalComment, finalRanking } = useMemo(
+    () => {
+      const finalComment = (currentColorId && state.parsedData?.[currentColorId]?.Comments) || state.selectedFile?.comment || '';
+      const finalRanking = (currentColorId && String(state.parsedData?.[currentColorId]?.Ranking)) || String(state.selectedFile?.ranking) || '0';
+
+      return { finalComment,  finalRanking}
+    },
+    [currentColorId, state.parsedData, state.selectedFile]
+  );
 
   const checkAddOrUpdate = useAPI<
     CheckColorAddOrUpdateRequest,
@@ -123,8 +133,6 @@ export function SheetActionsScreen() {
       }
       if (!state.selectedFile) return
 
-      const requestRanking = (state.parsedData?.[currentColorId!]?.Ranking && String(state.parsedData?.[currentColorId!]?.Ranking)) || '0';
-
       checkAddOrUpdate
         .call({
           spreadsheetId: state.selectedFile.id,
@@ -145,8 +153,8 @@ export function SheetActionsScreen() {
                   hex: state.color,
                   hsl: colors.hexToHSL(state.color),
                   rgb: colors.hexToRGB(state.color),
-                  comments: state.parsedData?.[currentColorId!]?.Comments || '',
-                  ranking: requestRanking,
+                  comments: finalComment,
+                  ranking: finalRanking,
                   additionalColumns: state.selectedFile!.additionalColumns.map(
                     (col) => ({
                       name: col.name,
@@ -158,8 +166,6 @@ export function SheetActionsScreen() {
               .then(() => {
                 toast.display("success", "Color saved successfully")
                 dispatch({ type: "RESET_ADDITIONAL_FIELDS" });
-                dispatch({ type: "SET_COLOR", payload: '' });
-                setCurrentColorId(null);
                 getParsedDataFromFile();
               })
               .catch((err) => toast.display("error", err))
@@ -170,8 +176,8 @@ export function SheetActionsScreen() {
                 add: false,
                 rowIndex: data.rowIndex,
                 row: {
-                  comment: state.parsedData?.[currentColorId!]?.Comments || '',
-                  ranking: requestRanking,
+                  comment: finalComment,
+                  ranking: finalRanking,
                   additionalColumns: data.row.additionalColumns,
                 },
               },
@@ -218,8 +224,6 @@ export function SheetActionsScreen() {
           toast.display("success", "Color updated successfully")
           dispatch({ type: "SET_SUBMIT_MODE", payload: { add: true } })
           dispatch({ type: "RESET_ADDITIONAL_FIELDS" });
-          dispatch({ type: "SET_COLOR", payload: '' });
-          setCurrentColorId(null);
           getParsedDataFromFile();
         })
         .catch(() => toast.display("error", "Failed to update color"))
@@ -318,7 +322,7 @@ export function SheetActionsScreen() {
           <div className="justify-start space-y-1 h-24 overflow-y-auto">
             <div className="flex flex-col">
               <CommentInput
-                currentValue={state.parsedData?.[currentColorId!]?.Comments || ''}
+                currentValue={finalComment}
                 setCurrentValue={(value: string) =>
                   dispatch({ type: "SET_COMMENT_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
                 }
@@ -407,7 +411,7 @@ export function SheetActionsScreen() {
       {state.selectedFile && (
         <div className="h-full ranking-slider">
           <RangeSlider 
-            rankingRange={state.parsedData?.[currentColorId!]?.Ranking || 0}
+            rankingRange={finalRanking}
             setRankingRange={(value: number) =>
               dispatch({ type: "SET_RANKING_RANGE_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
             }

@@ -1,4 +1,4 @@
-import { FC, useEffect } from "react"
+import { FC } from "react"
 import { useForm } from "react-hook-form"
 import { ErrorMessage } from "@hookform/error-message"
 import { InputError } from "@/components/InputError"
@@ -12,7 +12,6 @@ import {
 } from "@/types/api"
 import { Sheet } from "@/types/general"
 import { useToast } from "@/hooks/useToast"
-import { setCookie, getSheetUrlCookie } from '@/helpers/cookie'
 
 type Props = {
   setFileInfo: (args: {
@@ -40,7 +39,6 @@ const formValidators = {
 export const DriveFileURLForm: FC<Props> = (props) => {
   const {
     register,
-    setValue,
     handleSubmit,
     formState: { errors, isDirty, isValid },
   } = useForm<Form>()
@@ -55,21 +53,11 @@ export const DriveFileURLForm: FC<Props> = (props) => {
     method: "POST",
   })
 
-  useEffect(() => {
-    async function getCookie() {
-      const sheetUrl = await getSheetUrlCookie();
-      if (sheetUrl) {
-        setValue("fileURL", sheetUrl, { shouldDirty: true, shouldValidate: true });
-      }
-    }
-    getCookie();
-  }, []);
 
   return (
     <form
       className="flex flex-col space-y-1"
       onSubmit={handleSubmit((form: Form) => {
-        setCookie(config.cookie.cookieNameSheetUrl, form.fileURL);
 
         call({ url: form.fileURL })
           .then((data) => {
