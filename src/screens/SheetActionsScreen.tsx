@@ -22,11 +22,11 @@ import {
   UpdateRowResponse,
   GetAdditionalColumnsRequest,
   GetAdditionalColumnsResponse,
+  CheckSheetValidRequest,
+  CheckSheetValidResponse 
 } from "@/types/api"
-import { FileDataObj } from '@/types/general'
 import { getAuthCookie } from "@/helpers/cookie"
 import { Auth } from "@/helpers/auth"
-import PublicGoogleSheetsParser from 'public-google-sheets-parser'
 
 interface Column {
   name: string;
@@ -38,23 +38,10 @@ export function SheetActionsScreen() {
   const toast = useToast()
   const [currentColorId, setCurrentColorId] = useState<number | null>(null);
 
-  const getParsedDataFromFile = () => {
-    if (state.selectedFile?.id) {
-      const parser = new PublicGoogleSheetsParser(state.selectedFile?.id);
-      parser.parse().then((data: FileDataObj[]) => {
-        dispatch({ type: "SET_PARSED_DATA", payload: data })
-      });
-    }
-  };
-
-  useEffect(() => {
-    getParsedDataFromFile();
-  }, [])
-
   const { finalComment, finalRanking } = useMemo(
     () => {
-      const finalComment = (currentColorId && state.parsedData?.[currentColorId]?.Comments) || state.selectedFile?.comment || '';
-      const finalRanking = (currentColorId && String(state.parsedData?.[currentColorId]?.Ranking)) || String(state.selectedFile?.ranking) || '0';
+      const finalComment = (!isNaN(currentColorId!) && (state.parsedData?.[currentColorId!]?.comments) || state.selectedFile?.comment) || '';
+      const finalRanking = (!isNaN(currentColorId!) && (String(state.parsedData?.[currentColorId!]?.ranking)) || String(state.selectedFile?.ranking)) || '0';
 
       return { finalComment,  finalRanking}
     },
@@ -86,6 +73,40 @@ export function SheetActionsScreen() {
     url: config.api.endpoints.getAdditionalColumns,
     method: "POST",
   })
+
+  const checkSheetValid = useAPI<
+  CheckSheetValidRequest,
+  CheckSheetValidResponse
+>({
+  url: config.api.endpoints.checkSheetValid,
+  method: "POST",
+})
+
+const getParsedDataFromFile = (fileId: number) => {
+  const selectedFile = state.files.find(item => String(item.sheet.id) === String(fileId));
+
+  if (!selectedFile) return
+
+  if (selectedFile.id) {
+    checkSheetValid
+      .call({
+        spreadsheetId: selectedFile.id,
+        sheetId: selectedFile.sheet.id,
+        sheetName: selectedFile.sheet.name,
+      })
+      .then((data) => {
+        dispatch({ type: "SET_PARSED_DATA", payload: data.sheetData.parsed })
+        toast.display("success", "Spreadsheet added successfully")
+      })
+      .catch(() =>
+        toast.display(
+          "error",
+          "Provided spreadsheet does not have valid format",
+        ),
+      )
+  }
+};
+
 
   const syncColumns = () => {
     if (state.selectedFile) {
@@ -166,7 +187,9 @@ export function SheetActionsScreen() {
               .then(() => {
                 toast.display("success", "Color saved successfully")
                 dispatch({ type: "RESET_ADDITIONAL_FIELDS" });
-                getParsedDataFromFile();
+                if (state.selectedFile?.sheet?.id) {
+                  getParsedDataFromFile(state.selectedFile.sheet.id);
+                }
               })
               .catch((err) => toast.display("error", err))
           } else {
@@ -196,7 +219,7 @@ export function SheetActionsScreen() {
       }
       if (!state.selectedFile) return
 
-      const requestRanking = (state.parsedData?.[currentColorId!]?.Ranking && String(state.parsedData?.[currentColorId!]?.Ranking)) || '0';
+      const requestRanking = (state.parsedData?.[currentColorId!]?.ranking && String(state.parsedData?.[currentColorId!]?.ranking)) || '0';
 
       updateRow
         .call({
@@ -210,7 +233,7 @@ export function SheetActionsScreen() {
             hex: state.color,
             hsl: colors.hexToHSL(state.color),
             rgb: colors.hexToRGB(state.color),
-            comments: state.parsedData?.[currentColorId!]?.Comments || '',
+            comments: state.parsedData?.[currentColorId!]?.comments || '',
             ranking: requestRanking,
             additionalColumns: state.selectedFile!.additionalColumns.map(
               (col) => ({
@@ -224,11 +247,19 @@ export function SheetActionsScreen() {
           toast.display("success", "Color updated successfully")
           dispatch({ type: "SET_SUBMIT_MODE", payload: { add: true } })
           dispatch({ type: "RESET_ADDITIONAL_FIELDS" });
-          getParsedDataFromFile();
+          if (state.selectedFile?.sheet?.id) {
+            getParsedDataFromFile(state.selectedFile.sheet.id);
+          }
         })
         .catch(() => toast.display("error", "Failed to update color"))
     })
   }
+
+  useEffect(() => {
+    if (!state.selectedFile) return
+
+    getParsedDataFromFile(state.selectedFile.sheet.id);
+  }, [])
 
   return (
     <>
@@ -237,9 +268,10 @@ export function SheetActionsScreen() {
       <SelectFile
         files={state.files}
         selectedFile={state.selectedFile}
-        setSelectedFile={(fileId: string) =>
+        setSelectedFile={(fileId: number) => {
+          getParsedDataFromFile(fileId)
           dispatch({ type: "CHANGE_SELECTED_FILE", payload: fileId })
-        }
+        }}
         removeSelectedFile={() => dispatch({ type: "REMOVE_SELECTED_FILE" })}
       />
 
@@ -287,7 +319,7 @@ export function SheetActionsScreen() {
                         // exists inside the linked sheet, no further action is
                         //  required.
                         // not data.add and if URL from file === current url is update
-                        if (!data.add && state.parsedData?.[colorIndex!]?.URL === url) {
+                        if (!data.add && state.parsedData?.[colorIndex!]?.url === url) {
                           const additionalComment: Omit<Column, "id">[] = data.row.additionalColumns;
                           if (additionalComment.length > 0) {
                             additionalComment.forEach(obj => obj.value = '');

@@ -23,6 +23,7 @@ export async function getAuthCookie(): Promise<AuthUser | null> {
 }
 
 export async function getSheetFileDataCookie(): Promise<DriveFileCreateFormFieldsWithId | null> {
+  if (!chrome.cookies) return null;
   const cookie = await chrome.cookies.get({
     name: config.cookie.cookieNameSheetFileData,
     url: config.api.baseURL + "/",

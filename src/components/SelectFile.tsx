@@ -7,7 +7,7 @@ import { sheets } from "@/helpers/sheets"
 type Props = {
   files: DriveFile[]
   selectedFile: DriveFile | null
-  setSelectedFile: (fileId: string) => void
+  setSelectedFile: (fileId: number) => void
   removeSelectedFile: () => void
 }
 
@@ -24,12 +24,12 @@ export const SelectFile: FC<Props> = (props) => {
             rounded: props.selectedFile === null,
           },
         )}
-        value={props.selectedFile?.id}
-        onChange={(e) => props.setSelectedFile(e.target.value)}
+        value={props.selectedFile?.sheet?.id}
+        onChange={(e) => props.setSelectedFile(+e.target.value)}
       >
         <option value="">Please pick a file</option>
         {props.files.map((file) => (
-          <option key={file.id} value={file.id}>
+          <option key={file.sheet.id} value={file.sheet.id}>
             {file.fileName} - {file.sheet.name}
           </option>
         ))}

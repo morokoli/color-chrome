@@ -1,5 +1,5 @@
 import { produce } from "immer"
-import { GlobalState, FileDataObj, Column, DriveFile, ModeTab, Sheet } from "@/types/general"
+import { GlobalState, RowData, Column, DriveFile, ModeTab, Sheet } from "@/types/general"
 import { Storage } from "@/helpers/storage"
 
 const storedState = Storage.fetchState()
@@ -27,7 +27,7 @@ export type Action =
       payload: { accessToken: string; expiry: number }
     }
   | { type: "SET_COLOR"; payload: string }
-  | { type: "SET_PARSED_DATA"; payload: FileDataObj[] }
+  | { type: "SET_PARSED_DATA"; payload: RowData[] }
   | { type: "SET_COMMENT_PARSED_DATA"; payload: {value: string, currentColorId: number} }
   | { type: "SET_RANKING_RANGE_PARSED_DATA"; payload: {value: number, currentColorId: number} }
   | { type: "SWITCH_TAB"; payload: ModeTab }
@@ -41,7 +41,7 @@ export type Action =
       }
     }
   | { type: "REMOVE_SELECTED_FILE" }
-  | { type: "CHANGE_SELECTED_FILE"; payload: string }
+  | { type: "CHANGE_SELECTED_FILE"; payload: number }
   | { type: "SET_COMMENT"; payload: string }
   | { type: "SET_RANKING_RANGE"; payload: string}
   | { type: "ADD_COLUMN"; payload: { columnName: string } }
@@ -84,7 +84,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "SET_PARSED_DATA":
       return produce(state, (draft) => {
-        const colorsArr = action.payload?.map(color => color.HEX!);
+        const colorsArr = action.payload?.map((color: RowData) => color.hex!);
         const colorArrMax = colorsArr.slice(0, state.colorHistory.max);
 
         draft.parsedData = action.payload
@@ -97,7 +97,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         if (!currentColorId) {
           draft.selectedFile!.comment = value
         } else {
-          draft.parsedData[currentColorId].Comments = value;
+          draft.parsedData[currentColorId].comments = value;
         }
       })
 
@@ -107,7 +107,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
       if (!currentColorId) {
         draft.selectedFile!.ranking = value
       } else {
-        draft.parsedData[currentColorId].Ranking = value;
+        draft.parsedData[currentColorId].ranking = value;
       }
       })
 
@@ -161,7 +161,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "CHANGE_SELECTED_FILE":
       return produce(state, (draft) => {
-        const [foundFile] = draft.files.filter((f) => f.id === action.payload)
+        const [foundFile] = draft.files.filter((f) => f.sheet.id === action.payload)
         if (!foundFile) {
           draft.selectedFile = null
           return
