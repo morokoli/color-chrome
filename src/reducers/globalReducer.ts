@@ -94,7 +94,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "SET_COMMENT_PARSED_DATA":
       return produce(state, (draft) => {
         const { value, currentColorId } = action.payload;
-        if (!currentColorId) {
+        if (!(typeof currentColorId === 'number' && currentColorId >= 0)) {
           draft.selectedFile!.comment = value
         } else {
           draft.parsedData[currentColorId].comments = value;
@@ -104,7 +104,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "SET_RANKING_RANGE_PARSED_DATA":
       return produce(state, (draft) => {
       const { value, currentColorId } = action.payload;
-      if (!currentColorId) {
+      if (!(typeof currentColorId === 'number' && currentColorId >= 0)) {
         draft.selectedFile!.ranking = value
       } else {
         draft.parsedData[currentColorId].ranking = value;

@@ -40,8 +40,10 @@ export function SheetActionsScreen() {
 
   const { finalComment, finalRanking } = useMemo(
     () => {
-      const finalComment = (!isNaN(currentColorId!) && (state.parsedData?.[currentColorId!]?.comments) || state.selectedFile?.comment) || '';
-      const finalRanking = (!isNaN(currentColorId!) && (String(state.parsedData?.[currentColorId!]?.ranking)) || String(state.selectedFile?.ranking)) || '0';
+      const isColorIdValid = typeof currentColorId === 'number' && currentColorId >= 0;
+      const finalComment = isColorIdValid && (state.parsedData?.[currentColorId!]?.comments || state.selectedFile?.comment) || '';
+      const finalRanking = isColorIdValid && ((String(state.parsedData?.[currentColorId!]?.ranking)) || String(state.selectedFile?.ranking)) || '0';
+
 
       return { finalComment,  finalRanking}
     },
