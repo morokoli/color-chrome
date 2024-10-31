@@ -34,12 +34,15 @@ export type DriveFileGetByURLResponse = {
 export type CheckSheetValidRequest = {
   spreadsheetId: string
   sheetName: string
-  sheetId: number
+  sheetId?: number
 }
 
 export type CheckSheetValidResponse = {
   valid: boolean
   additionalColumns: string[]
+  sheetData: {
+    parsed: RowData[]
+  }
 }
 
 export type AddNewAdditionalColumnRequest = {

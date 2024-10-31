@@ -14,7 +14,7 @@ export type GlobalState = {
   selectedFile: DriveFile | null
   submitMode: "add" | "update"
   updateRowIndex: number
-  parsedData: FileDataObj[]
+  parsedData: RowData[]
   colorHistory: {
     max: number
     recent: string[]
@@ -72,19 +72,4 @@ export type RowData = {
   ranking?: string | number
   comments?: string
   additionalColumns: Omit<Column, "id">[]
-}
-
-export type FileDataObj = {
-  Year?: number | string
-  Month?: number | string
-  Day?: number | string
-  Hours?: number | string
-  Minutes?: number | string
-  URL?: string
-  HEX?: string
-  HSL?: string
-  RGB?: string
-  "Added By"?: string
-  Ranking?: string | number
-  Comments?: string
 }
