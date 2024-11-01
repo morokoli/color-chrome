@@ -38,14 +38,14 @@ export function SheetActionsScreen() {
   const toast = useToast()
   const [currentColorId, setCurrentColorId] = useState<number | null>(null);
 
-  const { finalComment, finalRanking } = useMemo(
+  const { finalComment, finalRanking, isColorIdValid } = useMemo(
     () => {
       const isColorIdValid = typeof currentColorId === 'number' && currentColorId >= 0;
-      const finalComment = isColorIdValid && (state.parsedData?.[currentColorId!]?.comments || state.selectedFile?.comment) || '';
-      const finalRanking = isColorIdValid && ((String(state.parsedData?.[currentColorId!]?.ranking)) || String(state.selectedFile?.ranking)) || '0';
+      const finalComment = isColorIdValid && state.parsedData?.[currentColorId!]?.comments || state.selectedFile?.comment || '';
+      const finalRanking = isColorIdValid && (String(state.parsedData?.[currentColorId!]?.ranking)) || String(state.selectedFile?.ranking) || '0';
 
 
-      return { finalComment,  finalRanking}
+      return { finalComment,  finalRanking, isColorIdValid}
     },
     [currentColorId, state.parsedData, state.selectedFile]
   );
@@ -98,7 +98,6 @@ const getParsedDataFromFile = (fileId: number) => {
       })
       .then((data) => {
         dispatch({ type: "SET_PARSED_DATA", payload: data.sheetData.parsed })
-        toast.display("success", "Spreadsheet added successfully")
       })
       .catch(() =>
         toast.display(
@@ -357,8 +356,13 @@ const getParsedDataFromFile = (fileId: number) => {
             <div className="flex flex-col">
               <CommentInput
                 currentValue={finalComment}
-                setCurrentValue={(value: string) =>
-                  dispatch({ type: "SET_COMMENT_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
+                setCurrentValue={(value: string) => {
+                  if (isColorIdValid) {
+                    dispatch({ type: "SET_COMMENT_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
+                  } else {
+                    dispatch({ type: "SET_COMMENT", payload: value })
+                  }
+                }
                 }
               />
             </div>
@@ -446,8 +450,13 @@ const getParsedDataFromFile = (fileId: number) => {
         <div className="h-full ranking-slider">
           <RangeSlider 
             rankingRange={finalRanking}
-            setRankingRange={(value: number) =>
-              dispatch({ type: "SET_RANKING_RANGE_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
+            setRankingRange={(value: number) => {
+              if (isColorIdValid) {
+                dispatch({ type: "SET_RANKING_RANGE_PARSED_DATA", payload: { value, currentColorId: currentColorId! } })
+              } else {
+                dispatch({ type: "SET_RANKING_RANGE", payload: String(value) })
+              }
+            }
             }
           />
         </div>
