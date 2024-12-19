@@ -17,7 +17,7 @@ export const ColorPicker: FC<Props> = (props) => {
       try {
         const color = await open();
         props.handleChange(color.sRGBHex);
-      } catch (e: any) {
+      } catch (e) {
         console.log(e);
       }
     };

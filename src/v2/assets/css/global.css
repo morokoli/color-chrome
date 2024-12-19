@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Montserrat Regular 400';
+}
+
+.range-container {
+  display: flex;
+  justify-content: center;
+  width: 30px;
+  height: 15px;
+}
+.vertical-slider {
+  width: 220px; 
+  transform: rotate(270deg);
+  transform-origin: 50% 50%;
+  position: absolute;
+  top: 39%;
+}
+.accent {
+  accent-color: black;
+}
+#track {
+  background-color: black;
+}
+.ranking-slider {
+  display: flex;
+  flex-direction: column;
+}
+
+/* @font-face {
+  font-family: 'Montserrat Light 300';
+  src: local('Montserrat Light'), url('../fonts/Montserrat-Light.ttf') format('truetype');
+} */
+
+@font-face {
+  font-family: 'Montserrat Regular 400';
+  src: local('Montserrat Regular'), url('../fonts/Montserrat-Regular.ttf') format('truetype');
+}
+
+.arrow {
+  border: solid black;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  padding: 3px;
+  margin: 10px;
+}
+
+.right {
+  transform: rotate(-45deg);
+  -webkit-transform: rotate(-45deg);
+}
+
+.left {
+  transform: rotate(135deg);
+  -webkit-transform: rotate(135deg);
+}
+
+
+/* .delete-square */
+
+.delete-square {
+  width: 15px;
+  height: 15px;
+  position: relative;
+  border: 1px solid red; /* Red border around the delete-square */
+  /* background-color: white; Background color of the delete-square */
+}
+
+.delete-square::before, .delete-square::after {
+  content: '';
+  position: absolute;
+
+  width: 19px;
+  height: 100%;
+
+  background-color: transparent;
+  border-top: 1px solid red; /* Diagonal line effect */
+  /* border-right: 1px solid red; Diagonal line effect */
+  /* transform: rotate(45deg); Rotate to create diagonals */
+  /* position: absolute; */
+  /* left: 0; */
+  /* top: 0; */
+  /* transform-origin: top left; */
+}
+
+.delete-square::after {
+  transform: rotate(-45deg);
+  bottom: -5px;
+  left: 1px;
+}
+
+.delete-square::before {
+  transform: rotate(43deg);
+  top: 4px;
+  left: -7px;
+}

@@ -10,7 +10,7 @@ export const ExtensionContainer: FC<Props> = (props) => {
   const toast = useToast()
 
   return (
-    <div className="w-[520px] h-96 bg-slate-50 relative">
+    <div className="">
       {props.children}
       <Toast message={toast.state.message} type={toast.state.type} />
     </div>
