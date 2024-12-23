@@ -32,6 +32,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
     {
       title: 'Add Sheet',
       icon: sheetIcon,
+      menuName: "ADD_SHEET",
     },
   ];
 

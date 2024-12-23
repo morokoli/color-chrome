@@ -25,6 +25,7 @@ const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     try {
       const color = await open()
       dispatch({ type: "SET_COLOR", payload: color.sRGBHex })
+      dispatch({ type: "ADD_COLOR_HISTORY", payload: color.sRGBHex })
       copyToClipboard?.(color.sRGBHex, "HEX")
     } catch (e) {
       console.log(e)
@@ -50,10 +51,10 @@ const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       <ColorCodeButtons isPanelFull={isPanelFull} selected={selected!} copyToClipboard={copyToClipboard} />
 
       <button
-        onClick={() => {}}
+        onClick={() => setTab('COMMENT')}
         className="h-[40px] w-[60px] border-2 text-white text-[20px] mr-3 flex justify-center"
       >
-        <img src={commentIcon} alt="pick" className="h-[40px] w-[40px]" />
+        <img src={commentIcon} alt="comment" className="h-[40px] w-[40px]" />
       </button>
 
       <div className="h-full w-[60px] border-l-2 border-black flex items-center justify-center">

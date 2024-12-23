@@ -1,6 +1,7 @@
 export type GlobalState = {
   // user: AuthUser | null
   color: string | null
+  colorHistory: string[]
   // tab?: string | null
   // files: DriveFile[]
   // selectedFile: DriveFile | null

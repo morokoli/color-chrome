@@ -4,6 +4,7 @@ import Copy from "./Copy";
 import { Show } from "./Show"
 import Comment from "./Comment";
 import MainMenu from "./MainMenu";
+import AddSheet from "./AddSheet";
 import PickPanel from "./PickPanel";
 import { ToastContext } from "@/v2/context/toastContext"
 import { GlobalStateContext } from "@/v2/context/globalStateContext"
@@ -50,6 +51,9 @@ const App = () => {
           </Show>
           <Show if={tab === 'COMMENT'}>
             <Comment />
+          </Show>
+          <Show if={tab === 'ADD_SHEET'}>
+            <AddSheet />
           </Show>
      
         </ExtensionContainer>

@@ -19,7 +19,7 @@ const ColorCodeButtons: FC<Props> = ({ isCopy, isPanelFull = false, selected, co
   const copyColorHandler = (colorCode: string, colorName: Selection) => {
     copyToClipboard?.(colorCode, colorName);
     const handle = setTimeout(() => {
-      window.close()
+      // window.close()
     }, 1000)
     return () => clearTimeout(handle)
   };

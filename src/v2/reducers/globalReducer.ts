@@ -9,6 +9,7 @@ const initState: GlobalState = {
   // color: "#000000",
   // tab: null,
   color: null,
+  colorHistory: [],
   // files: [],
   // selectedFile: null,
   // submitMode: "add",
@@ -49,7 +50,7 @@ export type Action =
   // | { type: "ADD_COLUMN"; payload: { columnName: string } }
   // | { type: "REMOVE_COLUMN"; payload: { columnId: string } }
   // | { type: "SET_COLUMN_VALUE"; payload: { columnId: string; value: string } }
-  // // | { type: "ADD_COLOR_HISTORY"; payload: any[] }
+  | { type: "ADD_COLOR_HISTORY"; payload: string }
   // | { type: "CLEAR_COLOR_HISTORY" }
   // | {
   //     type: "SET_SUBMIT_MODE"
@@ -82,6 +83,10 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "SET_COLOR":
       return produce(state, (draft) => {
         draft.color = action.payload
+      })
+    case "ADD_COLOR_HISTORY":
+      return produce(state, (draft) => {
+        draft.colorHistory.push(action.payload);
       })
 
   //   case "SET_PARSED_DATA":
