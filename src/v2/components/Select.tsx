@@ -111,7 +111,7 @@ const Select: FC<ISelectProps> = ({ setTab, isComment = false, placeholder, setC
   return (
     <div
       onClick={onClickHandler}
-      className="w-full h-[24px] mb-2 relative z-5"
+      className="w-full h-[24px] mb-3 relative z-5"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >

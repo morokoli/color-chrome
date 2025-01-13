@@ -48,6 +48,7 @@ const initialState = {
 
 const Comment: FC<Props> = ({ setTab }) => {
   const toast = useToast()
+  const [error, setError] = useState<boolean>(false);
   const [ selectedColors, setSelectedColors ] = useState<number[]>([]);
   const [ checkValidFlag, setCheckValidFlag ] = useState<boolean>(false);
   /* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -177,8 +178,10 @@ const Comment: FC<Props> = ({ setTab }) => {
       {colData.map(
         data => (
           <Input
+            error={error}
             key={data.name}
             name={data.name}
+            setError={setError}
             disabled={isDisable}
             onChange={handleChange}
             value={formData[data.name]}
@@ -192,7 +195,7 @@ const Comment: FC<Props> = ({ setTab }) => {
         disabled={isDisable}
         onChange={handleChange}
         value={formData['comments']}
-        className="w-full h-[24px] mb-2 min-h-[25px] bg-slate-200 px-2 py-1 text-xs focus:outline-none border border-slate-200 focus:border-slate-700"
+        className="w-full h-[24px] mb-3 min-h-[25px] bg-slate-200 px-2 py-1 text-xs focus:outline-none border border-slate-200 focus:border-slate-700"
       />
       {state?.newColumns?.map(
         (data, index) => (
@@ -226,7 +229,7 @@ const Comment: FC<Props> = ({ setTab }) => {
 
       <button
         onClick={handleSave}
-        disabled={isDisable}
+        disabled={isDisable || error}
         className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
       >
         {isStatusLoading ? 'Loading...' : 'Save'}
