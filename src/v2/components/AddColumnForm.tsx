@@ -1,5 +1,5 @@
 import { FC, useState } from 'react'
-import { AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse } from '@/types/api'
+import { AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse } from '@/v1/types/api'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
 import { config } from '@/v2/others/config'

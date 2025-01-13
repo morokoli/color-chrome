@@ -6,7 +6,7 @@ import { getPageURL } from '@/v2/helpers/url'
 import useEyeDropper from 'use-eye-dropper'
 import { useAPI } from '@/v2/hooks/useAPI'
 import { config } from '@/v2/others/config'
-import { colors } from '@/helpers/colors'
+import { colors } from '@/v1/helpers/colors'
 import classNames from 'classnames'
 
 import ColorCodeButtons from './ColorCodeButtons';

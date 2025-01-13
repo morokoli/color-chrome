@@ -1,4 +1,4 @@
-import { Sheet, Column, RowData } from '@/v1/types/general'
+import { Sheet, Column, RowData } from "@/v1/types/general"
 
 export type RefreshAccessTokenRequest = {
   refreshToken: string
@@ -67,6 +67,17 @@ export type RemoveAdditionalColumnResponse = {
   removed: boolean
 }
 
+export type CheckColorAddOrUpdateRequest = {
+  spreadsheetId: string
+  sheetName: string
+  url: string
+  colorHex: string
+}
+
+export type CheckColorAddOrUpdateResponse =
+  | { add: true }
+  | { add: false; rowIndex: number; row: RowData }
+
 export type AddColorRequest = {
   spreadsheetId: string
   sheetName: string
@@ -79,8 +90,6 @@ export type AddColorRequest = {
     rgb: string
     ranking?: string | number
     comments?: string | undefined
-    slashNaming: string,
-    projectName: string,
     additionalColumns: Omit<Column, "id">[]
   }
 }
@@ -101,8 +110,6 @@ export type UpdateRowRequest = {
     hex: string
     hsl: string
     rgb: string
-    slashNaming: string,
-    projectName: string,
     ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]
@@ -120,14 +127,4 @@ export type GetAdditionalColumnsRequest = {
 
 export type GetAdditionalColumnsResponse = {
   additionalColumns: string[]
-}
-
-export type DeleteRowRequest = {
-  spreadsheetId: string
-  deleteRows: number[]
-  sheetId?: number
-}
-
-export type DeleteRowResponse = {
-  done: boolean
 }
