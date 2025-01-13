@@ -1,20 +1,18 @@
 export type GlobalState = {
-  // user: AuthUser | null
+  files: File[]
   color: string | null
+  user: AuthUser | null
+  parsedData: RowData[]
   colorHistory: string[]
-  // tab?: string | null
-  // files: DriveFile[]
-  // selectedFile: DriveFile | null
-  // submitMode: "add" | "update"
-  // updateRowIndex: number
-  // parsedData: RowData[]
-  // colorHistory: {
-  //   max: number
-  //   recent: string[]
-  // }
+  newColumns: NewColumn[]
+  selectedFile: string | null
 }
 
-
+export type File = {
+  fileName: string
+  sheets: Sheet[]
+  spreadsheetId: string
+}
 
 export type AuthUser = {
   accessToken: string
@@ -24,10 +22,13 @@ export type AuthUser = {
   expiry: number
 }
 
-
-
 export type Column = {
   id: string
+  name: string
+  value: string
+}
+
+export type NewColumn = {
   name: string
   value: string
 }
@@ -55,12 +56,6 @@ export type DriveFileCreateFormFieldsWithId = DriveFileCreateFormFields & {
   spreadsheetId: string
   sheetId: number
   additionalColumns: string[]
-}
-
-export type ModeTab = string | null
-
-export type AddColumnFormFields = {
-  columnName: string
 }
 
 export type RowData = {

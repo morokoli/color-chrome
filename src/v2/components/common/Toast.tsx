@@ -1,23 +1,20 @@
-import { FC } from "react"
-import classNames from "classnames"
-import { Show } from "./Show"
-import {
-  CheckCircleIcon,
-  XCircleIcon,
-  InformationCircleIcon,
-} from "@heroicons/react/24/outline"
+import { FC } from 'react'
+import classNames from 'classnames'
+import { Show } from './Show'
+
+import { CheckCircleIcon, XCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 
 type Props = {
   message: string | null
   type: "error" | "success" | "info" | null
 }
 
-export const Toast: FC<Props> = (props) => {
-  return (
-    <Show if={props.message !== null}>
+export const Toast: FC<Props> = (props) => (
+  <Show if={props.message !== null}>
+    <div className='relative'>
       <div
         className={classNames(
-          "flex space-x-2 px-4 py-2 text-xs w-100 absolute top-0 left-0 w-full border-b-2",
+          "flex space-x-2 px-4 py-2 text-xs w-100 absolute top-0 right-0 w-full border-b-2",
           {
             "bg-custom-green border-custom-green text-white":
               props.type === "success",
@@ -37,6 +34,6 @@ export const Toast: FC<Props> = (props) => {
         )}
         <span className="my-auto">{props.message}</span>
       </div>
-    </Show>
-  )
-}
+    </div>
+  </Show>
+)

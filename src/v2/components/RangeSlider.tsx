@@ -1,28 +1,28 @@
-import { FC, useState } from "react";
-// import { FC, useState, useEffect } from "react";
+import { FC, useState, useEffect } from 'react';
 
-// type Props = {
-//   rankingRange: number | string,
-//   setRankingRange: (value: number) => void
-// }
+type Props = {
+  disabled: boolean,
+  value: number | string,
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
+  onChange: (e: any) => void
+}
 
-// const RangeSlider: FC<Props> = (props) => {
-const RangeSlider: FC = () => {
+const RangeSlider: FC<Props> = ({ value, disabled, onChange }) => {
   const [rangeNumber, setRangeNumber] = useState<number>(0);
   
-  // useEffect(() => {
-  //   setRangeNumber(+props.rankingRange)
-  // }, [props.rankingRange])
+  useEffect(() => {
+    setRangeNumber(+value)
+  }, [value])
 
   const onChangeRangeSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // props.setRankingRange(+value);
+    const { value } = e.target;
+    onChange(e);
     setRangeNumber(+value);
   }
 
   return (
-    <div className="mt-4">
-      <div className="text-center">{rangeNumber}</div>
+    <div className="mt-4 mb-12">
+      <div className="text-center">{rangeNumber || 0}</div>
 
       <div className="range-container">
         <input 
@@ -31,8 +31,9 @@ const RangeSlider: FC = () => {
           min="0" 
           max="100"
           step="1"
-          // fill="black"
-          value={rangeNumber}
+          name="ranking"
+          disabled={disabled}
+          value={rangeNumber || 0}
           onChange={onChangeRangeSlider}
           /* eslint-disable  @typescript-eslint/no-explicit-any */
           {...({ orient: "vertical" } as any)}  

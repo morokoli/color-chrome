@@ -77,37 +77,36 @@ export function SheetActionsScreen() {
   })
 
   const checkSheetValid = useAPI<
-  CheckSheetValidRequest,
-  CheckSheetValidResponse
->({
-  url: config.api.endpoints.checkSheetValid,
-  method: "POST",
-})
+    CheckSheetValidRequest,
+    CheckSheetValidResponse
+  >({
+    url: config.api.endpoints.checkSheetValid,
+    method: "POST",
+  })
 
-const getParsedDataFromFile = (fileId: number) => {
-  const selectedFile = state.files.find(item => String(item.sheet.id) === String(fileId));
+  const getParsedDataFromFile = (fileId: number) => {
+    const selectedFile = state.files.find(item => String(item.sheet.id) === String(fileId));
 
-  if (!selectedFile) return
+    if (!selectedFile) return
 
-  if (selectedFile.id) {
-    checkSheetValid
-      .call({
-        spreadsheetId: selectedFile.id,
-        sheetId: selectedFile.sheet.id,
-        sheetName: selectedFile.sheet.name,
-      })
-      .then((data) => {
-        dispatch({ type: "SET_PARSED_DATA", payload: data.sheetData.parsed })
-      })
-      .catch(() =>
-        toast.display(
-          "error",
-          "Provided spreadsheet does not have valid format",
-        ),
-      )
-  }
-};
-
+    if (selectedFile.id) {
+      checkSheetValid
+        .call({
+          spreadsheetId: selectedFile.id,
+          sheetId: selectedFile.sheet.id,
+          sheetName: selectedFile.sheet.name,
+        })
+        .then((data) => {
+          dispatch({ type: "SET_PARSED_DATA", payload: data.sheetData.parsed })
+        })
+        .catch(() =>
+          toast.display(
+            "error",
+            "Provided spreadsheet does not have valid format",
+          ),
+        )
+    }
+  };
 
   const syncColumns = () => {
     if (state.selectedFile) {

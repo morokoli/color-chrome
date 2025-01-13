@@ -1,5 +1,5 @@
-import { createContext } from "react"
-import { ToastState, Action, initToastState } from "@/reducers/toastReducer"
+import { createContext } from 'react'
+import { ToastState, Action, initToastState } from '@/v2/reducers/toastReducer'
 
 type ToastContextData = {
   state: ToastState

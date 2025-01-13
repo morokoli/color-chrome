@@ -1,9 +1,9 @@
-import { FC } from "react"
-import { colors } from "@/v2/helpers/colors"
-import classNames from "classnames"
-import { useGlobalState } from "@/v2/hooks/useGlobalState"
+import { FC } from 'react'
+import { useGlobalState } from '@/v2/hooks/useGlobalState'
+import { colors } from '@/v2/helpers/colors'
+import classNames from 'classnames'
 
-type Selection = "HEX" | "RGB" | "HSL"
+type Selection = 'HEX' | 'RGB' | 'HSL'
 
 type Props = {
   isCopy?: boolean;
@@ -19,7 +19,7 @@ const ColorCodeButtons: FC<Props> = ({ isCopy, isPanelFull = false, selected, co
   const copyColorHandler = (colorCode: string, colorName: Selection) => {
     copyToClipboard?.(colorCode, colorName);
     const handle = setTimeout(() => {
-      // window.close()
+      window.close()
     }, 1000)
     return () => clearTimeout(handle)
   };

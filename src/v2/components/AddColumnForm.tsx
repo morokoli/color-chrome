@@ -1,95 +1,84 @@
-import { FC } from "react"
-import { useForm } from "react-hook-form"
-import { PlusCircleIcon } from "@heroicons/react/24/outline"
-import { AddColumnFormFields } from "@/types/general"
-// import { useAPI } from "@/hooks/useAPI"
-// import { config } from "@/others/config"
-// import {
-//   AddNewAdditionalColumnRequest,
-//   AddNewAdditionalColumnResponse,
-// } from "@/types/api"
-// import { Loader } from "./Loader"
-import { Show } from "./Show"
-// import { useToast } from "@/hooks/useToast"
+import { FC, useState } from 'react'
+import { AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse } from '@/types/api'
+import { useGlobalState } from '@/v2/hooks/useGlobalState'
+import { useToast } from '@/v2/hooks/useToast'
+import { config } from '@/v2/others/config'
+import { useAPI } from '@/v2/hooks/useAPI'
 
-// type Props = {
-//   onSubmit: (form: AddColumnFormFields) => void
-//   spreadsheetId: string
-//   sheetName: string
-//   sheetId: number
-//   currentAdditionalColumnCount: number
-// }
+import { Show } from './common/Show'
+import { Loader } from './common/Loader'
 
-const formValidators = {
-  columnName: { required: "Column name is required" },
+import { PlusCircleIcon } from '@heroicons/react/24/outline'
+
+type Props = {
+  disabled: boolean;
 }
 
-const AddColumnForm: FC = () => {
-  // const { register, handleSubmit, reset } = useForm<AddColumnFormFields>()
-  const { register } = useForm<AddColumnFormFields>()
-  // const toast = useToast()
+const AddColumnForm: FC<Props> = ({ disabled }) => {
+  const toast = useToast()
+  const [columnName, setColumnName] = useState('');
+  const { state, dispatch } = useGlobalState();
 
-  // const addColumn = useAPI<
-  //   AddNewAdditionalColumnRequest,
-  //   AddNewAdditionalColumnResponse
-  // >({
-  //   url: config.api.endpoints.addColumn,
-  //   method: "POST",
-  // })
+  const { call, isStatusLoading } = useAPI<
+    AddNewAdditionalColumnRequest,
+    AddNewAdditionalColumnResponse
+  >({
+    url: config.api.endpoints.addColumn,
+    method: "POST",
+  })
+
+  const addNewColumn = () => {
+    const file = state.files.find(file => file.spreadsheetId === state.selectedFile);
+    
+    if (!file) {
+      return;
+    }
+
+    call({
+      spreadsheetId: file.spreadsheetId,
+      sheetName: file.sheets[0].name,
+      sheetId: file.sheets[0].id,
+      columnName: columnName,
+     })
+    .then(() => {
+      dispatch({ type: "ADD_NEW_COLUMN", payload: { name: columnName, value: '' } })
+      setColumnName('')
+
+      toast.display("success", "Column created successfully")
+    })
+    .catch(() => toast.display("error", "Failed to create a column"))
+  };
 
   return (
-    <form
-      className="flex"
-      // onSubmit={handleSubmit((form) => {
-      //   if (
-      //     props.currentAdditionalColumnCount ===
-      //     config.limitations.maxAdditionalColumns
-      //   ) {
-      //     toast.display("info", "Please purchase this extension to continue")
-      //     return
-      //   }
-      //   addColumn
-      //     .call({
-      //       spreadsheetId: props.spreadsheetId,
-      //       sheetName: props.sheetName,
-      //       sheetId: props.sheetId,
-      //       columnName: form.columnName,
-      //     })
-      //     .then(() => {
-      //       toast.display("success", "Column added successfully")
-      //       props.onSubmit(form)
-      //       reset()
-      //     })
-      //     .catch(() => toast.display("error", "Failed to add column"))
-      // })}
-    >
+    <div className="flex">
       <fieldset className="flex flex-1">
         <input
           type="text"
+          value={columnName}
+          disabled={disabled}
           placeholder="Column name"
+          onChange={(e) => setColumnName(e.target.value)}
           title="Column name for new additional column"
           className="flex-1 bg-slate-200 text-xs px-2 py-1 focus:outline-none border border-slate-200 focus:border-slate-700"
-          {...register("columnName", formValidators.columnName)}
         />
       </fieldset>
 
       <button
+        onClick={addNewColumn}
+        disabled={disabled || columnName === ''}
         className="px-2 py-1 bg-slate-200 hover:enabled:bg-emerald-100 enabled:cursor-pointer"
-        title="Add column"
       >
-        {/* <Show if={!addColumn.isStatusLoading}> */}
-        <Show if={true}>
+        <Show if={!isStatusLoading}>
           <PlusCircleIcon className="h-5 w-5 text-custom-green my-auto" />
         </Show>
 
-        {/* <Show if={addColumn.isStatusLoading}> */}
-        {/* <Show if={true}>
+        <Show if={isStatusLoading}>
           <div className="px-1">
             <Loader size="small" type="light" />
           </div>
-        </Show> */}
+        </Show>
       </button>
-    </form>
+    </div>
   )
 }
 

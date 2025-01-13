@@ -1,4 +1,4 @@
-import tinycolor from "tinycolor2"
+import tinycolor from 'tinycolor2'
 
 export const colors = {
   hexToRGB(hex: string): string {

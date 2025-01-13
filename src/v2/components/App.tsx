@@ -1,16 +1,18 @@
-import { useReducer, useState, useEffect } from "react"
+import { useReducer, useState, useEffect } from 'react'
+import { initGlobalState, globalReducer } from '@/v2/reducers/globalReducer'
+import { initToastState, toastReducer } from '@/v2/reducers/toastReducer'
+import { ExtensionContainer } from '@/v2/components/common/ExtensionContainer'
+import { GlobalStateContext } from '@/v2/context/globalStateContext'
+import { ToastContext } from '@/v2/context/toastContext'
+import { getAuthCookie } from '@/v2/helpers/cookie'
+import { Auth } from '@/v2/helpers/auth'
 
-import Copy from "./Copy";
-import { Show } from "./Show"
-import Comment from "./Comment";
-import MainMenu from "./MainMenu";
-import AddSheet from "./AddSheet";
-import PickPanel from "./PickPanel";
-import { ToastContext } from "@/v2/context/toastContext"
-import { GlobalStateContext } from "@/v2/context/globalStateContext"
-import { initToastState, toastReducer } from "@/v2/reducers/toastReducer"
-import { ExtensionContainer } from "@/v2/components/ExtensionContainer"
-import { initGlobalState, globalReducer } from "@/v2/reducers/globalReducer"
+import Copy from './Copy';
+import { Show } from './common/Show'
+import Comment from './Comment';
+import MainMenu from './MainMenu';
+import AddSheet from './AddSheet';
+import PickPanel from './PickPanel';
 
 const App = () => {
   const [state, dispatch] = useReducer(globalReducer, initGlobalState)
@@ -24,15 +26,39 @@ const App = () => {
         console.error('Clipboard error: ', err);
       });
     }
-  }
+  };
 
-  /** auto-unselect after n-miliseconds */
+  /** auto-unselect for Copy after n-miliseconds */
   useEffect(() => {
     if (selected) {
       const handle = setTimeout(() => setSelected(null), 2000)
       return () => clearTimeout(handle)
     }
   }, [selected])
+
+  useEffect(() => {
+    /** check if user is logged in */
+    const intervalId = setInterval(() => {
+      getAuthCookie().then((user) => {
+        if (user) {
+          dispatch({ type: "SET_USER", payload: user })
+          
+          /** refresh auth tokens in background */
+          if (user.refreshToken) {
+            const now = new Date().getTime()
+
+            if (now > user.expiry) {
+              Auth.refreshAuthToken(user.refreshToken, (data) => {
+                dispatch({ type: "UPDATE_ACCESS_TOKEN", payload: data })
+              })
+            }
+          }
+
+          clearInterval(intervalId);
+        }
+      })
+    }, 2000);
+  }, [])
 
   return (
     <GlobalStateContext.Provider value={{ state, dispatch }}>
@@ -50,10 +76,10 @@ const App = () => {
             <Copy selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'COMMENT'}>
-            <Comment />
+            <Comment setTab={setTab} />
           </Show>
           <Show if={tab === 'ADD_SHEET'}>
-            <AddSheet />
+            <AddSheet setTab={setTab} />
           </Show>
      
         </ExtensionContainer>

@@ -1,21 +1,20 @@
-import { FC } from "react"
-import { useAPI } from "@/hooks/useAPI"
-import { config } from "@/others/config"
-import { Loader } from "./Loader"
-import { Show } from "./Show"
-import { MinusCircleIcon } from "@heroicons/react/24/outline"
-import {
-  RemoveAdditionalColumnRequest,
-  RemoveAdditionalColumnResponse,
-} from "@/types/api"
+import { FC } from 'react'
+import { RemoveAdditionalColumnRequest, RemoveAdditionalColumnResponse } from '@/v2/types/api'
+import { config } from '@/v2/others/config'
+import { useAPI } from '@/v2/hooks/useAPI'
+
+import { Show } from './common/Show'
+import { Loader } from './common/Loader'
+
+import { MinusCircleIcon } from '@heroicons/react/24/outline'
 
 type Props = {
-  spreadsheetId: string
-  sheetName: string
   sheetId: number
+  sheetName: string
   columnName: string
-  handleSuccess: () => void
+  spreadsheetId: string
   handleError: () => void
+  handleSuccess: () => void
 }
 
 export const RemoveColumnButton: FC<Props> = (props) => {
@@ -29,8 +28,7 @@ export const RemoveColumnButton: FC<Props> = (props) => {
 
   return (
     <button
-      className="px-2 py-1 bg-slate-200 hover:bg-red-100 cursor-pointer rounded-r"
-      title="Remove Column"
+      className="px-2 py-1 bg-slate-200 hover:bg-red-100 cursor-pointer z-10"
       onClick={() => {
         const isConfirmed = window.confirm(
           "Deleting the column will also delete all data in the column. This action cannot be reversed. Are you sure you want to delete the column?",

@@ -1,4 +1,4 @@
-import { GlobalState } from "@/v2/types/general"
+import { GlobalState } from '@/v2/types/general'
 
 export const Storage = {
   storeKey: "color.picker.ext",
