@@ -36,11 +36,11 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
   };
 
   const colorsDeleteHandler = () => {
-      const res = filteredColorHistory.filter((_, index) => !selectedColors.includes(index));
-      setSelectedColors([]);
-      dispatch({ type: "CLEAR_COLOR_HISTORY" });
+    const res = filteredColorHistory.filter((_, index) => !selectedColors.includes(index));
+    setSelectedColors([]);
+    dispatch({ type: "CLEAR_COLOR_HISTORY" });
 
-      res.forEach(color => dispatch({ type: "ADD_COLOR_HISTORY", payload: color }))
+    res.forEach(color => dispatch({ type: "ADD_COLOR_HISTORY", payload: color }))
 
     if (selectedFile) {
       const selectedFileData = state.files.find(item => item.spreadsheetId === selectedFile);
@@ -48,7 +48,8 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
       call({
         spreadsheetId: selectedFile,
         sheetId: selectedFileData?.sheets?.[0]?.id,
-        deleteRows: selectedColors,
+        // sort need for right deletion from file
+        deleteRows: selectedColors.sort((a, b) => b - a),
        })
       .then((data) => {
         if (data.done) {
@@ -66,10 +67,6 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
 
   return (
     <div className="w-full h-[47px] flex mb-1.5 relative content-start">
-      {/* <div className='w-[47px] h-[15px] mr-[17px] mb-[1px] text-[12px] cursor-pointer flex items-center' onClick={() => setTab(null)}>
-        {'<- Back'}
-      </div> */}
-
       <div className='flex flex-col justify-between mr-[1px]'>
         <button
           onClick={() => setTab(null)}
@@ -86,7 +83,7 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
         </button>
       </div>
 
-      <div className='flex flex-wrap'>
+      <div className='flex flex-wrap content-baseline'>
         {filteredColorHistory.map(
           (color, index) => (
             <div

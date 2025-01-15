@@ -39,7 +39,7 @@ const Input: FC<InputProps> = ({ name, value, onChange, placeholder, disabled, h
       <input
         type="text"
         name={name}
-        value={value}
+        value={value || ''}
         disabled={disabled}
         onChange={onChange}
         onBlur={handleValidate}

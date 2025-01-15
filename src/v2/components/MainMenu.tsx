@@ -69,13 +69,14 @@ const MainMenu: FC<Props> = ({ setTab }) => {
 
       <Select placeholder='Add sheet' setTab={setTab} />
 
-      <button
-        onClick={openFileHandler}
-        disabled={!state.selectedFile}
-        className="h-[22px] w-full text-black text-[10px] bg-white border-b border-solid"
-      >
-        {'Open file'}
-      </button>
+      {state.selectedFile && (
+        <button
+          onClick={openFileHandler}
+          className="h-[22px] w-full text-black text-[10px] bg-white border-b border-solid"
+        >
+          {'Open file'}
+        </button>
+      )}
 
       {state.user && (
         <button
