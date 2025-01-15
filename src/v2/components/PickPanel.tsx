@@ -16,8 +16,8 @@ import pickIcon from '@/v2/assets/images/icons/menu/pick.svg'
 import commentIcon from '@/v2/assets/images/icons/menu/comment.svg'
 
 interface Props {
-  setTab: (tab: string | null) => void;
   selected: null | string;
+  setTab: (tab: string | null) => void;
   copyToClipboard: (text: string, selection: null | string) => void
 }
 
@@ -96,7 +96,7 @@ const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
         </div>
       </div>
 
-      <ColorCodeButtons isPanelFull={isPanelFull} selected={selected!} copyToClipboard={copyToClipboard} />
+      <ColorCodeButtons color={color!} isPanelFull={isPanelFull} selected={selected!} copyToClipboard={copyToClipboard} />
 
       <button
         onClick={() => setTab('COMMENT')}

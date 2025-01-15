@@ -11,11 +11,14 @@ import Select from './Select'
 import RangeSlider from './RangeSlider'
 import ColorHistory from './ColorHistory'
 import AddColumnForm from './AddColumnForm'
+import ColorCodeButtons from './ColorCodeButtons';
 
 import logoIcon from '@/v2/assets/images/logo.png'
 
 interface Props {
+  selected: null | string;
   setTab: (tab: string | null) => void;
+  copyToClipboard: (text: string, selection: null | string) => void
 }
 
 const colData = [
@@ -46,7 +49,7 @@ const initialState = {
   projectName: '',
 };
 
-const Comment: FC<Props> = ({ setTab }) => {
+const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   const toast = useToast()
   const [error, setError] = useState<boolean>(false);
   const [ selectedColors, setSelectedColors ] = useState<number[]>([]);
@@ -173,8 +176,29 @@ const Comment: FC<Props> = ({ setTab }) => {
 
   return (
     <div className="border-2 flex flex-col w-[275px] min-h-[370px] p-1.5 relative">
-      <ColorHistory setTab={setTab} selectedColors={selectedColors} setSelectedColors={setSelectedColors} />
-      <Select placeholder='Add Google Sheet to Save Colors' isComment ckeckFlag={checkValidFlag} setCheckValidFlag={setCheckValidFlag} setTab={setTab} />
+      <ColorHistory
+        setTab={setTab}
+        selectedColors={selectedColors}
+        setSelectedColors={setSelectedColors}
+      />
+      <Select
+        isComment
+        setTab={setTab}
+        ckeckFlag={checkValidFlag}
+        setCheckValidFlag={setCheckValidFlag}
+        placeholder='Add Google Sheet to Save Colors'
+      />
+      <div className='mb-3'>
+        <ColorCodeButtons
+          isComment
+          isPanelFull={true}
+          selected={selected!}
+          copyToClipboard={copyToClipboard}
+          color={colorHistory[selectedColors[0]]}
+        />
+      </div>
+
+
       {colData.map(
         data => (
           <Input

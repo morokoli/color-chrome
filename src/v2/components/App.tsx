@@ -76,7 +76,7 @@ const App = () => {
             <Copy selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'COMMENT'}>
-            <Comment setTab={setTab} />
+            <Comment setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'ADD_SHEET'}>
             <AddSheet setTab={setTab} />
