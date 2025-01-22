@@ -17,10 +17,6 @@ const ColorCodeButtons: FC<Props> = ({ color, isCopy, isComment, isPanelFull = f
   const copyColorHandler = (colorCode: string, colorName: Selection) => {
     if (color) {
       copyToClipboard?.(colorCode, colorName);
-      const handle = setTimeout(() => {
-        window.close()
-      }, 1000)
-      return () => clearTimeout(handle)
     }
   };
 
@@ -39,7 +35,7 @@ const ColorCodeButtons: FC<Props> = ({ color, isCopy, isComment, isPanelFull = f
         title="Copy HEX to clipboard"
         onClick={() => copyColorHandler(color!, "HEX")}
       >
-        {selected === "HEX" ? "COPIED" : color || '-'}
+        {selected === "HEX" ? "COPIED" : color || 'HEX'}
       </button>
 
       <button

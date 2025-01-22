@@ -1,18 +1,19 @@
 import { useReducer, useState, useEffect } from 'react'
+import { ExtensionContainer } from '@/v2/components/common/ExtensionContainer'
 import { initGlobalState, globalReducer } from '@/v2/reducers/globalReducer'
 import { initToastState, toastReducer } from '@/v2/reducers/toastReducer'
-import { ExtensionContainer } from '@/v2/components/common/ExtensionContainer'
 import { GlobalStateContext } from '@/v2/context/globalStateContext'
 import { ToastContext } from '@/v2/context/toastContext'
 import { getAuthCookie } from '@/v2/helpers/cookie'
 import { Auth } from '@/v2/helpers/auth'
 
-import Copy from './Copy';
+import Copy from './Copy'
+import Comment from './Comment'
+import MainMenu from './MainMenu'
+import AddSheet from './AddSheet'
+import PickPanel from './PickPanel'
 import { Show } from './common/Show'
-import Comment from './Comment';
-import MainMenu from './MainMenu';
-import AddSheet from './AddSheet';
-import PickPanel from './PickPanel';
+import AiGenerator from './AIGenerator'
 
 const App = () => {
   const [state, dispatch] = useReducer(globalReducer, initGlobalState)
@@ -71,6 +72,9 @@ const App = () => {
           </Show>
           <Show if={tab === 'PICK_PANEL'}>
             <PickPanel setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
+          </Show>
+          <Show if={tab === 'AI_GENERATOR'}>
+            <AiGenerator setTab={setTab} />
           </Show>
           <Show if={tab === 'COPY'}>
             <Copy selected={selected} copyToClipboard={copyToClipboard} />

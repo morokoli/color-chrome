@@ -110,3 +110,11 @@ input[type="checkbox"]:checked::before {
   color: #0f6cfc;
   text-decoration: underline;
 }
+
+.zoom-08 {
+  zoom: 0.8;
+}
+
+.zoom-15 {
+  zoom: 1.5;
+}

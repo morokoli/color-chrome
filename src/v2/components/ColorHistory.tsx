@@ -1,4 +1,4 @@
-import { FC } from 'react'
+import { FC, useEffect } from 'react'
 import { DeleteRowRequest, DeleteRowResponse } from '@/v2/types/api'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
@@ -27,11 +27,11 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
   })
 
   const colorChangeHandler = (colorIndex: number) => {
+    // [] because at the first iteration user could select multiple colors
     if (!selectedColors.includes(colorIndex)) {
-      setSelectedColors([...selectedColors, colorIndex])
+      setSelectedColors([colorIndex])
     } else {
-      const res = selectedColors.filter(color => color !== colorIndex);
-      setSelectedColors(res)
+      setSelectedColors([])
     }
   };
 
@@ -61,9 +61,14 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
   };
 
   const openFileHandler = () => {
-    const fileUrl = "https://docs.google.com/spreadsheets/d/" + selectedFile;  // Change to your file's URL
+    const fileUrl = import.meta.env.VITE_SPREADSHEET_URL + selectedFile;
     window.open(fileUrl, '_blank');
   }
+
+  // set Selected last color from Color history
+  useEffect(() => {
+    setSelectedColors([colorHistory.length - 1]);
+  }, [colorHistory])
 
   return (
     <div className="w-full h-[47px] flex mb-1.5 relative content-start">
@@ -90,7 +95,7 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
               key={color + index}
               style={{ backgroundColor: color }}
               onClick={() => colorChangeHandler(index)}
-              className={`w-[15px] h-[15px] mr-[1px] mb-[1px] ${selectedColors.includes(index) ? "border-2 border-solid border-black" : ""}`}
+              className={`w-[15px] h-[15px] mr-[1px] mb-[1px] ${selectedColors.includes(index) ? "border-2 border-solid border-black zoom-15" : ""}`}
             />
           ))
           .reverse()}

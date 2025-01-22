@@ -111,10 +111,16 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
 
       {isExisting && (
         <>
-          <div className="mb-2 h-[60px]">
+          <div className="mb-2">
             <Input key='url' name='url' placeholder="Paste URL Sheet Here" value={sheetUrl} onChange={handleChangeUrl} />
           </div>
-            <div className="w-full flex justify-end mt-2">
+            <div className="w-full flex justify-between mt-2">
+            <button
+                onClick={() => setTab(null)}
+                className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+              >
+                Back
+              </button>
               <button
                 disabled={!sheetUrl || loadindGetSheetByUrl} 
                 onClick={getFileDataByUrl}
@@ -128,18 +134,24 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
       )}
       {!isExisting && (
         <>
-          <div className="h-[60px]">
+          <div>
             <Input key='sheetName' name='sheetName' placeholder="Sheet Name" value={fileName} onChange={e => setFileName(e.target.value)} />
             <Input key='tabName' name='tabName' placeholder="Tab Name" value={sheetName} onChange={e => setSheetName(e.target.value)} />
           </div>
-           <div className="w-full flex justify-end mt-2">
-           <button
-             disabled={!fileName || !sheetName || loadingCreateSheet}
-             onClick={createSheetFile}
-             className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
-           >
-              {loadingCreateSheet ? 'Loading...' : 'Create'}
-           </button>
+           <div className="w-full flex justify-between mt-2 mb-2">
+            <button
+                onClick={() => setTab(null)}
+                className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+              >
+                Back
+              </button>
+            <button
+              disabled={!fileName || !sheetName || loadingCreateSheet}
+              onClick={createSheetFile}
+              className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
+            >
+                {loadingCreateSheet ? 'Loading...' : 'Create'}
+            </button>
          </div>
         </>
        

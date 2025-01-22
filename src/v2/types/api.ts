@@ -113,6 +113,13 @@ export type UpdateRowResponse = {
   done: boolean
 }
 
+export type AiGeneratedColorResponse = {
+  cmyk: number[]
+  rgb: number[]
+  color_description: string
+  hex_code: string
+}
+
 export type GetAdditionalColumnsRequest = {
   spreadsheetId: string
   sheetName: string

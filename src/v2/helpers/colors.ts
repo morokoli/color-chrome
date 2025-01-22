@@ -3,7 +3,7 @@ import tinycolor from 'tinycolor2'
 export const colors = {
   hexToRGB(hex: string): string {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    if (!result) return "-"
+    if (!result) return "RGB"
 
     const rgb = {
       r: parseInt(result[1], 16),
@@ -16,7 +16,7 @@ export const colors = {
 
   hexToHSL(hex: string): string {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    if (!result) return "-"
+    if (!result) return "HSL"
 
     let r = parseInt(result[1], 16)
     let g = parseInt(result[2], 16)

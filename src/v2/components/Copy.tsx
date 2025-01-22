@@ -1,6 +1,7 @@
 import { FC } from 'react'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 
+import PickBtn from './common/PickBtn'
 import ColorCodeButtons from './ColorCodeButtons'
 
 interface Props {
@@ -13,7 +14,11 @@ const Copy: FC<Props> = ({ selected, copyToClipboard }) => {
   const { color } = state;
 
   return (
-    <div className="border-2 flex items-center justify-between w-[150px]">
+    <div className="border-2 flex items-center justify-between w-[150px] flex-col">
+      <div className='w-full h-full mb-0.5 pr-1.5'>
+        <PickBtn />
+      </div>
+
       <ColorCodeButtons
         isCopy
         isPanelFull

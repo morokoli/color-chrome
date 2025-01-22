@@ -8,6 +8,7 @@ import pickIcon from '@/v2/assets/images/icons/menu/pick.svg'
 import copyIcon from '@/v2/assets/images/icons/menu/copy.svg'
 import sheetIcon from '@/v2/assets/images/icons/menu/sheet.svg'
 import commentIcon from '@/v2/assets/images/icons/menu/comment.svg'
+import aigeneratorIcon from '@/v2/assets/images/icons/menu/aigenerator.svg'
 
 interface Props {
   setTab: (tab: string | null) => void;
@@ -26,6 +27,11 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       title: 'Pick Color',
       icon: pickIcon,
       menuName: "PICK_PANEL",
+    },
+    {
+      title: 'Ai Generator',
+      icon: aigeneratorIcon,
+      menuName: "AI_GENERATOR",
     },
     {
       title: 'Copy',
@@ -50,7 +56,8 @@ const MainMenu: FC<Props> = ({ setTab }) => {
   }
 
   return (
-    <div className="w-[200px] border-2">
+    // zoom - smaller main menu to 20%
+    <div className="w-[200px] border-2 zoom-08">
       {data.map((item, index) => (
         <div
           key={item.title}
@@ -60,7 +67,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
           <div className="h-[23px] w-[25px] ml-2 mr-5" >
             <img src={item.icon} alt="icon" className="h-full w-full" />
           </div>
-          <div>{item.title}</div>
+          <div className='text-[22px]'>{item.title}</div>
         </div>
       ))}
       <div className="text-[10px] text-center">
