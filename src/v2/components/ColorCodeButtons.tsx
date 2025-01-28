@@ -7,13 +7,13 @@ type Selection = 'HEX' | 'RGB' | 'HSL'
 type Props = {
   color: string;
   isCopy?: boolean;
-  isComment?: boolean;
+  isCompact?: boolean;
   isPanelFull: boolean;
   selected?: string | null;
   copyToClipboard?: (text: string, selection: string | null) => void
 }
 
-const ColorCodeButtons: FC<Props> = ({ color, isCopy, isComment, isPanelFull = false, selected, copyToClipboard }) => {
+const ColorCodeButtons: FC<Props> = ({ color, isCopy, isCompact, isPanelFull = false, selected, copyToClipboard }) => {
   const copyColorHandler = (colorCode: string, colorName: Selection) => {
     if (color) {
       copyToClipboard?.(colorCode, colorName);
@@ -28,9 +28,9 @@ const ColorCodeButtons: FC<Props> = ({ color, isCopy, isComment, isPanelFull = f
         className={classNames("px-0.5 py-1 w-[147px] h-[40px]", {
           "bg-slate-200": selected !== "HEX",
           "bg-teal-100": selected === "HEX",
-          "mr-3": !isComment,
-          "text-[14px]": !isComment,
-          "text-[11px]": isComment,
+          "mr-3": !isCompact,
+          "text-[14px]": !isCompact,
+          "text-[11px]": isCompact,
         })}
         title="Copy HEX to clipboard"
         onClick={() => copyColorHandler(color!, "HEX")}
@@ -42,10 +42,10 @@ const ColorCodeButtons: FC<Props> = ({ color, isCopy, isComment, isPanelFull = f
         className={classNames("px-0.5 py-1 w-[147px] h-[40px]", {
           "bg-slate-200": selected !== "RGB",
           "bg-teal-100": selected === "RGB",
-          "mr-3": !isComment,
-          "mx-3": isComment,
-          "text-[14px]": !isComment,
-          "text-[11px]": isComment,
+          "mr-3": !isCompact,
+          "mx-3": isCompact,
+          "text-[14px]": !isCompact,
+          "text-[11px]": isCompact,
         })}
         title="Copy RGB to clipboard"
         onClick={() => copyColorHandler(colors.hexToRGB(color!), "RGB")}
@@ -57,9 +57,9 @@ const ColorCodeButtons: FC<Props> = ({ color, isCopy, isComment, isPanelFull = f
         className={classNames("px-0.5 py-1 w-[147px] h-[40px]", {
           "bg-slate-200": selected !== "HSL",
           "bg-teal-100": selected === "HSL",
-          "mr-3": !isComment,
-          "text-[14px]": !isComment,
-          "text-[11px]": isComment,
+          "mr-3": !isCompact,
+          "text-[14px]": !isCompact,
+          "text-[11px]": isCompact,
         })}
         title="Copy HSL to clipboard"
         onClick={() => copyColorHandler(colors.hexToHSL(color!), "HSL")}

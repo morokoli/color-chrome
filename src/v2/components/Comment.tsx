@@ -189,7 +189,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       />
       <div className='mb-3'>
         <ColorCodeButtons
-          isComment
+          isCompact
           isPanelFull={true}
           selected={selected!}
           copyToClipboard={copyToClipboard}

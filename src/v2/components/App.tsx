@@ -74,7 +74,7 @@ const App = () => {
             <PickPanel setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'AI_GENERATOR'}>
-            <AiGenerator setTab={setTab} />
+            <AiGenerator setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'COPY'}>
             <Copy selected={selected} copyToClipboard={copyToClipboard} />
