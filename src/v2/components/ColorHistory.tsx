@@ -6,12 +6,12 @@ import { config } from '@/v2/others/config'
 import { useAPI } from '@/v2/hooks/useAPI'
 
 interface Props {
-  selectedColors: number[];
+  selectedColor: number;
   setTab: (tab: string | null) => void;
-  setSelectedColors: (value: number[]) => void;
+  setSelectedColor: (value: number | null) => void;
 }
 
-const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) => {
+const ColorHistory: FC<Props> = ({ setTab, selectedColor, setSelectedColor }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState();
   const { colorHistory, selectedFile } = state;
@@ -28,16 +28,16 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
 
   const colorChangeHandler = (colorIndex: number) => {
     // [] because at the first iteration user could select multiple colors
-    if (!selectedColors.includes(colorIndex)) {
-      setSelectedColors([colorIndex])
+    if (selectedColor !== colorIndex) {
+      setSelectedColor(colorIndex)
     } else {
-      setSelectedColors([])
+      setSelectedColor(null)
     }
   };
 
   const colorsDeleteHandler = () => {
-    const res = filteredColorHistory.filter((_, index) => !selectedColors.includes(index));
-    setSelectedColors([]);
+    const res = filteredColorHistory.filter((_, index) => selectedColor !== index);
+    setSelectedColor(null);
     dispatch({ type: "CLEAR_COLOR_HISTORY" });
 
     res.forEach(color => dispatch({ type: "ADD_COLOR_HISTORY", payload: color }))
@@ -49,7 +49,7 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
         spreadsheetId: selectedFile,
         sheetId: selectedFileData?.sheets?.[0]?.id,
         // sort need for right deletion from file
-        deleteRows: selectedColors.sort((a, b) => b - a),
+        deleteRows: [selectedColor],
        })
       .then((data) => {
         if (data.done) {
@@ -67,7 +67,7 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
 
   // set Selected last color from Color history
   useEffect(() => {
-    setSelectedColors([colorHistory.length - 1]);
+    setSelectedColor(colorHistory.length - 1);
   }, [colorHistory])
 
   return (
@@ -95,7 +95,7 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColors, setSelectedColors }) 
               key={color + index}
               style={{ backgroundColor: color }}
               onClick={() => colorChangeHandler(index)}
-              className={`w-[15px] h-[15px] mr-[1px] mb-[1px] ${selectedColors.includes(index) ? "border-2 border-solid border-black zoom-15" : ""}`}
+              className={`w-[15px] h-[15px] mr-[1px] mb-[1px] ${selectedColor === index ? "border-2 border-solid border-black zoom-15" : ""}`}
             />
           ))
           .reverse()}

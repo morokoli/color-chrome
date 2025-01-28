@@ -52,14 +52,14 @@ const initialState = {
 const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   const toast = useToast()
   const [error, setError] = useState<boolean>(false);
-  const [ selectedColors, setSelectedColors ] = useState<number[]>([]);
+  const [ selectedColor, setSelectedColor ] = useState<number | null>(null);
   const [ checkValidFlag, setCheckValidFlag ] = useState<boolean>(false);
   /* eslint-disable  @typescript-eslint/no-explicit-any */
   const [formData, setFormData] = useState<any>(initialState);
 
   const { state, dispatch } = useGlobalState();
   const { selectedFile, parsedData, newColumns, colorHistory } = state;
-  const isDisable = !selectedFile || selectedColors.length > 1 || selectedColors.length === 0;
+  const isDisable = !selectedFile || !selectedColor;
 
   const { call, isStatusLoading} = useAPI<UpdateRowRequest, UpdateRowResponse>({
     url: config.api.endpoints.updateRow,
@@ -77,7 +77,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   
   const handleSave = () => {
     const selectedFileData = state.files.find(item => item.spreadsheetId === state.selectedFile);
-    const selectedColor = colorHistory[selectedColors[0]];
+    const selectedColorHEX = colorHistory[selectedColor!];
 
     // Step 1: Find keys from the input object that are not in initialState
     const additionalKeys = Object.keys(formData).filter(key => !(key in initialState));
@@ -92,15 +92,15 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       spreadsheetId: state.selectedFile!,
       sheetName: selectedFileData?.sheets?.[0]?.name || '',
       sheetId: selectedFileData?.sheets?.[0]?.id || 0,
-      rowIndex: selectedColors[0] + 1,
+      rowIndex: selectedColor! + 1,
       row: {
         timestamp: new Date().valueOf(),
         url: formData.url,
-        hex: selectedColor,
+        hex: selectedColorHEX,
         slashNaming: formData.slashNaming,
         projectName: formData.projectName,
-        hsl: colors.hexToHSL(selectedColor),
-        rgb: colors.hexToRGB(selectedColor),
+        hsl: colors.hexToHSL(selectedColorHEX),
+        rgb: colors.hexToRGB(selectedColorHEX),
         comments: formData?.comments || '',
         ranking: String(formData?.ranking) || '',
         additionalColumns: additionalColumns,
@@ -131,8 +131,8 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   };
 
   const getInputValue = (inputName: string) => {
-    if (selectedColors.length === 0) return
-    const valuesArr = parsedData.filter((_data, index) => selectedColors.includes(index));
+    if (selectedColor === null) return
+    const valuesArr = parsedData.filter((_data, index) => selectedColor === index);
     const transformedArr = valuesArr.map(item => ({...item, ...getAdditionalColumns(item.additionalColumns)}))
     const filtered = transformedArr.map((color: any) => color?.[inputName]);
     const inputString = filtered.every(item => item === filtered[0]) ? filtered[0] : `Several ${convertFromCamelCase(inputName)}`;
@@ -159,18 +159,17 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   useEffect(() => {
     const colNamesArr = [...colData, ...additionalColumns, ...newColumns]
 
-    if (selectedColors.length > 0) {
+    if (selectedColor) {
       colNamesArr.forEach(data => getInputValue(data.name))
     } else {
       setFormData(initialState)
     }
  
-  }, [selectedColors, newColumns])
+  }, [selectedColor, newColumns])
 
   useEffect(() => {
     if (!selectedFile) {
       setFormData(initialState)
-      setSelectedColors([])
     }
   }, [selectedFile])
 
@@ -178,8 +177,8 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     <div className="border-2 flex flex-col w-[275px] min-h-[370px] p-1.5 relative">
       <ColorHistory
         setTab={setTab}
-        selectedColors={selectedColors}
-        setSelectedColors={setSelectedColors}
+        selectedColor={selectedColor!}
+        setSelectedColor={setSelectedColor}
       />
       <Select
         isComment
@@ -194,7 +193,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           isPanelFull={true}
           selected={selected!}
           copyToClipboard={copyToClipboard}
-          color={colorHistory[selectedColors[0]]}
+          color={colorHistory[selectedColor!]}
         />
       </div>
 

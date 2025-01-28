@@ -1,4 +1,4 @@
-import { FC, useState } from 'react'
+import { FC, useEffect, useState } from 'react'
 import { AddColorRequest, AddColorResponse } from '@/v2/types/api'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
@@ -15,6 +15,7 @@ const Comment: FC<Props> = ({ setTab }) => {
   const toast = useToast()
   const [loading, setLoading] = useState<boolean>(false);
   const [respColor, setRespColor] = useState<string>('');
+  const [showTooltip, setShowTooltip] = useState<boolean>(false);
   const [colorDescription, setColorDescription] = useState<string>('');
 
   const addColor = useAPI<AddColorRequest, AddColorResponse>({
@@ -72,6 +73,14 @@ const Comment: FC<Props> = ({ setTab }) => {
       .catch((err) => toast.display("error", err))
   };
 
+  useEffect(() => {
+    if (!selectedFile) {
+      setShowTooltip(true)
+    } else {
+      setShowTooltip(false)
+    }
+  }, [selectedFile]);
+
   return (
     <div className="border-2 flex flex-col w-[275px] min-h-[370px] p-1.5 relative items-center">
       <div
@@ -89,9 +98,14 @@ const Comment: FC<Props> = ({ setTab }) => {
       <button
         onClick={handleGenerate}
         disabled={colorDescription === ''}
-        className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
+        className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400 relative"
       >
         {loading ? 'Loading...' : 'Generate'}
+        {showTooltip  && (
+          <div className="w-[200px] absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-gray-800 text-white text-[9px] rounded py-1 px-2 z-10">
+            You need to login and add sheet
+          </div>
+        )}
       </button>
 
       <div className="w-full flex justify-between absolute bottom-0 p-3">
