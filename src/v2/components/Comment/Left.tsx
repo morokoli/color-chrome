@@ -18,6 +18,7 @@ interface Props {
   copyToClipboard: (text: string, selection: null | string) => void
   handleSave: (color: string) => void;
   setCheckValidFlag: (value: boolean) => void
+  setAddNewColorLoading: (value: boolean) => void
 }
 
 const Left: FC<Props> = ({
@@ -27,6 +28,7 @@ const Left: FC<Props> = ({
   copyToClipboard,
   handleSave,
   setCheckValidFlag,
+  setAddNewColorLoading,
 }) => {
   const toast = useToast();
   const { state } = useGlobalState();
@@ -42,6 +44,7 @@ const Left: FC<Props> = ({
   const selectedFileData = files.find(file => file.spreadsheetId === selectedFile);
 
   const addColorToFile = (color: string) => {
+    setAddNewColorLoading(true);
     getPageURL().then((url) => {
       addColor
       .call({
@@ -62,6 +65,7 @@ const Left: FC<Props> = ({
         },
       })
       .then(() => {
+        setAddNewColorLoading(false);
         setCheckValidFlag(true)
         toast.display("success", "Color saved successfully")
       })

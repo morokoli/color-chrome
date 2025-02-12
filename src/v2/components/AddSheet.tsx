@@ -3,13 +3,15 @@ import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from "@/v2/hooks/useToast"
 import { config } from '@/v2/others/config'
 import { useAPI } from "@/v2/hooks/useAPI"
-import Input from '@/v2/components/Input';
 import {
   DriveFileCreateRequest,
   DriveFileCreateResponse,
   DriveFileGetByURLRequest,
   DriveFileGetByURLResponse,
 } from "@/v2/types/api"
+
+import Input from '@/v2/components/Input';
+import Select from '@/v2/components/Select'
 
 interface Props {
   setTab: (tab: string | null) => void;
@@ -18,7 +20,8 @@ interface Props {
 const AddSheet: FC<Props> = memo(({ setTab }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState();
-  const [isExisting, setIsExisting] = useState(true);
+  const { user, selectedFile } = state;
+  const [tabName, setTabName] = useState('exist');
   const [sheetUrl, setSheetUrl] = useState('');
   const [fileName, setFileName] = useState('');
   const [sheetName, setSheetName] = useState('');
@@ -84,32 +87,41 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
     )
   };
 
+  const removeFileHandler = () => {
+    dispatch({ type: "REMOVE_FILES", payload: selectedFile! });
+    dispatch({ type: "SET_SELECTED_FILE", payload: '' });
+  };
+
   const openLogin = () => {
     const url = config.api.baseURL + config.api.endpoints.auth
     window.open(url, "Google Sign-in", "width=1000,height=700")
   }
 
   useEffect(() => {
-    if (!state.user) {
+    if (!user) {
       setTab(null);
       openLogin();
     }
-  }, [state.user]);
+  }, [user]);
 
   return (
     <div className="w-[450px] border-2 flex-col p-3">
-      <div className="flex mb-3">
-        <div className="mr-5">
-          <input type="checkbox" id="existing" name="existing" checked={isExisting} onChange={() => setIsExisting(true)}/>
+      <div className="flex mb-3 justify-between">
+        <div className="flex items-center">
+          <input type="checkbox" id="existing" name="existing" checked={tabName === 'exist'} onChange={() => setTabName('exist')}/>
           <label htmlFor="existing" className="ml-2">Existing Sheet</label>
         </div>
-        <div>
-          <input type="checkbox" id="new" name="new" checked={!isExisting} onChange={() => setIsExisting(false)}/>
+        <div className="flex items-center">
+          <input type="checkbox" id="new" name="new" checked={tabName === 'new'} onChange={() => setTabName('new')}/>
           <label htmlFor="new" className="ml-2">New Sheet</label>
+        </div>
+        <div className="flex items-center">
+          <input type="checkbox" id="remove" name="remove" checked={tabName === 'remove'} onChange={() => setTabName('remove')}/>
+          <label htmlFor="remove" className="ml-2">Remove Sheet</label>
         </div>
       </div>
 
-      {isExisting && (
+      {tabName === 'exist' && (
         <>
           <div className="mb-2">
             <Input key='url' name='url' placeholder="Paste URL Sheet Here" value={sheetUrl} onChange={handleChangeUrl} />
@@ -132,7 +144,8 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
         </>
 
       )}
-      {!isExisting && (
+
+      {tabName === 'new' && (
         <>
           <div>
             <Input key='sheetName' name='sheetName' placeholder="Sheet Name" value={fileName} onChange={e => setFileName(e.target.value)} />
@@ -155,6 +168,30 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
          </div>
         </>
        
+      )}
+
+      {tabName === 'remove' && (
+        <>
+          <div className="mb-2">
+            <Select placeholder='Select sheet' />
+          </div>
+            <div className="w-full flex justify-between mt-2">
+            <button
+                onClick={() => setTab(null)}
+                className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+              >
+                Back
+              </button>
+              <button
+                disabled={!selectedFile || loadindGetSheetByUrl} 
+                onClick={removeFileHandler}
+                className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
+              >
+                {loadindGetSheetByUrl ? 'Loading...' : 'Remove'}
+              </button>
+           </div>
+        </>
+
       )}
 
     </div>

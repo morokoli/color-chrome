@@ -28,6 +28,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     const { state } = useGlobalState();
     const { colorHistory } = state;
     const [ selectedColor, setSelectedColor ] = useState<number | null>(null);
+    const [ addNewColorLoading, setAddNewColorLoading ] = useState<boolean>(false);
     /* eslint-disable  @typescript-eslint/no-explicit-any */
     const [formData, setFormData] = useState<any>(initialState);
     const [ checkValidFlag, setCheckValidFlag ] = useState<boolean>(false);
@@ -76,7 +77,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
         toast.display("error", "Failed to update color")
       })
     };
- 
+
     return (
       <div className="border-2 flex">
         <Left
@@ -86,13 +87,14 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           copyToClipboard={copyToClipboard}
           handleSave={handleSave}
           setCheckValidFlag={setCheckValidFlag}
+          setAddNewColorLoading={setAddNewColorLoading}
         />
         <Right
           setTab={setTab}
           selectedColor={selectedColor}
           initialState={initialState}
           handleSave={handleSave}
-          loading={isStatusLoading}
+          loading={isStatusLoading || addNewColorLoading}
           formData={formData}
           setFormData={setFormData}
           checkValidFlag={checkValidFlag}
