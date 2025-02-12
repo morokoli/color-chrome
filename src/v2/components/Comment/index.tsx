@@ -79,7 +79,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     };
 
     return (
-      <div className="border-2 flex">
+      <div className="border-2 flex w-[840px]">
         <Left
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}

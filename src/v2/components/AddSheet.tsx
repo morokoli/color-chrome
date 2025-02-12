@@ -127,7 +127,7 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
             <Input key='url' name='url' placeholder="Paste URL Sheet Here" value={sheetUrl} onChange={handleChangeUrl} />
           </div>
             <div className="w-full flex justify-between mt-2">
-            <button
+              <button
                 onClick={() => setTab(null)}
                 className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
               >
