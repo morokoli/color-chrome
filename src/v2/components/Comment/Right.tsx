@@ -1,24 +1,33 @@
 import { FC, useState, useEffect } from 'react'
-import { UpdateRowRequest, UpdateRowResponse } from '@/v2/types/api'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
-import { colors } from '@/v2/helpers/colors'
-import { config } from '@/v2/others/config'
-import { useAPI } from '@/v2/hooks/useAPI'
 
-import Input from './Input'
-import Select from './Select'
-import RangeSlider from './RangeSlider'
-import ColorHistory from './ColorHistory'
-import AddColumnForm from './AddColumnForm'
-import ColorCodeButtons from './ColorCodeButtons';
+import Input from '../Input'
+import Select from '../Select'
+import RangeSlider from '../RangeSlider'
+import AddColumnForm from '../AddColumnForm'
 
 import logoIcon from '@/v2/assets/images/logo.png'
 
+type initialState = {
+  url: string,
+  ranking: number,
+  comments: string,
+  slashNaming: string,
+  projectName: string,
+}
+
 interface Props {
-  selected: null | string;
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
+  formData: any;
   setTab: (tab: string | null) => void;
-  copyToClipboard: (text: string, selection: null | string) => void
+  selectedColor: null | number;
+  initialState: initialState;
+  handleSave: () => void;
+  loading: boolean;
+  checkValidFlag: boolean;
+  setFormData: (value: any) => void
+  setCheckValidFlag: (value: boolean) => void
 }
 
 const colData = [
@@ -41,77 +50,29 @@ const additionalColumns = [
   {name: 'ranking'},
 ];
 
-const initialState = {
-  url: '',
-  ranking: 0,
-  comments: '',
-  slashNaming: '',
-  projectName: '',
-};
-
-const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
+const Right: FC<Props> = ({
+  setTab,
+  selectedColor,
+  initialState,
+  handleSave,
+  loading,
+  formData,
+  setFormData,
+  checkValidFlag,
+  setCheckValidFlag
+}) => {
   const toast = useToast()
   const [error, setError] = useState<boolean>(false);
-  const [ selectedColor, setSelectedColor ] = useState<number | null>(null);
-  const [ checkValidFlag, setCheckValidFlag ] = useState<boolean>(false);
-  /* eslint-disable  @typescript-eslint/no-explicit-any */
-  const [formData, setFormData] = useState<any>(initialState);
+
 
   const { state, dispatch } = useGlobalState();
-  const { selectedFile, parsedData, newColumns, colorHistory } = state;
-  const isDisable = !selectedFile || !selectedColor;
+  const { selectedFile, parsedData, newColumns } = state;
+  const isDisable = !selectedFile || selectedColor === null;
 
-  const { call, isStatusLoading} = useAPI<UpdateRowRequest, UpdateRowResponse>({
-    url: config.api.endpoints.updateRow,
-    method: "PUT",
-  })
-
-  const convertFromCamelCase = (str: string) => {
-    // Convert the first character to uppercase
-    // Replace any occurrences of uppercase letters with a space and the lowercase version of the letter
-    return str
-      .replace(/([A-Z])/g, ' $1') // Adds a space before uppercase letters
-      .replace(/^./, (match) => match.toUpperCase()) // Capitalizes the first letter
-      .trim(); // Remove any leading/trailing spaces
+  const openFileHandler = () => {
+    const fileUrl = import.meta.env.VITE_SPREADSHEET_URL + selectedFile;
+    window.open(fileUrl, '_blank');
   }
-  
-  const handleSave = () => {
-    const selectedFileData = state.files.find(item => item.spreadsheetId === state.selectedFile);
-    const selectedColorHEX = colorHistory[selectedColor!];
-
-    // Step 1: Find keys from the input object that are not in initialState
-    const additionalKeys = Object.keys(formData).filter(key => !(key in initialState));
-
-    // Step 2: Convert to the desired array of objects
-    const additionalColumns = additionalKeys.map(key => ({
-      name: key,
-      value: formData[key]
-    }));
-
-    call({
-      spreadsheetId: state.selectedFile!,
-      sheetName: selectedFileData?.sheets?.[0]?.name || '',
-      sheetId: selectedFileData?.sheets?.[0]?.id || 0,
-      rowIndex: selectedColor! + 1,
-      row: {
-        timestamp: new Date().valueOf(),
-        url: formData.url,
-        hex: selectedColorHEX,
-        slashNaming: formData.slashNaming,
-        projectName: formData.projectName,
-        hsl: colors.hexToHSL(selectedColorHEX),
-        rgb: colors.hexToRGB(selectedColorHEX),
-        comments: formData?.comments || '',
-        ranking: String(formData?.ranking) || '',
-        additionalColumns: additionalColumns,
-      },
-    })
-    .then(() => {
-      setCheckValidFlag(true)
-      toast.display("success", "Color updated successfully")
-    })
-    .catch(() => toast.display("error", "Failed to update color"))
-  };
 
   const handleChange = (event: any) => {
     const { name, value } = event.target;
@@ -135,7 +96,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     const valuesArr = parsedData.filter((_data, index) => selectedColor === index);
     const transformedArr = valuesArr.map(item => ({...item, ...getAdditionalColumns(item.additionalColumns)}))
     const filtered = transformedArr.map((color: any) => color?.[inputName]);
-    const inputString = filtered.every(item => item === filtered[0]) ? filtered[0] : `Several ${convertFromCamelCase(inputName)}`;
+    const inputString = filtered[0] || '';
 
     setFormData((prevState: any) => ({
       ...prevState,
@@ -159,7 +120,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   useEffect(() => {
     const colNamesArr = [...colData, ...additionalColumns, ...newColumns]
 
-    if (selectedColor) {
+    if (selectedColor !== null) {
       colNamesArr.forEach(data => getInputValue(data.name))
     } else {
       setFormData(initialState)
@@ -174,12 +135,25 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   }, [selectedFile])
 
   return (
-    <div className="border-2 flex flex-col w-[275px] min-h-[370px] p-1.5 relative">
-      <ColorHistory
-        setTab={setTab}
-        selectedColor={selectedColor!}
-        setSelectedColor={setSelectedColor}
-      />
+    <div className="flex flex-col w-[275px] min-h-[370px] p-1.5 relative">
+      <div className='flex justify-between mb-3'>
+        <div className="flex items-center">
+          <div className="h-[27px] w-[30px] mr-1.5">
+            <img src={logoIcon} alt="pick" className="w-full h-full" />
+          </div>
+
+          <a href='https://colorwithyou.com/' className="text-xs underline text-blue-600">
+            colorwithyou.com
+          </a>
+        </div>
+        <button
+          onClick={openFileHandler}
+          disabled={!selectedFile}
+          className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+        >
+          {'Go to sheet'}
+        </button>
+      </div>
       <Select
         isComment
         setTab={setTab}
@@ -187,17 +161,6 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
         setCheckValidFlag={setCheckValidFlag}
         placeholder='Add Google Sheet to Save Colors'
       />
-      <div className='mb-3'>
-        <ColorCodeButtons
-          isCompact
-          isPanelFull={true}
-          selected={selected!}
-          copyToClipboard={copyToClipboard}
-          color={colorHistory[selectedColor!]}
-        />
-      </div>
-
-
       {colData.map(
         data => (
           <Input
@@ -240,22 +203,19 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
 
       <div className="flex absolute bottom-1.5  justify-between w-[95%]">
 
-      <div className="flex items-center">
-        <div className="h-[27px] w-[30px] mr-1.5">
-          <img src={logoIcon} alt="pick" className="w-full h-full" />
-        </div>
-
-        <a href='https://colorwithyou.com/' className="text-xs underline text-blue-600">
-          colorwithyou.com
-        </a>
-      </div>
+      <button
+        onClick={() => setTab(null)}
+        className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+      >
+        Back
+      </button>
 
       <button
-        onClick={handleSave}
+        onClick={() => handleSave()}
         disabled={isDisable || error}
         className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
       >
-        {isStatusLoading ? 'Loading...' : 'Save'}
+        {loading ? 'Loading...' : 'Save'}
       </button>
 
       </div>
@@ -264,4 +224,4 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   )
 }
 
-export default Comment;
+export default Right;

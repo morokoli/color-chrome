@@ -140,11 +140,11 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
           </div>
            <div className="w-full flex justify-between mt-2 mb-2">
             <button
-                onClick={() => setTab(null)}
-                className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
-              >
-                Back
-              </button>
+              onClick={() => setTab(null)}
+              className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+            >
+              Back
+            </button>
             <button
               disabled={!fileName || !sheetName || loadingCreateSheet}
               onClick={createSheetFile}

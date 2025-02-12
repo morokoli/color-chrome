@@ -7,16 +7,17 @@ import { useAPI } from '@/v2/hooks/useAPI'
 
 interface Props {
   selectedColor: number;
-  setTab: (tab: string | null) => void;
   setSelectedColor: (value: number | null) => void;
+  setCurrentColor: (value: string) => void;
+  setColorFromPallete: (value: string) => void;
 }
 
-const ColorHistory: FC<Props> = ({ setTab, selectedColor, setSelectedColor }) => {
+const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentColor, setColorFromPallete }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState();
   const { colorHistory, selectedFile } = state;
-  // not more then 38 colors
-  const filteredColorHistory = colorHistory.slice(0, 38);
+  // not more then 65 colors
+  const filteredColorHistory = colorHistory.slice(0, 65);
 
   const { call } = useAPI<
     DeleteRowRequest,
@@ -26,12 +27,15 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColor, setSelectedColor }) =>
     method: "POST",
   })
 
-  const colorChangeHandler = (colorIndex: number) => {
-    // [] because at the first iteration user could select multiple colors
+  const colorChangeHandler = (colorIndex: number, color: string) => {
     if (selectedColor !== colorIndex) {
       setSelectedColor(colorIndex)
+      setCurrentColor(color)
+      setColorFromPallete(color)
     } else {
       setSelectedColor(null)
+      setCurrentColor('#fff')
+      setColorFromPallete('#fff')
     }
   };
 
@@ -60,49 +64,27 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColor, setSelectedColor }) =>
     }
   };
 
-  const openFileHandler = () => {
-    const fileUrl = import.meta.env.VITE_SPREADSHEET_URL + selectedFile;
-    window.open(fileUrl, '_blank');
-  }
-
   // set Selected last color from Color history
   useEffect(() => {
     setSelectedColor(colorHistory.length - 1);
   }, [colorHistory])
 
   return (
-    <div className="w-full h-[47px] flex mb-1.5 relative content-start">
-      <div className='flex flex-col justify-between mr-[1px]'>
-        <button
-          onClick={() => setTab(null)}
-          className="h-[22px] w-[50px] text-black text-[10px] bg-white disabled:bg-gray-400 border border-black"
-        >
-          {'<- Back'}
-        </button>
-        <button
-          onClick={openFileHandler}
-          disabled={!selectedFile}
-          className="h-[22px] w-[50px] text-black text-[10px] bg-white disabled:bg-gray-400 border border-black"
-        >
-          {'Open file'}
-        </button>
-      </div>
-
-      <div className='flex flex-wrap content-baseline'>
+    <div className="w-[125px] h-[241px] relative">
+      <div className='flex flex-wrap content-baseline gap-[1px]'>
         {filteredColorHistory.map(
           (color, index) => (
             <div
               key={color + index}
               style={{ backgroundColor: color }}
-              onClick={() => colorChangeHandler(index)}
-              className={`w-[15px] h-[15px] mr-[1px] mb-[1px] ${selectedColor === index ? "border-2 border-solid border-black zoom-15" : ""}`}
+              onClick={() => colorChangeHandler(index, color)}
+              className={`w-[20px] h-[21px] ${selectedColor === index ? "border border-solid border-black scale-180 z-10" : ""}`}
             />
           ))
-          .reverse()}
+          .reverse()
+          }
         <div className='delete-square' onClick={() => colorsDeleteHandler()}/>
       </div>
-     
-    
     </div>
   )
 }
