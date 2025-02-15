@@ -50,7 +50,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
         name: key,
         value: formData[key]
       }));
-  
+
       call({
         spreadsheetId: state.selectedFile!,
         sheetName: selectedFileData?.sheets?.[0]?.name || '',
@@ -79,7 +79,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     };
 
     return (
-      <div className="border-2 flex w-[840px]">
+      <div className="border-2 flex w-[800px]">
         <Left
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}

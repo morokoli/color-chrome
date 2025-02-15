@@ -118,7 +118,7 @@ const Select: FC<ISelectProps> = ({ setTab, isComment = false, placeholder, setC
       <select
         value={selectedFile || ''}
         onChange={onChange}
-        className="select px-1 py-1 w-full text-xs text-slate-800 bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none border border-slate-200 focus:border-slate-700"
+        className="select px-1 py-1 w-full text-[11px] text-slate-800 bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none border border-slate-200 focus:border-slate-700"
       >
         <option value="">{placeholder}</option>
         {files.map((item: File) => (

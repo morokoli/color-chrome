@@ -10,14 +10,13 @@ interface Props {
   setSelectedColor: (value: number | null) => void;
   setCurrentColor: (value: string) => void;
   setColorFromPallete: (value: string) => void;
+  setCheckValidFlag: (value: boolean) => void
 }
 
-const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentColor, setColorFromPallete }) => {
+const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentColor, setColorFromPallete, setCheckValidFlag }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState();
   const { colorHistory, selectedFile } = state;
-  // not more then 65 colors
-  const filteredColorHistory = colorHistory.slice(0, 65);
 
   const { call } = useAPI<
     DeleteRowRequest,
@@ -39,40 +38,47 @@ const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentCo
     }
   };
 
-  const colorsDeleteHandler = () => {
-    const res = filteredColorHistory.filter((_, index) => selectedColor !== index);
+  const deleteColorFromState = () => {
+    const res = colorHistory.filter((_, index) => selectedColor !== index);
     setSelectedColor(null);
     dispatch({ type: "CLEAR_COLOR_HISTORY" });
 
     res.forEach(color => dispatch({ type: "ADD_COLOR_HISTORY", payload: color }))
+  };
 
+  const colorsDeleteHandler = () => {
+    if (selectedColor === null) return;
     if (selectedFile) {
+      const isConfirmed = window.confirm(
+        "It will be deleted from sheet as well. Are you sure to continue?",
+      )
+      if (!isConfirmed) return
+      
       const selectedFileData = state.files.find(item => item.spreadsheetId === selectedFile);
 
       call({
         spreadsheetId: selectedFile,
         sheetId: selectedFileData?.sheets?.[0]?.id,
-        // sort need for right deletion from file
         deleteRows: [selectedColor],
        })
       .then((data) => {
         if (data.done) {
           toast.display("success", "Color removed successfully")
         }
+        setCheckValidFlag(true)
       })
       .catch(() => toast.display("error", "Failed to fetch spreadsheet details"))
     }
+    deleteColorFromState();
   };
 
   // set Selected last color from Color history
-  useEffect(() => {
-    setSelectedColor(colorHistory.length - 1);
-  }, [colorHistory])
+  useEffect(() => setSelectedColor(colorHistory.length - 1), [colorHistory])
 
   return (
-    <div className="w-[125px] h-[241px] relative">
-      <div className='flex flex-wrap content-baseline gap-[1px]'>
-        {filteredColorHistory.map(
+    <div className="w-[125px] h-[241px] relative color-history">
+      <div className='flex flex-wrap content-baseline gap-[1px] color-history-container'>
+        {colorHistory.map(
           (color, index) => (
             <div
               key={color + index}
@@ -83,7 +89,7 @@ const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentCo
           ))
           .reverse()
           }
-        <div className='delete-square' onClick={() => colorsDeleteHandler()}/>
+        <div className='delete-square' onClick={colorsDeleteHandler} />
       </div>
     </div>
   )

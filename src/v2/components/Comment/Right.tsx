@@ -59,11 +59,10 @@ const Right: FC<Props> = ({
   formData,
   setFormData,
   checkValidFlag,
-  setCheckValidFlag
+  setCheckValidFlag,
 }) => {
   const toast = useToast()
   const [error, setError] = useState<boolean>(false);
-
 
   const { state, dispatch } = useGlobalState();
   const { selectedFile, parsedData, newColumns } = state;
@@ -72,6 +71,10 @@ const Right: FC<Props> = ({
   const openFileHandler = () => {
     const fileUrl = import.meta.env.VITE_SPREADSHEET_URL + selectedFile;
     window.open(fileUrl, '_blank');
+  }
+
+  const openLink = () => {
+    window.open('https://colorswithyou.com/', '_blank');
   }
 
   const handleChange = (event: any) => {
@@ -93,6 +96,7 @@ const Right: FC<Props> = ({
 
   const getInputValue = (inputName: string) => {
     if (selectedColor === null) return
+
     const valuesArr = parsedData.filter((_data, index) => selectedColor === index);
     const transformedArr = valuesArr.map(item => ({...item, ...getAdditionalColumns(item.additionalColumns)}))
     const filtered = transformedArr.map((color: any) => color?.[inputName]);
@@ -135,21 +139,21 @@ const Right: FC<Props> = ({
   }, [selectedFile])
 
   return (
-    <div className="flex flex-col w-[275px] min-h-[370px] p-1.5 relative">
+    <div className="flex flex-col w-[245px] min-h-[370px] pr-[15px] pt-[15px] pb-[5px] relative">
       <div className='flex justify-between mb-3'>
         <div className="flex items-center">
-          <div className="h-[27px] w-[30px] mr-1.5">
+          <div className="h-[27px] w-[30px] mr-0.5">
             <img src={logoIcon} alt="pick" className="w-full h-full" />
           </div>
 
-          <a href='https://colorwithyou.com/' className="text-xs underline text-blue-600">
-            colorwithyou.com
+          <a href='https://colorswithyou.com/' className="text-[10px] underline text-blue-600" onClick={openLink}>
+            colorswithyou.com
           </a>
         </div>
         <button
           onClick={openFileHandler}
           disabled={!selectedFile}
-          className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+          className="h-[40px] w-[85px] text-black text-[14px] border border-solid border-black"
         >
           {'Go to sheet'}
         </button>
@@ -201,11 +205,11 @@ const Right: FC<Props> = ({
       <AddColumnForm disabled={!selectedFile} />
       <RangeSlider disabled={isDisable} onChange={handleChange} value={+formData['ranking']}/>
 
-      <div className="flex absolute bottom-1.5  justify-between w-[95%]">
+      <div className="flex absolute bottom-1.5  justify-between w-[93%]">
 
       <button
         onClick={() => setTab(null)}
-        className="h-[40px] w-[100px] text-black text-[16px] border border-solid border-black"
+        className="h-[40px] w-[85px] text-black text-[14px] border border-solid border-black"
       >
         Back
       </button>
@@ -213,7 +217,7 @@ const Right: FC<Props> = ({
       <button
         onClick={() => handleSave()}
         disabled={isDisable || error}
-        className="h-[40px] w-[100px] text-white text-[16px] bg-black disabled:bg-gray-400"
+        className="h-[40px] w-[85px] text-white text-[14px] bg-black disabled:bg-gray-400"
       >
         {loading ? 'Loading...' : 'Save'}
       </button>

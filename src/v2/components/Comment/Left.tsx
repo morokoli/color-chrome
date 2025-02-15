@@ -31,7 +31,7 @@ const Left: FC<Props> = ({
   setAddNewColorLoading,
 }) => {
   const toast = useToast();
-  const { state } = useGlobalState();
+  const { state, dispatch } = useGlobalState();
   const { files, selectedFile, colorHistory } = state;
   const [colorFromPallete, setColorFromPallete] = useState<string>('#fff');
   const [currentColor, setCurrentColor] = useState<string>('#fff');
@@ -74,12 +74,15 @@ const Left: FC<Props> = ({
   };
 
   const handleClickAccept = () => {
-    if (selectedColor === null) {
+    if (!selectedFile) {
+      dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
+    } else if (selectedColor === null || selectedColor < 0) {
       addColorToFile(colorFromPallete);
     } else {
       handleSave(colorFromPallete);
-      setCurrentColor(colorFromPallete);
     }
+
+    setCurrentColor(colorFromPallete);
   };
 
   useEffect(() => {
@@ -87,7 +90,7 @@ const Left: FC<Props> = ({
       setCurrentColor(colorHistory[selectedColor]);
       setColorFromPallete(colorHistory[selectedColor]);
     }
-  }, [selectedColor])
+  }, [selectedColor, colorHistory])
   
   return (
     <div className="relative">
@@ -104,6 +107,7 @@ const Left: FC<Props> = ({
           setSelectedColor={setSelectedColor}
           setCurrentColor={setCurrentColor}
           setColorFromPallete={setColorFromPallete}
+          setCheckValidFlag={setCheckValidFlag}
         />
       </div>
       <div className='absolute bottom-[6px] left-[40px]'>
