@@ -50,16 +50,27 @@ body {
   -webkit-transform: rotate(135deg);
 }
 
+/* color history */
+
+.color-history {
+  background: conic-gradient(from 90deg at 1px 1px, #e2e8f0 90deg, #0000 0) -1px -1px / 21px 22px;
+  background-color: #caccd0;
+}
+
+.color-history-container div:nth-child(n+66):not(.delete-square){
+  display: none;
+}
 
 /* .delete-square */
 
 .delete-square {
-  width: 15px;
-  height: 15px;
+  width: 20px;
+  height: 21px;
   position: absolute;
-  right: 4px;
+  right: 0;
   bottom: 0;
   border: 1px solid red;
+  z-index: 0;
 }
 
 .delete-square::before, .delete-square::after {
@@ -117,4 +128,36 @@ input[type="checkbox"]:checked::before {
 
 .zoom-15 {
   zoom: 1.5;
+}
+
+.scale-180 {
+  transform: scale(1.8);
+}
+
+
+.photoshop-picker {
+  background: #fff !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  width: 100% !important;
+}
+
+/* header */
+.photoshop-picker > div:nth-child(1) {
+  display: none;
+}
+
+.photoshop-picker > div:nth-child(2) > div:nth-child(3) {
+  width: 240px !important;
+}
+
+.photoshop-picker > div:nth-child(2) > div:nth-child(3) > div > div:nth-child(1) {
+  margin-left: 20px;
+}
+
+/* hsv and rgb */
+.photoshop-picker > div:nth-child(2) > div:nth-child(3) > div > div:nth-child(2) > div:nth-child(3) {
+  top: 125px;
+  left: 320px;
+  position: absolute !important;
 }

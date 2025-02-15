@@ -20,6 +20,7 @@ export type Action =
 | { type: "CLEAR_NEW_COLUMNS" }
 | { type: "CLEAR_COLOR_HISTORY" }
 | { type: "ADD_FILES"; payload: File }
+| { type: "REMOVE_FILES"; payload: string }
   | { type: "SET_COLOR"; payload: string }
   | { type: "ADD_COLOR_HISTORY"; payload: string }
   | { type: "ADD_NEW_COLUMN"; payload: NewColumn }
@@ -55,6 +56,10 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "ADD_FILES":
       return produce(state, (draft) => {
         draft.files.push(action.payload);
+      })
+    case "REMOVE_FILES":
+      return produce(state, (draft) => {
+        draft.files = draft.files.filter(file => file.spreadsheetId !== action.payload);
       })
     case "SET_SELECTED_FILE":
       return produce(state, (draft) => {

@@ -7,16 +7,16 @@ import { useAPI } from '@/v2/hooks/useAPI'
 
 interface Props {
   selectedColor: number;
-  setTab: (tab: string | null) => void;
   setSelectedColor: (value: number | null) => void;
+  setCurrentColor: (value: string) => void;
+  setColorFromPallete: (value: string) => void;
+  setCheckValidFlag: (value: boolean) => void
 }
 
-const ColorHistory: FC<Props> = ({ setTab, selectedColor, setSelectedColor }) => {
+const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentColor, setColorFromPallete, setCheckValidFlag }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState();
   const { colorHistory, selectedFile } = state;
-  // not more then 38 colors
-  const filteredColorHistory = colorHistory.slice(0, 38);
 
   const { call } = useAPI<
     DeleteRowRequest,
@@ -26,83 +26,71 @@ const ColorHistory: FC<Props> = ({ setTab, selectedColor, setSelectedColor }) =>
     method: "POST",
   })
 
-  const colorChangeHandler = (colorIndex: number) => {
-    // [] because at the first iteration user could select multiple colors
+  const colorChangeHandler = (colorIndex: number, color: string) => {
     if (selectedColor !== colorIndex) {
       setSelectedColor(colorIndex)
+      setCurrentColor(color)
+      setColorFromPallete(color)
     } else {
       setSelectedColor(null)
+      setCurrentColor('#fff')
+      setColorFromPallete('#fff')
     }
   };
 
-  const colorsDeleteHandler = () => {
-    const res = filteredColorHistory.filter((_, index) => selectedColor !== index);
+  const deleteColorFromState = () => {
+    const res = colorHistory.filter((_, index) => selectedColor !== index);
     setSelectedColor(null);
     dispatch({ type: "CLEAR_COLOR_HISTORY" });
 
     res.forEach(color => dispatch({ type: "ADD_COLOR_HISTORY", payload: color }))
+  };
 
+  const colorsDeleteHandler = () => {
+    if (selectedColor === null) return;
     if (selectedFile) {
+      const isConfirmed = window.confirm(
+        "It will be deleted from sheet as well. Are you sure to continue?",
+      )
+      if (!isConfirmed) return
+      
       const selectedFileData = state.files.find(item => item.spreadsheetId === selectedFile);
 
       call({
         spreadsheetId: selectedFile,
         sheetId: selectedFileData?.sheets?.[0]?.id,
-        // sort need for right deletion from file
         deleteRows: [selectedColor],
        })
       .then((data) => {
         if (data.done) {
           toast.display("success", "Color removed successfully")
         }
+        setCheckValidFlag(true)
       })
       .catch(() => toast.display("error", "Failed to fetch spreadsheet details"))
     }
+    deleteColorFromState();
   };
 
-  const openFileHandler = () => {
-    const fileUrl = import.meta.env.VITE_SPREADSHEET_URL + selectedFile;
-    window.open(fileUrl, '_blank');
-  }
-
   // set Selected last color from Color history
-  useEffect(() => {
-    setSelectedColor(colorHistory.length - 1);
-  }, [colorHistory])
+  useEffect(() => setSelectedColor(colorHistory.length - 1), [colorHistory])
 
   return (
-    <div className="w-full h-[47px] flex mb-1.5 relative content-start">
-      <div className='flex flex-col justify-between mr-[1px]'>
-        <button
-          onClick={() => setTab(null)}
-          className="h-[22px] w-[50px] text-black text-[10px] bg-white disabled:bg-gray-400 border border-black"
-        >
-          {'<- Back'}
-        </button>
-        <button
-          onClick={openFileHandler}
-          disabled={!selectedFile}
-          className="h-[22px] w-[50px] text-black text-[10px] bg-white disabled:bg-gray-400 border border-black"
-        >
-          {'Open file'}
-        </button>
-      </div>
-
-      <div className='flex flex-wrap content-baseline'>
-        {filteredColorHistory.map(
+    <div className="w-[125px] h-[241px] relative color-history">
+      <div className='flex flex-wrap content-baseline gap-[1px] color-history-container'>
+        {colorHistory.map(
           (color, index) => (
             <div
               key={color + index}
               style={{ backgroundColor: color }}
-              onClick={() => colorChangeHandler(index)}
-              className={`w-[15px] h-[15px] mr-[1px] mb-[1px] ${selectedColor === index ? "border-2 border-solid border-black zoom-15" : ""}`}
+              onClick={() => colorChangeHandler(index, color)}
+              className={`w-[20px] h-[21px] ${selectedColor === index ? "border border-solid border-black scale-180 z-10" : ""}`}
             />
           ))
-          .reverse()}
-        <div className='delete-square' onClick={() => colorsDeleteHandler()}/>
+          .reverse()
+          }
+        <div className='delete-square' onClick={colorsDeleteHandler} />
       </div>
-     
-    
     </div>
   )
 }

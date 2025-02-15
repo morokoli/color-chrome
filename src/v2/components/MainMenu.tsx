@@ -2,7 +2,7 @@ import { FC } from 'react'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { eraseAllCookies } from '@/v2/helpers/cookie'
 
-import Select from './Select'
+import Select from '@/v2/components/Select'
 
 import pickIcon from '@/v2/assets/images/icons/menu/pick.svg'
 import copyIcon from '@/v2/assets/images/icons/menu/copy.svg'
@@ -44,7 +44,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       menuName: "COMMENT",
     },
     {
-      title: 'Add Sheet',
+      title: '+/- Sheet',
       icon: sheetIcon,
       menuName: "ADD_SHEET",
     },

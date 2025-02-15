@@ -53,7 +53,6 @@ const PickBtn: FC<Props> = ({ copyToClipboard }) => {
         toast.display("success", "Color saved successfully")
       })
       .catch((err) => toast.display("error", err))
-
     });
   };
 

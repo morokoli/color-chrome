@@ -77,7 +77,7 @@ const App = () => {
             <AiGenerator setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'COPY'}>
-            <Copy selected={selected} copyToClipboard={copyToClipboard} />
+            <Copy setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
           </Show>
           <Show if={tab === 'COMMENT'}>
             <Comment setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
