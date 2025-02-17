@@ -22,7 +22,7 @@ const Copy: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       <div className='w-full h-full mb-2'>
         <ColorCodeButtons
           isCopy
-          isPanelFull
+          isPanelOpen
           color={color!}
           selected={selected!}
           copyToClipboard={copyToClipboard}
