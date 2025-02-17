@@ -8,19 +8,19 @@ type Props = {
   color: string;
   isCopy?: boolean;
   isCompact?: boolean;
-  isPanelFull: boolean;
+  isPanelOpen: boolean;
   selected?: string | null;
   copyToClipboard?: (text: string, selection: string | null) => void
 }
 
-const ColorCodeButtons: FC<Props> = ({ color, isCopy, isCompact, isPanelFull = false, selected, copyToClipboard }) => {
+const ColorCodeButtons: FC<Props> = ({ color, isCopy, isCompact, isPanelOpen = false, selected, copyToClipboard }) => {
   const copyColorHandler = (colorCode: string, colorName: Selection) => {
     if (color) {
       copyToClipboard?.(colorCode, colorName);
     }
   };
 
-  if (!isPanelFull) return null;
+  if (!isPanelOpen) return null;
 
   return (
     <div className={`flex ${isCopy ? 'flex-col h-[130px] justify-between' : 'flex-row'}`}>

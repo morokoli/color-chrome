@@ -17,15 +17,15 @@ interface Props {
 const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   const { state } = useGlobalState()
   const { color } = state;
-  const [isPanelFull, setIsPanelFull] = useState(true)
+  const [isPanelOpen, setIsPanelOpen] = useState(true)
 
   return (
-    <div id='container' className={`${isPanelFull ? 'w-fit' : 'w-[300px]'} h-[50px] border-2 flex items-center justify-between`}>
+    <div id='container' className={`${isPanelOpen ? 'w-fit' : 'w-[300px]'} h-[50px] border-2 flex items-center justify-between`}>
       <div className='ml-3 mr-3'>
         <PickBtn copyToClipboard={copyToClipboard} />
       </div>
 
-      <ColorCodeButtons color={color!} isPanelFull={isPanelFull} selected={selected!} copyToClipboard={copyToClipboard} />
+      <ColorCodeButtons color={color!} isPanelOpen={isPanelOpen} selected={selected!} copyToClipboard={copyToClipboard} />
 
       <button
         onClick={() => setTab('COMMENT')}
@@ -39,7 +39,7 @@ const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           <img src={homeIcon} alt="home" className="h-full w-full" />
         </div>
       </div>
-      <div onClick={() => setIsPanelFull(!isPanelFull)} className={classNames(`cursor-pointer arrow ${isPanelFull ? 'right' : 'left' }`)} />
+      <div onClick={() => setIsPanelOpen(!isPanelOpen)} className={classNames(`cursor-pointer arrow ${isPanelOpen ? 'right' : 'left' }`)} />
     </div>
   )
 }

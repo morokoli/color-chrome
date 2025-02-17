@@ -130,7 +130,7 @@ const Right: FC<Props> = ({
       setFormData(initialState)
     }
  
-  }, [selectedColor, newColumns])
+  }, [selectedColor])
 
   useEffect(() => {
     if (!selectedFile) {

@@ -104,7 +104,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
         <ColorCodeButtons
           isCompact
           color={respColor}
-          isPanelFull={true}
+          isPanelOpen={true}
           selected={selected!}
           copyToClipboard={copyToClipboard}
         />
@@ -132,7 +132,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
 
       <button
         onClick={() => setTab('COMMENT')}
-        className="h-[40px] w-[100px] border-2 text-white text-[20px] flex justify-center"
+        className="h-[40px] w-[100px] text-[20px] flex justify-center"
       >
         <img src={commentIcon} alt="comment" className="h-[40px] w-[40px]" />
       </button>
