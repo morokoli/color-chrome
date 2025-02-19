@@ -80,7 +80,7 @@ export type AddColorRequest = {
     ranking?: string | number
     comments?: string | undefined
     slashNaming: string,
-    projectName: string,
+    tags: string,
     additionalColumns: Omit<Column, "id">[]
   }
 }
@@ -102,7 +102,7 @@ export type UpdateRowRequest = {
     hsl: string
     rgb: string
     slashNaming: string,
-    projectName: string,
+    tags: string,
     ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]
