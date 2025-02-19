@@ -19,9 +19,11 @@ interface Props {
   copyToClipboard: (text: string, selection: null | string) => void
   setCheckValidFlag: (value: boolean) => void
   setAddNewColorLoading: (value: boolean) => void
+  setTab: (tab: string | null) => void;
 }
 
 const Left: FC<Props> = ({
+  setTab,
   selectedColor,
   setSelectedColor,
   selected,
@@ -59,7 +61,7 @@ const Left: FC<Props> = ({
           comments: 'Manual Input',
           ranking: '',
           slashNaming: '',
-          projectName: '',
+          tags: '',
           additionalColumns: [],
         },
       })
@@ -117,7 +119,7 @@ const Left: FC<Props> = ({
         />
       </div>
       <div className='h-[40px] w-[85px] absolute bottom-[5px] left-[15px]'>
-        <PickBtn />
+        <PickBtn onSuccess={() => setCheckValidFlag(true)} onClick={() => setTab('PICK_PANEL')} />
       </div>
     </div>
   )

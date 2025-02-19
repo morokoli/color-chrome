@@ -12,9 +12,11 @@ import pickIcon from '@/v2/assets/images/icons/menu/pick.svg'
 
 interface Props {
   copyToClipboard?: (text: string, selection: null | string) => void
+  onSuccess?: () => void
+  onClick?: () => void
 }
 
-const PickBtn: FC<Props> = ({ copyToClipboard }) => {
+const PickBtn: FC<Props> = ({ copyToClipboard, onSuccess, onClick }) => {
   const toast = useToast()
   const { open } = useEyeDropper()
   const { state, dispatch } = useGlobalState()
@@ -45,11 +47,12 @@ const PickBtn: FC<Props> = ({ copyToClipboard }) => {
           comments: '',
           ranking: '',
           slashNaming: '',
-          projectName: '',
+          tags: '',
           additionalColumns: [],
         },
       })
       .then(() => {
+        if (onSuccess) onSuccess()
         toast.display("success", "Color saved successfully")
       })
       .catch((err) => toast.display("error", err))
@@ -75,10 +78,12 @@ const PickBtn: FC<Props> = ({ copyToClipboard }) => {
     openPicker()
   }, [open])
 
+  const onCLickHandler = () => onClick ? onClick() : pickColor(); 
+
   return (
     <div
       id='pickBtn'
-      onClick={pickColor}
+      onClick={onCLickHandler}
       className={`flex items-center cursor-pointer border-2 justify-center ${btnClassnames}`}
       style={{ backgroundColor: color! }}
     >

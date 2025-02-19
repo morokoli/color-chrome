@@ -20,7 +20,7 @@ const initialState = {
   ranking: 0,
   comments: '',
   slashNaming: '',
-  projectName: '',
+  tags: '',
 };
 
 const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
@@ -61,7 +61,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           url: formData.url,
           hex: selectedColorHEX,
           slashNaming: formData.slashNaming,
-          projectName: formData.projectName,
+          tags: formData.tags,
           hsl: colors.hexToHSL(selectedColorHEX),
           rgb: colors.hexToRGB(selectedColorHEX),
           comments: formData?.comments || '',
@@ -81,6 +81,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     return (
       <div className="border-2 flex w-[800px]">
         <Left
+          setTab={setTab}
           selectedColor={selectedColor}
           setSelectedColor={setSelectedColor}
           selected={selected}

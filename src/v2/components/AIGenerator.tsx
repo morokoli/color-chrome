@@ -70,7 +70,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           comments: colorDescription,
           ranking: '',
           slashNaming: '',
-          projectName: '',
+          tags: '',
           additionalColumns: [],
         },
       })

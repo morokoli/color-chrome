@@ -14,7 +14,7 @@ type initialState = {
   ranking: number,
   comments: string,
   slashNaming: string,
-  projectName: string,
+  tags: string,
 }
 
 interface Props {
@@ -40,8 +40,8 @@ const colData = [
     placeholder: 'Slash Naming ex: a/b/c',
   },
   {
-    name: 'projectName',
-    placeholder: 'Project or Brand Name',
+    name: 'tags',
+    placeholder: 'Tags ex: a/b/c or a, b, c',
   },
 ];
 
@@ -95,8 +95,6 @@ const Right: FC<Props> = ({
   };
 
   const getInputValue = (inputName: string) => {
-    if (selectedColor === null) return
-
     const valuesArr = parsedData.filter((_data, index) => selectedColor === index);
     const transformedArr = valuesArr.map(item => ({...item, ...getAdditionalColumns(item.additionalColumns)}))
     const filtered = transformedArr.map((color: any) => color?.[inputName]);
@@ -124,13 +122,13 @@ const Right: FC<Props> = ({
   useEffect(() => {
     const colNamesArr = [...colData, ...additionalColumns, ...newColumns]
 
-    if (selectedColor !== null) {
+    if (selectedColor !== null && parsedData.length !== 0) {
       colNamesArr.forEach(data => getInputValue(data.name))
     } else {
       setFormData(initialState)
     }
  
-  }, [selectedColor])
+  }, [selectedColor, parsedData])
 
   useEffect(() => {
     if (!selectedFile) {
