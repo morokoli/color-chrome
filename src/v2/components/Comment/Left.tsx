@@ -8,6 +8,7 @@ import { colors } from '@/v2/helpers/colors'
 import { config } from '@/v2/others/config'
 import { useAPI } from '@/v2/hooks/useAPI'
 
+import PickBtn from '../common/PickBtn'
 import ColorHistory from '../ColorHistory'
 import ColorCodeButtons from '../ColorCodeButtons';
 
@@ -16,7 +17,6 @@ interface Props {
   setSelectedColor: (colorId: number | null) => void;
   selected: null | string;
   copyToClipboard: (text: string, selection: null | string) => void
-  handleSave: (color: string) => void;
   setCheckValidFlag: (value: boolean) => void
   setAddNewColorLoading: (value: boolean) => void
 }
@@ -26,7 +26,6 @@ const Left: FC<Props> = ({
   setSelectedColor,
   selected,
   copyToClipboard,
-  handleSave,
   setCheckValidFlag,
   setAddNewColorLoading,
 }) => {
@@ -57,7 +56,7 @@ const Left: FC<Props> = ({
           hex: color,
           hsl: colors.hexToHSL(color),
           rgb: colors.hexToRGB(color),
-          comments: '',
+          comments: 'Manual Input',
           ranking: '',
           slashNaming: '',
           projectName: '',
@@ -76,10 +75,8 @@ const Left: FC<Props> = ({
   const handleClickAccept = () => {
     if (!selectedFile) {
       dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
-    } else if (selectedColor === null || selectedColor < 0) {
-      addColorToFile(colorFromPallete);
     } else {
-      handleSave(colorFromPallete);
+      addColorToFile(colorFromPallete);
     }
 
     setCurrentColor(colorFromPallete);
@@ -93,7 +90,7 @@ const Left: FC<Props> = ({
   }, [selectedColor, colorHistory])
   
   return (
-    <div className="relative">
+    <div className="relative min-h-[423px]">
       <PhotoshopPicker
         color={colorFromPallete}
         onChange={color => setColorFromPallete(color.hex)}
@@ -110,14 +107,17 @@ const Left: FC<Props> = ({
           setCheckValidFlag={setCheckValidFlag}
         />
       </div>
-      <div className='absolute bottom-[6px] left-[40px]'>
+      <div className='absolute top-[326px] left-[15px] w-[385px]'>
         <ColorCodeButtons
           isCompact
-          isPanelFull={true}
+          isPanelOpen={true}
           selected={selected!}
           copyToClipboard={copyToClipboard}
           color={colorHistory[selectedColor!]}
         />
+      </div>
+      <div className='h-[40px] w-[85px] absolute bottom-[5px] left-[15px]'>
+        <PickBtn />
       </div>
     </div>
   )

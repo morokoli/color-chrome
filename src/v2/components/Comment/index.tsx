@@ -85,7 +85,6 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           setSelectedColor={setSelectedColor}
           selected={selected}
           copyToClipboard={copyToClipboard}
-          handleSave={handleSave}
           setCheckValidFlag={setCheckValidFlag}
           setAddNewColorLoading={setAddNewColorLoading}
         />

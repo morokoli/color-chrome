@@ -76,7 +76,7 @@ const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentCo
   useEffect(() => setSelectedColor(colorHistory.length - 1), [colorHistory])
 
   return (
-    <div className="w-[125px] h-[241px] relative color-history">
+    <div className="w-[125px] h-[284px] relative color-history">
       <div className='flex flex-wrap content-baseline gap-[1px] color-history-container'>
         {colorHistory.map(
           (color, index) => (
