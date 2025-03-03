@@ -1,28 +1,36 @@
-import { FC, useState } from 'react'
-import { useGlobalState } from '@/v2/hooks/useGlobalState'
-import classNames from 'classnames'
+import { FC, useState, useEffect, useRef } from 'react';
+import { useGlobalState } from '@/v2/hooks/useGlobalState';
+import classNames from 'classnames';
 
-import PickBtn from './common/PickBtn'
-import ColorCodeButtons from './ColorCodeButtons'
+import PickBtn, { PickBtnRef } from './common/PickBtn';
+import ColorCodeButtons from './ColorCodeButtons';
 
-import homeIcon from '@/v2/assets/images/icons/home.svg'
-import commentIcon from '@/v2/assets/images/icons/menu/comment.svg'
+import homeIcon from '@/v2/assets/images/icons/home.svg';
+import commentIcon from '@/v2/assets/images/icons/menu/comment.svg';
 
 interface Props {
   selected: null | string;
   setTab: (tab: string | null) => void;
-  copyToClipboard: (text: string, selection: null | string) => void
+  copyToClipboard: (text: string, selection: null | string) => void;
 }
 
 const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
-  const { state } = useGlobalState()
+  const { state } = useGlobalState();
   const { color } = state;
-  const [isPanelOpen, setIsPanelOpen] = useState(true)
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  
+  const pickBtnRef = useRef<PickBtnRef | null>(null);
+
+  useEffect(() => {
+    if (isPanelOpen && pickBtnRef.current) {
+      pickBtnRef.current.pickColor();
+    }
+  }, [isPanelOpen]);
 
   return (
-    <div id='container' className={`${isPanelOpen ? 'w-fit' : 'w-[300px]'} h-[50px] border-2 flex items-center justify-between`}>
-      <div className='ml-3 mr-3'>
-        <PickBtn copyToClipboard={copyToClipboard} />
+    <div id="container" className={`${isPanelOpen ? 'w-fit' : 'w-[300px]'} h-[50px] border-2 flex items-center justify-between`}>
+      <div className="ml-3 mr-3">
+        <PickBtn ref={pickBtnRef} copyToClipboard={copyToClipboard} />
       </div>
 
       <ColorCodeButtons color={color!} isPanelOpen={isPanelOpen} selected={selected!} copyToClipboard={copyToClipboard} />
@@ -41,7 +49,7 @@ const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       </div>
       <div onClick={() => setIsPanelOpen(!isPanelOpen)} className={classNames(`cursor-pointer arrow ${isPanelOpen ? 'right' : 'left' }`)} />
     </div>
-  )
-}
+  );
+};
 
 export default PickPanel;
