@@ -36,6 +36,7 @@ const Left: FC<Props> = ({
   const { files, selectedFile, colorHistory } = state;
   const [colorFromPallete, setColorFromPallete] = useState<string>('#fff');
   const [currentColor, setCurrentColor] = useState<string>('#fff');
+  const [isManualInput, setIsManualInput] = useState(false);
 
   const addColor = useAPI<AddColorRequest, AddColorResponse>({
     url: config.api.endpoints.addColor,
@@ -47,6 +48,7 @@ const Left: FC<Props> = ({
   const addColorToFile = (color: string) => {
     setAddNewColorLoading(true);
     getPageURL().then((url) => {
+      const colorUrl = isManualInput ? 'Manual Input' : url;
       addColor
       .call({
         spreadsheetId: selectedFile!,
@@ -54,11 +56,11 @@ const Left: FC<Props> = ({
         sheetId: selectedFileData?.sheets?.[0]?.id || null!,
         row: {
           timestamp: new Date().valueOf(),
-          url: url!,
+          url: colorUrl!,
           hex: color,
           hsl: colors.hexToHSL(color),
           rgb: colors.hexToRGB(color),
-          comments: 'Manual Input',
+          comments: '',
           ranking: '',
           slashNaming: '',
           tags: '',
@@ -77,6 +79,7 @@ const Left: FC<Props> = ({
   const handleClickAccept = () => {
     if (!selectedFile) {
       dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
+      
     } else {
       addColorToFile(colorFromPallete);
     }
@@ -88,6 +91,7 @@ const Left: FC<Props> = ({
     if (selectedColor !== null) {
       setCurrentColor(colorHistory[selectedColor]);
       setColorFromPallete(colorHistory[selectedColor]);
+      setIsManualInput(true); 
     }
   }, [selectedColor, colorHistory])
   

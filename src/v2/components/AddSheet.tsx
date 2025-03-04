@@ -93,7 +93,7 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
   };
 
   const openLogin = () => {
-    const url = config.api.baseURL + config.api.endpoints.auth
+    const url = config.api.baseURL + config.api.endpoints.auth;
     window.open(url, "Google Sign-in", "width=1000,height=700")
   }
 
