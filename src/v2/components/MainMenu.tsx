@@ -44,7 +44,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       menuName: "COMMENT",
     },
     {
-      title: '+/- Sheet',
+      title: 'Sheet Manager',
       icon: sheetIcon,
       menuName: "ADD_SHEET",
     },
@@ -56,7 +56,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
   }
 
   return (
-    // zoom - smaller main menu to 20%
+    // zoom - smaller main menu to 20% / title - 22px at standart
     <div className="w-[200px] border-2 zoom-08">
       {data.map((item, index) => (
         <div
@@ -67,9 +67,9 @@ const MainMenu: FC<Props> = ({ setTab }) => {
           <div className="h-[23px] w-[25px] ml-2 mr-5" >
             <img src={item.icon} alt="icon" className="h-full w-full" />
           </div>
-          <div className='text-[22px]'>{item.title}</div>
+          <div className='text-[18px]'>{item.title}</div> 
         </div>
-      ))}
+      ))} 
       <div className="text-[10px] text-center">
         Chose the Sheet to save your colors
       </div>

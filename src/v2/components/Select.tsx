@@ -84,13 +84,21 @@ const Select: FC<ISelectProps> = ({ setTab, isComment = false, placeholder, setC
       )
   };
 
+  // const onClickHandler = () => {
+  //   if (!selectedFile && selectedFile !== '' && setTab) {
+  //     setTab('ADD_SHEET')
+  //   }
+
+  //   return null
+  // }
+
   const onClickHandler = () => {
-    if (!selectedFile && selectedFile !== '' && setTab) {
+    if (!selectedFile  && setTab) {
       setTab('ADD_SHEET')
     }
 
     return null
-  }
+  }  
 
   const onChange = (e: ChangeEvent<HTMLSelectElement>) => {
     dispatch({ type: "SET_SELECTED_FILE", payload: e?.target?.value });

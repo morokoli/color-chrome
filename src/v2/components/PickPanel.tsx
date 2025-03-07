@@ -17,15 +17,22 @@ interface Props {
 const PickPanel: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   const { state } = useGlobalState();
   const { color } = state;
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+
+  const [isPanelOpen, setIsPanelOpen] = useState<boolean>(() => {
+    const stored = localStorage.getItem("pickPanelIsOpen");
+    return stored !== null ? JSON.parse(stored) : true;
+  });
   
   const pickBtnRef = useRef<PickBtnRef | null>(null);
 
   useEffect(() => {
-    if (isPanelOpen && pickBtnRef.current) {
+    if (pickBtnRef.current) {
       pickBtnRef.current.pickColor();
     }
-  }, [isPanelOpen]);
+  }, []);
+  useEffect(()=>{
+    localStorage.setItem("pickPanelIsOpen", JSON.stringify(isPanelOpen));
+  }, [isPanelOpen])
 
   return (
     <div id="container" className={`${isPanelOpen ? 'w-fit' : 'w-[300px]'} h-[50px] border-2 flex items-center justify-between`}>
