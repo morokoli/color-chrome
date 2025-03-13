@@ -1,7 +1,7 @@
 {
   "name": "Colors with You",
   "description": "Capture colors using a color-picker from anywhere on your computer and seamlessly save them to your Google Sheets for easy access.",
-  "version": "1.1.14",
+  "version": "1.1.15",
   "manifest_version": 3,
   "permissions": ["cookies", "tabs"],
   "host_permissions": [
@@ -9,7 +9,8 @@
     "http://localhost:5000/",
     "https://api.colorpickintosheet.com/",
     "https://api.colorwithyou.com/",
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "https://be.colorwithyou.com/*"
   ],
   "cross_origin_opener_policy": {
     "value": "unsafe-none"
