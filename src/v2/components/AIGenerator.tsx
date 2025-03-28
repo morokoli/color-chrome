@@ -65,7 +65,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   const handleGenerate = async () => {
     try {
       setLoading(true)
-      const token = state.user?.accessToken
+      const token = state.user?.jwtToken
       if (!token) {
         toast.display("error", "You are not authorized.")
         setLoading(false)

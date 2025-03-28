@@ -46,22 +46,15 @@ const App = () => {
 
           /** refresh auth tokens in background */
           if (user.jwtToken) {
-            const now = new Date().getTime()
-
-            let hasRefreshed = false
-
-            if (now > user.expiry) {
-              hasRefreshed = true
-              Auth.refreshAuthToken(user.jwtToken, (data) => {
-                dispatch({ type: "UPDATE_ACCESS_TOKEN", payload: data })
-              })
-            }
+            Auth.refreshAuthToken(user.jwtToken, (data) => {
+              dispatch({ type: "UPDATE_ACCESS_TOKEN", payload: data })
+            })
           }
 
           clearInterval(intervalId)
         }
       })
-    }, 2000)
+    }, 1000)
   }, [])
 
   return (
