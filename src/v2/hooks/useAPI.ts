@@ -10,7 +10,8 @@ const instance = axios.create({
 
 type APIArguments = {
   url: string
-  method: "GET" | "POST" | "PUT" | "DELETE"
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  jwtToken?: string,
 }
 
 export type APIResponse<T extends Record<string, unknown>> =
@@ -33,7 +34,9 @@ export function useAPI<T, E extends Record<string, unknown>>(
     return new Promise<E>((resolve, reject) => {
       setStatusLoading()
       instance
-        .request({ url: args.url, method: args.method, data: payload })
+        .request({ url: args.url, method: args.method, data: payload, headers: {
+          "Authorization": args.jwtToken ? `Bearer ${args.jwtToken}` : undefined
+        } })
         .then((res) => {
           setStatusIdle()
           const data = res.data as APIResponse<E>

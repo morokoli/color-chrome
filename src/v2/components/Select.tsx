@@ -41,6 +41,7 @@ const Select: FC<ISelectProps> = ({ setTab, isComment = false, placeholder, setC
   >({
     url: config.api.endpoints.checkSheetValid,
     method: "POST",
+    jwtToken: user?.jwtToken,
   })
 
   const getParsedDataFromFile = (fileId: string) => {

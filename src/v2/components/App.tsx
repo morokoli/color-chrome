@@ -18,7 +18,7 @@ import AiGenerator from './AIGenerator'
 const App = () => {
   const [state, dispatch] = useReducer(globalReducer, initGlobalState)
   const [toastState, toastDispatch] = useReducer(toastReducer, initToastState)
-  const [tab, setTab] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>(null)
   const [selected, setSelected] = useState<null | string>(null)
 
   const copyToClipboard = (text: string, selection: null | string) => {
@@ -43,52 +43,59 @@ const App = () => {
       getAuthCookie().then((user) => {
         if (user) {
           dispatch({ type: "SET_USER", payload: user })
-          
+
           /** refresh auth tokens in background */
-          if (user.refreshToken) {
+          if (user.jwtToken) {
             const now = new Date().getTime()
 
+            let hasRefreshed = false
+
             if (now > user.expiry) {
-              Auth.refreshAuthToken(user.refreshToken, (data) => {
+              hasRefreshed = true
+              Auth.refreshAuthToken(user.jwtToken, (data) => {
                 dispatch({ type: "UPDATE_ACCESS_TOKEN", payload: data })
               })
             }
           }
 
-          clearInterval(intervalId);
+          clearInterval(intervalId)
         }
       })
-    }, 2000);
+    }, 2000)
   }, [])
 
   return (
-    <GlobalStateContext.Provider value={{ state, dispatch }}>
-      <ToastContext.Provider
-        value={{ state: toastState, dispatch: toastDispatch }}
-      >
-        <ExtensionContainer>
-          <Show if={tab === null}>
-            <MainMenu setTab={setTab} />
-          </Show>
+      <GlobalStateContext.Provider value={{ state, dispatch }}>
+        <ToastContext.Provider
+          value={{ state: toastState, dispatch: toastDispatch }}
+        >
+          <ExtensionContainer>
+            <Show if={tab === null}>
+              <MainMenu setTab={setTab} />
+            </Show>
           <Show if={tab === 'PICK_PANEL'}>
             <PickPanel setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
-          </Show>
+            </Show>
           <Show if={tab === 'AI_GENERATOR'}>
             <AiGenerator setTab={setTab} selected={selected} copyToClipboard={copyToClipboard} />
-          </Show>
-          <Show if={tab === 'COPY'}>
-            <Copy setTab={setTab} selected={selected} copyToClipboard={copyToClipboard}/>
-          </Show>
+            </Show>
+            <Show if={tab === "COPY"}>
+              <Copy
+                setTab={setTab}
+                selected={selected}
+                copyToClipboard={copyToClipboard}
+              />
+            </Show>
           <Show if={tab === 'COMMENT'}>
             <Comment setTab={setTab} selected={selected} copyToClipboard={copyToClipboard}/>
-          </Show>
+            </Show>
           <Show if={tab === 'ADD_SHEET'}>
-            <AddSheet setTab={setTab} />
-          </Show>
+              <AddSheet setTab={setTab} />
+            </Show>
      
-        </ExtensionContainer>
-      </ToastContext.Provider>
-    </GlobalStateContext.Provider>
+          </ExtensionContainer>
+        </ToastContext.Provider>
+      </GlobalStateContext.Provider>
   )
 }
 

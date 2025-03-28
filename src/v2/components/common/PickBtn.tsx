@@ -32,6 +32,7 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
   const addColor = useAPI<AddColorRequest, AddColorResponse>({
     url: config.api.endpoints.addColor,
     method: "POST",
+    jwtToken: state.user?.jwtToken,
   });
 
   const selectedFileData = files.find(file => file.spreadsheetId === selectedFile);

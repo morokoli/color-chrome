@@ -16,6 +16,8 @@ export type File = {
 
 export type AuthUser = {
   accessToken: string
+  jwtToken: string
+  jwtExpiry: number
   refreshToken: string | undefined
   name: string | undefined
   email: string | undefined

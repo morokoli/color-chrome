@@ -41,6 +41,7 @@ const Left: FC<Props> = ({
   const addColor = useAPI<AddColorRequest, AddColorResponse>({
     url: config.api.endpoints.addColor,
     method: "POST",
+    jwtToken: state.user?.jwtToken,
   })
 
   const selectedFileData = files.find(file => file.spreadsheetId === selectedFile);

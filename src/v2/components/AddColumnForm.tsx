@@ -25,6 +25,7 @@ const AddColumnForm: FC<Props> = ({ disabled }) => {
   >({
     url: config.api.endpoints.addColumn,
     method: "POST",
+    jwtToken: state.user?.jwtToken,
   })
 
   const addNewColumn = () => {

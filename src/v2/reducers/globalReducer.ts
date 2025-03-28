@@ -28,7 +28,7 @@ export type Action =
   | { type: "SET_PARSED_DATA"; payload: RowData[] }
   | { type: "SET_USER"; payload: GlobalState["user"] }
   | { type: "UPDATE_ACCESS_TOKEN"; payload: { accessToken: string; expiry: number } }
-
+  | { type: "UPDATE_JWT_TOKEN"; payload: { jwtToken: string, jwtExpiry: number } }
 export function globalReducer(state: GlobalState, action: Action): GlobalState {
   switch (action.type) {
     case "SET_USER":
@@ -40,6 +40,12 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         if (!draft.user) return
         draft.user.accessToken = action.payload.accessToken
         draft.user.expiry = action.payload.expiry
+      })
+    case "UPDATE_JWT_TOKEN":
+      return produce(state, (draft) => {
+        if (!draft.user) return
+        draft.user.jwtToken = action.payload.jwtToken
+        draft.user.jwtExpiry = action.payload.jwtExpiry
       })
     case "SET_COLOR":
       return produce(state, (draft) => {

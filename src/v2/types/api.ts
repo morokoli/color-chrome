@@ -1,9 +1,5 @@
 import { Sheet, Column, RowData } from '@/v1/types/general'
 
-export type RefreshAccessTokenRequest = {
-  refreshToken: string
-}
-
 export type RefreshAccessTokenResponse = {
   accessToken: string
   expiry: number

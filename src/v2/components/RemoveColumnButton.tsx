@@ -7,7 +7,7 @@ import { Show } from './common/Show'
 import { Loader } from './common/Loader'
 
 import { MinusCircleIcon } from '@heroicons/react/24/outline'
-
+import { useGlobalState } from '@/v2/hooks/useGlobalState'
 type Props = {
   sheetId: number
   sheetName: string
@@ -18,12 +18,14 @@ type Props = {
 }
 
 export const RemoveColumnButton: FC<Props> = (props) => {
+  const { state } = useGlobalState()
   const removeColumn = useAPI<
     RemoveAdditionalColumnRequest,
     RemoveAdditionalColumnResponse
   >({
     url: config.api.endpoints.removeColumn,
     method: "PUT",
+    jwtToken: state.user?.jwtToken,
   })
 
   return (

@@ -10,6 +10,7 @@
     "https://api.colorpickintosheet.com/",
     "https://api.colorwithyou.com/",
     "http://localhost:3000/*",
+    "http://localhost:3333/*",
     "https://be.colorwithyou.com/*"
   ],
   "cross_origin_opener_policy": {

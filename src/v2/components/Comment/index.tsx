@@ -36,6 +36,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     const { call, isStatusLoading} = useAPI<UpdateRowRequest, UpdateRowResponse>({
       url: config.api.endpoints.updateRow,
       method: "PUT",
+      jwtToken: state.user?.jwtToken,
     })
 
     const handleSave = (newColor?:string) => {

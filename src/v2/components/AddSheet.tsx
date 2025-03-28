@@ -32,6 +32,7 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
   >({
     url: config.api.endpoints.sheetCreate,
     method: "POST",
+    jwtToken: user?.jwtToken,
   })
 
   const { call: callGetSheetByUrl, isStatusLoading: loadindGetSheetByUrl } = useAPI<
@@ -40,6 +41,7 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
   >({
     url: config.api.endpoints.sheetGetByURL,
     method: "POST",
+    jwtToken: user?.jwtToken,
   })
 
   const handleChangeUrl = (event: ChangeEvent<HTMLInputElement>) => {

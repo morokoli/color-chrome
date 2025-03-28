@@ -24,6 +24,7 @@ const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentCo
   >({
     url: config.api.endpoints.deleteRow,
     method: "POST",
+    jwtToken: state.user?.jwtToken,
   })
 
   const colorChangeHandler = (colorIndex: number, color: string) => {

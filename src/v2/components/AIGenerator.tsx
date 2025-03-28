@@ -24,12 +24,16 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
   const [showTooltip, setShowTooltip] = useState<boolean>(false);
   const [colorDescription, setColorDescription] = useState<string>('');
 
+  
+
+  const { state } = useGlobalState();
+
   const addColor = useAPI<AddColorRequest, AddColorResponse>({
     url: config.api.endpoints.addColor,
     method: "POST",
+    jwtToken: state.user?.jwtToken,
   })
 
-  const { state } = useGlobalState();
   const { files, selectedFile } = state;
   const selectedFileData = files.find(file => file.spreadsheetId === selectedFile);
 
