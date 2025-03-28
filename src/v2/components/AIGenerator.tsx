@@ -73,7 +73,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       }
 
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/ai/color`,
+        `${import.meta.env.VITE_API_URL}/api/ai/color`,
         { description: colorDescription },
         {
           headers: {
