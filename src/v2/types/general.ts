@@ -6,12 +6,16 @@ export type GlobalState = {
   colorHistory: string[]
   newColumns: NewColumn[]
   selectedFile: string | null
+  selectedColorsFromFile: { color: string; slashNaming: string }[];
+
+
 }
 
 export type File = {
   fileName: string
   sheets: Sheet[]
-  spreadsheetId: string
+  spreadsheetId: string;
+  colorHistory: string[]
 }
 
 export type AuthUser = {
@@ -73,5 +77,6 @@ export type RowData = {
   addedBy: string
   ranking?: string | number
   comments?: string
+  slashNaming?: string
   additionalColumns: Omit<Column, "id">[]
 }

@@ -65,20 +65,46 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
     });
   };
 
+  // const openPicker = async () => {
+  //   try {
+  //     const color = await open();
+  //     dispatch({ type: "SET_COLOR", payload: color.sRGBHex });
+  //     dispatch({ type: "ADD_COLOR_HISTORY", payload: color.sRGBHex });
+  //     copyToClipboard?.(color.sRGBHex, "HEX");
+
+  //     if (selectedFile) {
+  //       addColorToFile(color.sRGBHex);
+  //     }
+  //   } catch (e) {
+  //     console.log(e);
+  //   }
+  // };
+
   const openPicker = async () => {
     try {
       const color = await open();
       dispatch({ type: "SET_COLOR", payload: color.sRGBHex });
       dispatch({ type: "ADD_COLOR_HISTORY", payload: color.sRGBHex });
-      copyToClipboard?.(color.sRGBHex, "HEX");
-
+  
+      // 🎯 Додаємо колір у файл
       if (selectedFile) {
+        dispatch({
+          type: "ADD_FILE_COLOR_HISTORY",
+          payload: {
+            spreadsheetId: selectedFile,
+            color: color.sRGBHex,
+          },
+        });
+  
         addColorToFile(color.sRGBHex);
       }
+  
+      copyToClipboard?.(color.sRGBHex, "HEX");
     } catch (e) {
       console.log(e);
     }
   };
+  
 
   const pickColor = useCallback(() => {
     openPicker();

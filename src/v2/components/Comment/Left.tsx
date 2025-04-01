@@ -77,16 +77,32 @@ const Left: FC<Props> = ({
     });
   };
 
+  // const handleClickAccept = () => {
+  //   if (!selectedFile) {
+  //     dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
+      
+  //   } else {
+  //     addColorToFile(colorFromPallete);
+  //   }
+
+  //   setCurrentColor(colorFromPallete);
+  // };
+
   const handleClickAccept = () => {
     if (!selectedFile) {
-      dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
-      
+      dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete });
     } else {
       addColorToFile(colorFromPallete);
+  
+      dispatch({
+        type: "ADD_FILE_COLOR_HISTORY",
+        payload: { spreadsheetId: selectedFile, color: colorFromPallete },
+      });
     }
-
+  
     setCurrentColor(colorFromPallete);
   };
+  
 
   useEffect(() => {
     if (selectedColor !== null) {

@@ -84,7 +84,7 @@ const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentCo
             <div
               key={color + index}
               style={{ backgroundColor: color }}
-              onClick={() => colorChangeHandler(index, color)}
+              onClick={() => {colorChangeHandler(index, color); console.log(state.parsedData)}}
               className={`w-[20px] h-[21px] ${selectedColor === index ? "border border-solid border-black scale-180 z-10" : ""}`}
             />
           ))

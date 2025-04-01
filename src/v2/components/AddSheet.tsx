@@ -52,7 +52,13 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
     callGetSheetByUrl({ url: sheetUrl})
       .then((data) => {
         if (data.spreadsheet) {
-          dispatch({ type: "ADD_FILES", payload: data.spreadsheet })
+          dispatch({
+            type: "ADD_FILES",
+            payload: {
+              ...data.spreadsheet,
+              colorHistory: [], // обовʼязкове поле
+            },
+          })
           dispatch({ type: "SET_SELECTED_FILE", payload: data.spreadsheet.spreadsheetId });
           toast.display("success", "Spreadsheet added successfully")
           setTab(null);
@@ -77,7 +83,13 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
           }],
         };
 
-        dispatch({ type: "ADD_FILES", payload: fileObj })
+        dispatch({
+          type: "ADD_FILES",
+          payload: {
+            ...fileObj,
+            colorHistory: [], // теж додаємо
+          },
+        })
         dispatch({ type: "SET_SELECTED_FILE", payload: data.spreadsheetId });
         toast.display("success", "Spreadsheet added successfully")
         setTab(null);
