@@ -44,15 +44,16 @@ export type Action =
       type: "ADD_FILE_COLOR_HISTORY"
       payload: { spreadsheetId: string; color: string }
     }
-  // | { type: "ADD_SELECTED_COLOR_FROM_FILE"; payload: string }
-  // | { type: "CLEAR_SELECTED_COLORS_FROM_FILE" }
-  // | { type: "REMOVE_SELECTED_COLOR_FROM_FILE"; payload: string }
   | {
       type: "ADD_SELECTED_COLOR_FROM_FILE"
       payload: { color: string; slashNaming: string }
     }
   | { type: "REMOVE_SELECTED_COLOR_FROM_FILE"; payload: string }
   | { type: "CLEAR_SELECTED_COLORS_FROM_FILE" }
+  | {
+      type: "UPDATE_SELECTED_COLOR_SLASHNAMING"
+      payload: { color: string; slashNaming: string }
+    }
 
 export function globalReducer(state: GlobalState, action: Action): GlobalState {
   switch (action.type) {
@@ -198,6 +199,26 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "CLEAR_SELECTED_COLORS_FROM_FILE":
       return produce(state, (draft) => {
         draft.selectedColorsFromFile = []
+      })
+
+    case "UPDATE_SELECTED_COLOR_SLASHNAMING":
+      return produce(state, (draft) => {
+        // 🔁 Оновлюємо в selectedColorsFromFile
+        const index = draft.selectedColorsFromFile.findIndex(
+          (item) => item.color === action.payload.color,
+        )
+        if (index !== -1) {
+          draft.selectedColorsFromFile[index].slashNaming =
+            action.payload.slashNaming
+        }
+
+        // 🔁 Оновлюємо напряму в parsedData
+        const row = draft.parsedData.find(
+          (row) => row.hex === action.payload.color,
+        )
+        if (row) {
+          row.slashNaming = action.payload.slashNaming
+        }
       })
 
     default:

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+//import { useEffect } from "react";
 import { useGlobalState } from "@/v2/hooks/useGlobalState";
 import { useToast } from "@/v2/hooks/useToast";
 import { useAPI } from "@/v2/hooks/useAPI";
@@ -18,6 +19,7 @@ const Left: React.FC = () => {
     jwtToken: state.user?.jwtToken,
   });
 
+  // Функція, яка підвантажує parsedData для конкретного файлу
   const handleColorClick = async (fileId: string, color: string) => {
     const fileData = files.find((f) => f.spreadsheetId === fileId);
     if (!fileData) return;
@@ -51,6 +53,62 @@ const Left: React.FC = () => {
 
   return (
     <div className="relative min-h-[100vh] overflow-y-auto p-4">
+         <div className="flex mb-4">
+        <input
+          type="text"
+          placeholder="Sheet URL"
+          className="border p-2 flex-grow"
+        />
+        <button className="ml-2 border p-2">Add</button>
+      </div>
+
+      {/* Search Input */}
+      <div className="mb-4">
+        <input type="text" placeholder="Search" className="border p-2 w-full" />
+      </div>
+
+      {/* Sliders */}
+      <div className="flex justify-around mb-4">
+        {["Hue", "Saturation", "Lightness", "Ranking"].map((label) => (
+          <div key={label} className="text-center">
+            <input
+              type="range"
+              className="w-full appearance-none h-1 bg-black rounded-lg"
+              style={{
+                WebkitAppearance: "none",
+                appearance: "none",
+                height: "4px",
+                backgroundColor: "#000",
+                borderRadius: "8px",
+                outline: "none",
+                cursor: "pointer",
+              }}
+            />
+            <style>
+              {`
+                input[type='range']::-webkit-slider-thumb {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 16px;
+                  height: 16px;
+                  background-color: #000;
+                  border-radius: 50%;
+                  cursor: pointer;
+                }
+
+                input[type='range']::-moz-range-thumb {
+                  width: 16px;
+                  height: 16px;
+                  background-color: #000;
+                  border-radius: 50%;
+                  cursor: pointer;
+                }
+              `}
+            </style>
+            <div>{label}</div>
+          </div>
+        ))}
+      </div>
       {files.map((item) => (
         <div key={item.spreadsheetId} className="mb-4">
           <div className="flex mb-2">
