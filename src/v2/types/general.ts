@@ -6,7 +6,7 @@ export type GlobalState = {
   colorHistory: string[]
   newColumns: NewColumn[]
   selectedFile: string | null
-  selectedColorsFromFile: { color: string; slashNaming: string }[];
+  selectedColorsFromFile: { color: { hex: string; hsl: string; rgb: string, additionalColumns: { name: string, value: string }[] }; slashNaming: string, animated?: number }[];
 
 
 }
@@ -79,4 +79,10 @@ export type RowData = {
   comments?: string
   slashNaming?: string
   additionalColumns: Omit<Column, "id">[]
+}
+
+export type SheetData = {
+  spreadsheetId: string
+  sheetId: string
+  sheetName: string
 }

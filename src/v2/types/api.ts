@@ -1,4 +1,4 @@
-import { Sheet, Column, RowData } from '@/v1/types/general'
+import { Sheet, Column, RowData } from "@/v1/types/general"
 
 export type RefreshAccessTokenResponse = {
   accessToken: string
@@ -75,9 +75,53 @@ export type AddColorRequest = {
     rgb: string
     ranking?: string | number
     comments?: string | undefined
-    slashNaming: string,
-    tags: string,
+    slashNaming: string
+    tags: string
     additionalColumns: Omit<Column, "id">[]
+  }
+}
+
+export type FigmaGetAccountsResponse = {
+  data: {
+    accounts: string[]
+  }
+}
+
+export type FigmaBindAccountResponse = {
+  data: {
+    email: string
+    message: string
+  }
+}
+
+export type FigmaGetTeamsResponse = {
+  data: {
+    teams: {
+      id: string
+      name: string
+    }[]
+  }
+}
+
+export type FigmaAddTeamResponse = {
+  message: string
+}
+
+export type FigmaGetProjectsResponse = {
+  data: {
+    projects: {
+      name: string
+      id: string
+    }[]
+  }
+}
+
+export type FigmaGetFilesResponse = {
+  data: {
+    files: {
+      name: string
+      key: string
+    }[]
   }
 }
 
@@ -97,8 +141,8 @@ export type UpdateRowRequest = {
     hex: string
     hsl: string
     rgb: string
-    slashNaming: string,
-    tags: string,
+    slashNaming: string
+    tags: string
     ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]

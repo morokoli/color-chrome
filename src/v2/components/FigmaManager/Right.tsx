@@ -1,13 +1,31 @@
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
-import { ChevronDown, Plus } from "lucide-react"
+import { config } from "@/v2/others/config"
+import {
+  useFigmaAddColors,
+  useFigmaAddTeam,
+  useFigmaBindAccount,
+  useFigmaGetAccounts,
+  useFigmaGetProjects,
+  useFigmaGetTeams,
+  useFigmaMultipleProjectsFiles,
+} from "@/v2/api/figma.api"
+import { ColorList } from "@/v2/components/FigmaManager/ColorList"
+import { AccountDropdown } from "./AccountDropdown"
+import { TeamsModal, OpenFigmaModal } from "./FigmaModals"
+import { SlashNameInputs } from "./SlashNameInputs"
+import { TeamsDropdown } from "./TeamsDropdown"
+import { ProjectDropdown } from "./ProjectDropdown"
+import { MultiSelectDropdown } from "./MultiSelectDropdown"
+import { useToast } from "@/v2/hooks/useToast"
+import { UpdateRowResponse } from "@/v2/types/api"
+import { useAPI } from "@/v2/hooks/useAPI"
+import { UpdateRowRequest } from "@/v2/types/api"
 
-const MOCK_PROJECTS = [
-  "Figma Project 1",
-  "Figma Project 2",
-  "Figma Project 3",
-  "Figma Project 4",
-]
+interface FigmaFile {
+  name: string
+  key: string
+}
 
 const Right = () => {
   const { state, dispatch } = useGlobalState()
@@ -19,260 +37,380 @@ const Right = () => {
     "",
     "",
   ])
-  const [activeColor, setActiveColor] = useState<string | null>(null)
+  const [activeColors, setActiveColors] = useState<number[]>([])
+  const toast = useToast()
 
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const [accounts, setAccounts] = useState([
-    "Figma Account 1",
-    "Figma Account 2",
+  const { mutateAsync: bindAccountMutation } = useFigmaBindAccount()
+  const { mutateAsync: addColorsMutation } = useFigmaAddColors()
+  const { data: accountsData, isLoading: isAccountsLoading } =
+    useFigmaGetAccounts()
+  const { mutateAsync: addTeamMutation } = useFigmaAddTeam()
+
+  const [accounts, setAccounts] = useState<string[]>([])
+  const [selectedAccount, setSelectedAccount] = useState<string>("")
+
+  const [teamsModalOpen, setTeamsModalOpen] = useState(false)
+  const [openFigmaModalOpen, setFigmaModalOpen] = useState(false)
+
+  const [selectedFiles, setSelectedFiles] = useState<FigmaFile[]>([])
+
+  const [projects, setProjects] = useState<
+    {
+      name: string
+      id: string
+    }[]
+  >([])
+
+  const { data: teamsData } = useFigmaGetTeams(selectedAccount)
+
+  const [selectedTeam, setSelectedTeam] = useState("Figma Team")
+  const [teams, setTeams] = useState([
+    { name: "Figma Team 1", id: "" },
+    { name: "Figma Team 2", id: "" },
   ])
-  const [selectedAccount, setSelectedAccount] = useState("Figma Account")
 
-  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-
-  const [isProjectsOpen, setIsProjectsOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
-  const [projectInputValue, setProjectInputValue] = useState("")
+  const [files, setFiles] = useState<FigmaFile[]>([])
 
-  const handleCheckboxClick = (item: {
-    color: string
-    slashNaming: string
-  }) => {
-    if (activeColor === item.color) {
-      setActiveColor(null)
-      setSlashNameInputs(["", "", "", "", ""])
+  // Get files from all selected projects
+  const selectedProjectIds = useMemo(
+    () =>
+      selectedProjects
+        .map((projectName) => projects.find((p) => p.name === projectName)?.id)
+        .filter(Boolean) as string[],
+    [selectedProjects, projects],
+  )
+
+  const { data: projectsData } = useFigmaGetProjects(
+    teams.find((team) => team.name === selectedTeam)?.id,
+    selectedAccount,
+  )
+  const multipleProjectsData = useFigmaMultipleProjectsFiles(
+    selectedProjectIds,
+    selectedAccount,
+  )
+  const isLoading = multipleProjectsData.some(
+    (result) => result?.isLoading || !result,
+  )
+  // Fetch files from all selected projects
+  useEffect(() => {
+    if (multipleProjectsData && !isLoading) {
+      const allFiles = multipleProjectsData
+        .map((project) => project?.data?.files)
+        .flat()
+      setFiles(allFiles)
+    }
+  }, [isLoading, selectedProjects])
+
+  useEffect(() => {
+    if (projectsData?.data?.projects) {
+      setProjects(projectsData.data.projects)
+      if (projectsData.data.projects.length > 0) {
+        setSelectedProjects([projectsData.data.projects[0].name])
+      }
     } else {
-      const parts = item.slashNaming
+      setSelectedProjects([])
+      setSelectedFiles([])
+      setFiles([])
+    }
+  }, [projectsData])
+
+  useEffect(() => {
+    if (teamsData?.data?.teams) {
+      setTeams(teamsData.data.teams)
+      if (teamsData.data.teams.length > 0) {
+        setSelectedTeam(teamsData.data.teams[0].name)
+      }
+    } else {
+      setTeams([])
+      setProjects([])
+      setSelectedProjects([])
+      setSelectedFiles([])
+      setFiles([])
+      setSelectedTeam("")
+    }
+  }, [teamsData])
+
+  const handleSelectTeam = (team: string) => {
+    setSelectedTeam(team)
+  }
+
+  const handleCheckboxClick = (colorId: number) => {
+    if (activeColors.includes(colorId)) {
+      const filteredColors = activeColors.filter((color) => color !== colorId)
+      setActiveColors(filteredColors)
+      if (filteredColors.length === 0) {
+        setSlashNameInputs(["", "", "", "", ""])
+      } else {
+        const parts = selectedColorsFromFile[filteredColors[0]]?.slashNaming
+          .split("/")
+          .map((p) => p.trim())
+          .slice(0, 5)
+        const filled = [...parts, "", "", "", "", ""].slice(0, 5)
+        setSlashNameInputs(filled)
+      }
+    } else {
+      const parts = selectedColorsFromFile[colorId]?.slashNaming
         .split("/")
         .map((p) => p.trim())
         .slice(0, 5)
       const filled = [...parts, "", "", "", "", ""].slice(0, 5)
       setSlashNameInputs(filled)
-      setActiveColor(item.color)
+      setActiveColors([...activeColors, colorId])
+    }
+  }
+
+  useEffect(() => {
+    if (!isAccountsLoading && accountsData?.data?.accounts) {
+      setAccounts(accountsData.data.accounts)
+      setSelectedAccount(accountsData.data.accounts[0] ?? "Figma Account")
+    }
+  }, [isAccountsLoading, accountsData])
+
+  const getTeams = async () => {
+    const figmaTabs = await chrome.tabs.query({ active: true })
+    const figmaTab = figmaTabs[0]
+    if (figmaTab?.url?.includes("figma.com")) {
+      setTeamsModalOpen(true)
+    } else {
+      setFigmaModalOpen(true)
     }
   }
 
   const handleChangeSlashNaming = () => {
-    if (!activeColor) return
+    if (!activeColors.length) return
     const newSlashNaming = slashNameInputs.filter(Boolean).join(" / ")
     dispatch({
       type: "UPDATE_SELECTED_COLOR_SLASHNAMING",
-      payload: { color: activeColor, slashNaming: newSlashNaming },
+      payload: { colors: activeColors, slashNaming: newSlashNaming },
     })
   }
 
-  const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen)
+  const bindAccount = async () => {
+    const response = await bindAccountMutation()
+    console.log("response", response)
+    if (response.data.email) {
+      setAccounts([...accounts, response.data.email])
+      setSelectedAccount(response.data.email)
+      chrome.cookies.remove({
+        name: config.cookie.cookieNameFigmaJwt,
+        url: config.api.baseURL,
+      })
+    }
+  }
+
+  const connectFigmaAccount = async () => {
+    const figmaLoginWindow = await window.open(
+      `${config.api.baseURL}${config.api.endpoints.figmaAuth}`,
+      "Figma Sign-in",
+      "width=1000,height=700",
+    )
+
+    const loginPromise = new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (figmaLoginWindow?.closed) {
+          clearInterval(interval)
+          chrome.cookies
+            .get({
+              name: config.cookie.cookieNameFigmaJwt,
+              url: config.api.baseURL,
+            })
+            .then((res) => {
+              resolve(res?.value)
+            })
+        }
+      }, 1000)
+    })
+
+    loginPromise.then(async (res) => {
+      if (res) {
+        await bindAccount()
+      }
+    })
+  }
+
+  useEffect(() => {
+    const getFigmaJwt = async () => {
+      const figmaJwt = await chrome.cookies.get({
+        name: config.cookie.cookieNameFigmaJwt,
+        url: config.api.baseURL,
+      })
+      console.log("figmaJwt", figmaJwt)
+      if (figmaJwt?.value) {
+        await bindAccount()
+      }
+    }
+    getFigmaJwt()
+  }, [])
 
   const handleSelectAccount = (account: string) => {
     setSelectedAccount(account)
-    setIsDropdownOpen(false)
-    setIsProjectsOpen(true)
   }
 
-  const handleSignIn = () => {
-    if (!email.trim()) return
-    setAccounts([...accounts, email])
-    setEmail("")
-    setPassword("")
-    setIsSignInModalOpen(false)
-    setSelectedAccount(email)
-    setIsProjectsOpen(true)
+  const handleSelectProjects = (projects: string[]) => {
+    setSelectedProjects(projects)
   }
 
-  const handleToggleProject = (project: string) => {
-    setSelectedProjects((prev) =>
-      prev.includes(project)
-        ? prev.filter((p) => p !== project)
-        : [...prev, project],
-    )
-    setIsProjectsOpen(false)
-    setProjectInputValue(project)
+  const handleAddTeam = async (teamId: string, teamName: string) => {
+    addTeamMutation({
+      teamId: teamId,
+      teamName: teamName,
+      email: selectedAccount,
+    })
+  }
+
+  const updateRow = useAPI<UpdateRowRequest, UpdateRowResponse>({
+    url: config.api.endpoints.updateRow,
+    method: "PUT",
+    jwtToken: state.user?.jwtToken,
+  })
+
+  const handleSaveChanges = async () => {
+    const promises = selectedColorsFromFile.map(async (color) => {
+      const response = await updateRow.call({
+        spreadsheetId: color.color.sheetData.spreadsheetId,
+        sheetId: color.color.sheetData.sheetId,
+        rowIndex: color.color.rowIndex,
+        sheetName: color.color.sheetData.sheetName,
+        row: {
+          ...color.color,
+          slashNaming: color.slashNaming,
+          timestamp: Date.now(),
+        },
+      })
+      return response
+    })
+
+    await Promise.all(promises)
+  }
+
+  const handleAddColors = async () => {
+    const response = await addColorsMutation({
+      fileIds: selectedFiles.map((file) => file.key),
+      colors: selectedColorsFromFile.map((color) => ({
+        hex: color.color.hex,
+        slashName: color.slashNaming,
+      })),
+      email: selectedAccount,
+    })
+    toast.display("success", response.data.message[0].message)
   }
 
   return (
     <div className="relative min-h-[100vh] overflow-y-auto p-4">
-      {/* Dropdown */}
-      <div className="flex mb-4 gap-4">
-        <div className="relative w-[200px] text-sm">
-          <button
-            onClick={toggleDropdown}
-            className="w-full flex justify-between items-center border px-3 py-2"
-          >
-            {selectedAccount}
-            <ChevronDown size={18} />
-          </button>
+      <div className="flex mb-4 gap-4 grid grid-cols-2">
+        <AccountDropdown
+          selectedAccount={selectedAccount}
+          accounts={accounts}
+          onSelectAccount={handleSelectAccount}
+          onConnectAccount={connectFigmaAccount}
+        />
 
-          {isDropdownOpen && (
-            <div className="absolute w-full border mt-1 bg-white z-10">
-              {accounts.map((account, i) => (
-                <div
-                  key={i}
-                  onClick={() => handleSelectAccount(account)}
-                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b"
-                >
-                  {account}
-                </div>
-              ))}
-              <div
-                onClick={() => {
-                  setIsDropdownOpen(false)
-                  setIsSignInModalOpen(true)
-                }}
-                className="flex justify-center items-center py-2 cursor-pointer hover:bg-gray-100"
-              >
-                <Plus size={20} />
-              </div>
-            </div>
-          )}
-        </div>
+        <TeamsDropdown
+          selectedTeam={selectedTeam}
+          teams={teams}
+          onSelectTeam={handleSelectTeam}
+          onConnectTeam={getTeams}
+        />
 
-        {/* <select value={projectInputValue} className="border p-1 w-[150px] text-sm h-[40px]">
-          <option>Figma Project</option>
-        </select> */}
-        <button className="w-full flex justify-between items-center border px-3 py-2">
-          {projectInputValue}
-        </button>
+        <ProjectDropdown
+          selectedProjects={selectedProjects}
+          projects={projects}
+          onSelectProjects={handleSelectProjects}
+        />
 
-        <button className="border p-1 w-[150px] text-sm">
+        <MultiSelectDropdown<FigmaFile>
+          selected={selectedFiles}
+          items={files}
+          onSelect={(newSelected) => setSelectedFiles(newSelected)}
+          renderItem={(file: FigmaFile) => file?.name}
+          renderSelected={(selected: FigmaFile[]) => {
+            if (selected.length === 0) return "Select Files"
+            if (selected.length === 1) return selected[0]?.name
+            return `${selected.length} files selected`
+          }}
+        />
+
+        <button
+          onClick={connectFigmaAccount}
+          className="border p-1 w-full text-sm"
+        >
           Connect Figma Account
         </button>
       </div>
 
-      {isProjectsOpen && (
-        <div className="border w-[300px] p-2 bg-white z-10 mb-4">
-          <div className="flex items-center border-b pb-2 mb-2">
-            <span className="mr-2">🔍</span>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search"
-              className="w-full outline-none"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            {MOCK_PROJECTS.filter((p) =>
-              p.toLowerCase().includes(searchTerm.toLowerCase()),
-            ).map((project) => (
-              <label
-                key={project}
-                className="flex justify-between items-center border-b py-1 px-2"
-              >
-                {project}
-                <input
-                  type="checkbox"
-                  checked={selectedProjects.includes(project)}
-                  onChange={() => handleToggleProject(project)}
-                />
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+      <SlashNameInputs
+        inputs={slashNameInputs}
+        onInputChange={setSlashNameInputs}
+        onChangeSlashNaming={handleChangeSlashNaming}
+      />
 
-      {/* Slash Name Inputs */}
-      <div className="flex mb-4 overflow-x-auto">
-        {slashNameInputs.map((value, index) => (
-          <input
-            key={index}
-            type="text"
-            value={value}
-            onChange={(e) => {
-              const updated = [...slashNameInputs]
-              updated[index] = e.target.value
-              setSlashNameInputs(updated)
-            }}
-            placeholder={`Slash Name ${index + 1}`}
-            className="border p-2 mr-2 min-w-[150px]"
-          />
-        ))}
-      </div>
-      <button
-        onClick={handleChangeSlashNaming}
-        className="border p-2 mb-4 bg-black text-white"
-      >
-        Change Slash Name
-      </button>
-
-      {/* Warning */}
       <div className="bg-[#F6FF03] p-2 mb-4 border text-sm">
         <strong>!!! Warning !!!:</strong> Slash Name changes are temporarily to
         export into Figma.
       </div>
 
-      {/* Color List */}
-      {Array.isArray(selectedColorsFromFile) &&
-        selectedColorsFromFile.map((item, i) => (
-          <div key={item.color + i} className="flex items-center mb-2">
-            <input
-              type="checkbox"
-              checked={activeColor === item.color}
-              className="mr-2"
-              onChange={() => handleCheckboxClick(item)}
-            />
-            <div
-              className="w-8 h-8 border mr-2"
-              style={{ backgroundColor: item.color }}
-            />
-            <div className="border p-2 flex-grow bg-gray-100 rounded">
-              {item.slashNaming || "No slashNaming"}
-            </div>
-            <button
-              className="border p-2 ml-2"
-              onClick={() =>
-                dispatch({
-                  type: "REMOVE_SELECTED_COLOR_FROM_FILE",
-                  payload: item.color,
-                })
-              }
-            >
-              ✖
-            </button>
-          </div>
-        ))}
+      <ColorList
+        colors={selectedColorsFromFile}
+        activeColors={activeColors}
+        onCheckboxClick={handleCheckboxClick}
+        onRemoveColor={(color) =>
+          dispatch({
+            type: "REMOVE_SELECTED_COLOR_FROM_FILE",
+            payload: color,
+          })
+        }
+      />
 
-      {/* Export Message */}
-      <div className="bg-[#03FF26] p-2 mb-4 border">
-        70 / 70 colors exported to your Figma Project XXX, Project YYY, Project
-        ZZZ
+      <div className="flex justify-between mt-2">
+        <button onClick={handleSaveChanges} className="border p-2">
+          Save Changes
+        </button>
+        <button onClick={handleAddColors} className="bg-black text-white p-2">
+          Export
+        </button>
       </div>
 
-      <div className="flex justify-between">
-        <button className="border p-2">Save Changes</button>
-        <button className="bg-black text-white p-2">Export</button>
-      </div>
+      <TeamsModal
+        isOpen={teamsModalOpen}
+        onClose={() => setTeamsModalOpen(false)}
+        selectedAccount={selectedAccount}
+        onSubmit={async (teamName: string) => {
+          const activeTabs = await chrome.tabs.query({
+            active: true,
+          })
+          const figmaTab = activeTabs[0]
+          const figmaUrlRegex = /\/(\d+)\//
+          const figmaTeamId = figmaTab?.url?.match(figmaUrlRegex)?.[1]
+          if (figmaTeamId) {
+            setTeams([
+              ...teams,
+              {
+                name:
+                  teamName.length > 0 ? teamName : `Team ${teams.length + 1}`,
+                id: figmaTeamId,
+              },
+            ])
+            setSelectedTeam(
+              teamName.length > 0 ? teamName : `Team ${teams.length + 1}`,
+            )
+            handleAddTeam(
+              figmaTeamId,
+              teamName.length > 0 ? teamName : `Team ${teams.length + 1}`,
+            )
+            setTeamsModalOpen(false)
+          }
+        }}
+      />
 
-      {/* Sign In Modal */}
-      {isSignInModalOpen && (
-        <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 w-[300px] rounded border">
-            <h2 className="text-xl mb-4 text-center">Figma sign in</h2>
-            <input
-              type="text"
-              placeholder="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="border w-full p-2 mb-2"
-            />
-            <input
-              type="password"
-              placeholder="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="border w-full p-2 mb-4"
-            />
-            <button
-              onClick={handleSignIn}
-              className="bg-black text-white w-full p-2"
-            >
-              sign in
-            </button>
-          </div>
-        </div>
-      )}
+      <OpenFigmaModal
+        isOpen={openFigmaModalOpen}
+        onClose={() => setFigmaModalOpen(false)}
+        onOpenTab={async () => {
+          setFigmaModalOpen(false)
+          await chrome.tabs.create({ url: "https://www.figma.com" })
+        }}
+      />
     </div>
   )
 }

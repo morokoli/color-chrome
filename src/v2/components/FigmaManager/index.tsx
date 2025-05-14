@@ -6,11 +6,11 @@ interface Props {
     setTab: (tab: string | null) => void;
   }
 
-const FigmaManager: React.FC<Props> = () => {
+const FigmaManager: React.FC<Props> = ({setTab}) => {
   return (
-    <div className="border-2 flex w-[800px] h-[600px] overflow-hidden">
+    <div className="border-2 flex w-[800px] h-full max-h-[600px] overflow-hidden">
       <div className="flex-1 min-w-0 overflow-y-auto">
-        <Left/>
+        <Left setTab={setTab}/>
       </div>
       <div className="flex-1 min-w-0 overflow-y-auto">
         <Right />

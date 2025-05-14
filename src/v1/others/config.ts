@@ -18,6 +18,7 @@ export const config = {
       addColumn: "/api/sheets/add-column",
       removeColumn: "/api/sheets/remove-column",
       getAdditionalColumns: "/api/sheets/get-additional-columns",
+      figmaAuth: "/figma/auth",
     },
   },
   toast: {

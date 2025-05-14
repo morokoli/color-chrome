@@ -1,20 +1,71 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { useAPI } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { CheckSheetValidRequest, CheckSheetValidResponse } from "@/v2/types/api"
+import { RowData, SheetData } from "@/v2/types/general"
+import useGetSheet from "@/v2/api/sheet.api"
+import DualThumbSlider from "./DualThumbSlider"
+import SheetItem from "./SheetItem"
+import { MultiSelectDropdown } from "./MultiSelectDropdown"
 
-import { RowData } from "@/v2/types/general"
+interface Props {
+  setTab: (tab: string | null) => void;
+}
 
-const Left: React.FC = () => {
+const Left: React.FC<Props> = ({setTab}) => {
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
-  const { files } = state
-  const [visibleFileIds, setVisibleFileIds] = useState<string[]>(
-    files.map((f) => f.spreadsheetId),
-  )
+  const { files, selectedColorsFromFile  } = state
+  const [sheets, setSheets] = useState<any[]>([])
+  const [visibleSheets, setVisibleSheets] = useState<any[]>([])
+  const [hueFilter, setHueFilter] = useState<[number, number]>([0, 360])
+  const [saturationFilter, setSaturationFilter] = useState<[number, number]>([
+    0, 100,
+  ])
+  const [lightnessFilter, setLightnessFilter] = useState<[number, number]>([
+    0, 100,
+  ])
+  const [rankingFilter, setRankingFilter] = useState<[number, number]>([1, 100])
+  const [searchQuery, setSearchQuery] = useState<string>("")
+
+  useEffect(() => {
+    const fetchSheets = async () => {
+      const promises = files.map((file) => {
+        return checkSheetValid.call({
+          spreadsheetId: file.spreadsheetId,
+          sheetId: file.sheets?.[0]?.id,
+          sheetName: file.sheets?.[0]?.name,
+        })
+      })
+      const results = await Promise.all(promises)
+      const newSheets = results.map((result, index) => ({
+        spreadsheetId: files[index].spreadsheetId,
+        sheetId: files[index].sheets?.[0]?.id,
+        sheetName: files[index].sheets?.[0]?.name,
+        colorHistory: result.sheetData.parsed.map((elem) => {
+          const splitHSL = elem?.hsl?.match(/\d*/g)
+          const filteredSplitHSL = splitHSL?.filter((item) => item !== "")
+          return {
+            ...elem,
+            hue: filteredSplitHSL?.[0],
+            saturation: filteredSplitHSL?.[1],
+            lightness: filteredSplitHSL?.[2],
+            ranking: elem.ranking,
+          }
+        }),
+      }))
+      setSheets(newSheets)
+      setVisibleSheets(newSheets) // Initially all sheets are visible
+    }
+    fetchSheets()
+  }, [files])
+
+  const [fileURL, setFileURL] = useState<string>("")
+  const { getSheet, data: getSheetData } = useGetSheet(fileURL)
+
   const [confirmFileId, setConfirmFileId] = useState<string | null>(null)
 
   const checkSheetValid = useAPI<
@@ -27,31 +78,29 @@ const Left: React.FC = () => {
   })
 
   // Функція, яка підвантажує parsedData для конкретного файлу
-  const handleColorClick = async (fileId: string, color: string) => {
-    const fileData = files.find((f) => f.spreadsheetId === fileId)
-    if (!fileData) return
-
+  const handleColorClick = async (color: RowData, sheetData: SheetData, rowIndex: number) => {
     try {
-      const response = await checkSheetValid.call({
-        spreadsheetId: fileId,
-        sheetId: fileData.sheets?.[0].id,
-        sheetName: `'${fileData.sheets?.[0].name}'`,
-      })
-
-      const parsed: RowData[] = response.sheetData.parsed
-
       // шукаємо відповідний рядок
-      const matchedRow = parsed.find((row) => row.hex === color)
+      const slashNaming = color?.slashNaming || ""
 
-      const slashNaming =
-        matchedRow?.slashNaming ||
-        matchedRow?.additionalColumns?.find((col) => col.name === "slashNaming")
-          ?.value ||
-        ""
+      const presentColor = selectedColorsFromFile.find(
+        (selectedColor) => selectedColor.color.hex === color.hex,
+      )
+
+      if (presentColor) {
+        toast.display("error", "Color already added")
+        return
+      }
+
+      const fullColor = {
+        ...color,
+        sheetData: sheetData,
+        rowIndex: rowIndex,
+      }
 
       dispatch({
         type: "ADD_SELECTED_COLOR_FROM_FILE",
-        payload: { color, slashNaming },
+        payload: { color:fullColor, slashNaming },
       })
     } catch (err) {
       toast.display("error", "Failed to load sheet data")
@@ -61,110 +110,186 @@ const Left: React.FC = () => {
 
   const handleRemoveFile = () => {
     if (confirmFileId) {
-      setVisibleFileIds((prev) => prev.filter((id) => id !== confirmFileId))
+      setSheets((prev) =>
+        prev.filter((sheet) => sheet.spreadsheetId !== confirmFileId),
+      )
+      setVisibleSheets((prev) =>
+        prev.filter((sheet) => sheet.spreadsheetId !== confirmFileId),
+      )
       setConfirmFileId(null)
     }
   }
 
+  const handleAddFile = async () => {
+    await getSheet()
+  }
+
+  useEffect(() => {
+    const fetchSheetData = async () => {
+      if (getSheetData) {
+        const sheetData = await checkSheetValid.call({
+          spreadsheetId: getSheetData.spreadsheet.spreadsheetId,
+          sheetId: getSheetData.spreadsheet.sheets?.[0].id,
+          sheetName: `${getSheetData.spreadsheet.sheets?.[0].name}`,
+        })
+
+        // Add the sheet to the global state
+        dispatch({
+          type: "ADD_FILES",
+          payload: {
+            ...getSheetData.spreadsheet,
+            colorHistory: [], // Required field
+          },
+        })
+
+        // Set as selected file
+        dispatch({
+          type: "SET_SELECTED_FILE",
+          payload: getSheetData.spreadsheet.spreadsheetId,
+        })
+
+        // Add to local state for display
+        setSheets((prev) => [
+          ...prev,
+          {
+            spreadsheetId: getSheetData.spreadsheet.spreadsheetId,
+            sheetId: getSheetData.spreadsheet.sheets?.[0].id,
+            sheetName: `${getSheetData.spreadsheet.sheets?.[0].name}`,
+            colorHistory: sheetData.sheetData.parsed.map((elem) => {
+              const splitHSL = elem?.hsl?.match(/\d*/g)
+              return {
+                ...elem,
+                hue: splitHSL?.[1],
+                saturation: splitHSL?.[2],
+                lightness: splitHSL?.[3],
+                slashNaming:
+                  elem?.additionalColumns?.find(
+                    (col) => col.name === "slashNaming",
+                  )?.value || "",
+              }
+            }),
+          },
+        ])
+
+        // Clear the input field
+        setFileURL("")
+
+        // Show success message
+        toast.display("success", "Spreadsheet added successfully")
+      }
+    }
+    fetchSheetData()
+  }, [getSheetData])
+
+  const handleBack = () => {
+    setTab(null)
+  }
+
   return (
-    <div className="relative min-h-[100vh] overflow-y-auto p-4">
+    <div className="relative h-full overflow-y-auto p-4">
       <div className="flex mb-4">
         <input
           type="text"
+          onChange={(e) => setFileURL(e.target.value)}
           placeholder="Sheet URL"
           className="border p-2 flex-grow"
         />
-        <button className="ml-2 border p-2">Add</button>
+        <button onClick={handleAddFile} className="ml-2 border p-2">
+          Add
+        </button>
       </div>
 
       {/* Search Input */}
       <div className="mb-4">
-        <input type="text" placeholder="Search" className="border p-2 w-full" />
+        <input
+          type="text"
+          placeholder="Search"
+          className="border p-2 w-full"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
+      {/* Sheet Selection Dropdown */}
+      <div className="mb-4">
+        <MultiSelectDropdown
+          selected={visibleSheets}
+          items={sheets}
+          renderItem={(sheet) => sheet.sheetName}
+          renderSelected={(selected) =>
+            selected.length === sheets.length
+              ? "All Sheets"
+              : `${selected.length} Sheet${selected.length === 1 ? "" : "s"}`
+          }
+          onSelect={(selectedSheets) => setVisibleSheets(selectedSheets)}
+          width="100%"
+        />
       </div>
 
       {/* Sliders */}
-      <div className="flex justify-around mb-4">
-        {["Hue", "Saturation", "Lightness", "Ranking"].map((label) => (
-          <div key={label} className="text-center">
-            <input
-              type="range"
-              className="w-full appearance-none h-1 bg-black rounded-lg"
-              style={{
-                WebkitAppearance: "none",
-                appearance: "none",
-                height: "4px",
-                backgroundColor: "#000",
-                borderRadius: "8px",
-                outline: "none",
-                cursor: "pointer",
-              }}
-            />
-            <style>
-              {`
-                input[type='range']::-webkit-slider-thumb {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  width: 16px;
-                  height: 16px;
-                  background-color: #000;
-                  border-radius: 50%;
-                  cursor: pointer;
-                }
+      <div className="flex justify-around mb-4 gap-4">
+        <DualThumbSlider
+          value={hueFilter}
+          onValueChange={(value) => setHueFilter(value as [number, number])}
+          max={360}
+          step={1}
+          label="Hue"
+          unit="°"
+          showGradient
+          thumbColors={[
+            `hsl(${hueFilter[0]}, 100%, 50%)`,
+            `hsl(${hueFilter[1]}, 100%, 50%)`,
+          ]}
+        />
 
-                input[type='range']::-moz-range-thumb {
-                  width: 16px;
-                  height: 16px;
-                  background-color: #000;
-                  border-radius: 50%;
-                  cursor: pointer;
-                }
-              `}
-            </style>
-            <div>{label}</div>
-          </div>
-        ))}
+        <DualThumbSlider
+          value={saturationFilter}
+          onValueChange={(value) =>
+            setSaturationFilter(value as [number, number])
+          }
+          max={100}
+          step={1}
+          label="Saturation"
+          unit="%"
+        />
+
+        <DualThumbSlider
+          value={lightnessFilter}
+          onValueChange={(value) =>
+            setLightnessFilter(value as [number, number])
+          }
+          max={100}
+          step={1}
+          label="Lightness"
+          unit="%"
+        />
+
+        <DualThumbSlider
+          value={rankingFilter}
+          onValueChange={(value) => setRankingFilter(value as [number, number])}
+          max={100}
+          min={1}
+          step={1}
+          label="Ranking"
+        />
       </div>
-      {files
-        .filter((file) => visibleFileIds.includes(file.spreadsheetId))
-        .map((item) => (
-          <div key={item.spreadsheetId} className="mb-4">
-            <div className="flex mb-2">
-              <input
-                type="text"
-                placeholder={`${item.fileName} - ${
-                  item.sheets?.[0]?.name || ""
-                }`}
-                className="border p-2 flex-grow"
-              />
-              <button
-                className="border p-2"
-                onClick={() => setConfirmFileId(item.spreadsheetId)}
-              >
-                ✖
-              </button>
-            </div>
 
-            {/* Color Grid per file */}
-            <div className="w-[355px] h-[284px] relative color-history">
-              <div className="flex flex-wrap content-baseline gap-[1px] color-history-container">
-                {(item.colorHistory || [])
-                  .slice()
-                  .reverse()
-                  .map((color, index) => (
-                    <div
-                      key={color + index}
-                      style={{ backgroundColor: color }}
-                      className="w-[20px] h-[21px] cursor-pointer"
-                      onClick={() =>
-                        handleColorClick(item.spreadsheetId, color)
-                      }
-                    />
-                  ))}
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Sheets List */}
+      {visibleSheets.map((sheet) => (
+        <SheetItem
+          key={sheet.spreadsheetId}
+          sheet={sheet}
+          hueFilter={hueFilter}
+          saturationFilter={saturationFilter}
+          lightnessFilter={lightnessFilter}
+          rankingFilter={rankingFilter}
+          searchQuery={searchQuery}
+          onColorClick={handleColorClick}
+          onRemove={handleRemoveFile}
+        />
+      ))}
 
+      {/* Confirmation Dialog */}
       {confirmFileId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded w-[400px] text-center border shadow-lg">
@@ -181,7 +306,26 @@ const Left: React.FC = () => {
               </button>
               <button
                 className="px-6 py-2 border border-[#CC0000] text-[#CC0000] font-semibold"
-                onClick={handleRemoveFile}
+                onClick={() => {
+                  // Remove from global state
+                  dispatch({ type: "REMOVE_FILES", payload: confirmFileId })
+
+                  // Remove from local state
+                  setSheets((prev) =>
+                    prev.filter(
+                      (sheet) => sheet.spreadsheetId !== confirmFileId,
+                    ),
+                  )
+                  setVisibleSheets((prev) =>
+                    prev.filter(
+                      (sheet) => sheet.spreadsheetId !== confirmFileId,
+                    ),
+                  )
+                  setConfirmFileId(null)
+
+                  // Show success message
+                  toast.display("success", "Spreadsheet removed successfully")
+                }}
               >
                 Remove
               </button>
@@ -189,6 +333,7 @@ const Left: React.FC = () => {
           </div>
         </div>
       )}
+      <button onClick={handleBack} className="border p-2">Go Back</button>
     </div>
   )
 }

@@ -46,13 +46,13 @@ export type Action =
     }
   | {
       type: "ADD_SELECTED_COLOR_FROM_FILE"
-      payload: { color: string; slashNaming: string }
+      payload: { color: { hex: string; hsl: string; rgb: string, additionalColumns: { name: string, value: string }[] }; slashNaming: string }
     }
   | { type: "REMOVE_SELECTED_COLOR_FROM_FILE"; payload: string }
   | { type: "CLEAR_SELECTED_COLORS_FROM_FILE" }
   | {
       type: "UPDATE_SELECTED_COLOR_SLASHNAMING"
-      payload: { color: string; slashNaming: string }
+      payload: { colors: number[]; slashNaming: string }
     }
 
 export function globalReducer(state: GlobalState, action: Action): GlobalState {
@@ -179,7 +179,19 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         if (!Array.isArray(draft.selectedColorsFromFile)) {
           draft.selectedColorsFromFile = []
         }
-        draft.selectedColorsFromFile.unshift(action.payload) // payload тепер обʼєкт
+        const colorIndex = draft.selectedColorsFromFile.findIndex(item => item.color.hex === action.payload.color.hex)
+        draft.selectedColorsFromFile.forEach((item, index) => {
+          if(index !== colorIndex) {
+            item.animated = 0
+          }
+        })
+
+        if(colorIndex === -1) {
+          draft.selectedColorsFromFile.unshift(action.payload)
+        } else {
+          draft.selectedColorsFromFile[colorIndex].animated = draft.selectedColorsFromFile[colorIndex].animated ? draft?.selectedColorsFromFile[colorIndex]?.animated + 1 : 1
+        }
+         // payload тепер обʼєкт
       })
 
     //     case "REMOVE_SELECTED_COLOR_FROM_FILE":
@@ -191,9 +203,12 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "REMOVE_SELECTED_COLOR_FROM_FILE":
       return produce(state, (draft) => {
-        draft.selectedColorsFromFile = draft.selectedColorsFromFile.filter(
-          (item) => item.color !== action.payload,
+        const colorIndex = draft.selectedColorsFromFile.findIndex(
+          (item) => item.color.hex === action.payload,
         )
+        if (colorIndex !== -1) {
+          draft.selectedColorsFromFile.splice(colorIndex, 1)
+        }
       })
 
     case "CLEAR_SELECTED_COLORS_FROM_FILE":
@@ -204,20 +219,19 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "UPDATE_SELECTED_COLOR_SLASHNAMING":
       return produce(state, (draft) => {
         // 🔁 Оновлюємо в selectedColorsFromFile
-        const index = draft.selectedColorsFromFile.findIndex(
-          (item) => item.color === action.payload.color,
-        )
-        if (index !== -1) {
-          draft.selectedColorsFromFile[index].slashNaming =
+        for (const colorId of action.payload.colors) {
+          draft.selectedColorsFromFile[colorId].slashNaming =
             action.payload.slashNaming
         }
 
         // 🔁 Оновлюємо напряму в parsedData
-        const row = draft.parsedData.find(
-          (row) => row.hex === action.payload.color,
-        )
-        if (row) {
-          row.slashNaming = action.payload.slashNaming
+        for (const colorId of action.payload.colors) {
+          const row = draft.parsedData.find(
+            (row) => row.hex === draft.selectedColorsFromFile[colorId].color.hex,
+          )
+          if (row) {
+            row.slashNaming = action.payload.slashNaming
+          }
         }
       })
 

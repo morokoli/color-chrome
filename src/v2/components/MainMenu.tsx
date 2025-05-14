@@ -9,7 +9,8 @@ import copyIcon from "@/v2/assets/images/icons/menu/copy.svg"
 import sheetIcon from "@/v2/assets/images/icons/menu/sheet.svg"
 import commentIcon from "@/v2/assets/images/icons/menu/comment.svg"
 import aigeneratorIcon from "@/v2/assets/images/icons/menu/aigenerator.svg"
-
+import figmaIcon from "@/v2/assets/images/icons/menu/figma.svg"
+import colorExtraction from "@/v2/assets/images/icons/menu/colorExtraction.svg"
 interface Props {
   setTab: (tab: string | null) => void
 }
@@ -29,6 +30,17 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       menuName: "PICK_PANEL",
     },
     {
+      title: "Figma (Beta)",
+      icon: figmaIcon,
+      menuName: "FIGMA_MANAGER",
+    },
+
+    {
+      title: "Website Colors",
+      icon: colorExtraction,
+      menuName: "COLOR_EXTRACTION",
+    },
+    {
       title: "Ai Generator",
       icon: aigeneratorIcon,
       menuName: "AI_GENERATOR",
@@ -42,11 +54,6 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       title: "Comment",
       icon: commentIcon,
       menuName: "COMMENT",
-    },
-    {
-      title: "Figma",
-      icon: pickIcon,
-      menuName: "FIGMA_MANAGER",
     },
     {
       title: "Sheet Manager",
@@ -79,7 +86,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
         </div>
       ))}
       <div className="text-[10px] text-center">
-        Chose the Sheet to save your colors
+        Choose the Sheet to save your colors
       </div>
 
       <Select placeholder="Add sheet" setTab={setTab} />

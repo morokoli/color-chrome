@@ -171,3 +171,38 @@ input[type="checkbox"]:checked::before {
 .photoshop-picker > div:nth-child(2) > div:nth-child(3) > div > div:nth-child(2) > div:nth-child(3) > div:nth-child(10) > div {
   height: 27px!important;
 }
+
+@theme {
+  --animate-fade-in: fade-in 0.2s ease-in-out;
+  --animate-highlight: highlight 2s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes highlight {
+    from {
+      background-color: red;
+    }
+    to {
+      background-color: #fff;
+    }
+  }
+}
+
+@keyframes highlight {
+  0% {
+    background-color: red;
+  }
+  50% {
+    background-color: #fff;
+  }
+  100% {
+    background-color: red;
+  }
+}

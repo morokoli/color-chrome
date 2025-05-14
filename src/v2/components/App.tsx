@@ -6,7 +6,7 @@ import { GlobalStateContext } from "@/v2/context/globalStateContext"
 import { ToastContext } from "@/v2/context/toastContext"
 import { getAuthCookie } from "@/v2/helpers/cookie"
 import { Auth } from "@/v2/helpers/auth"
-
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import Copy from "./Copy"
 import Comment from "./Comment"
 import MainMenu from "./MainMenu"
@@ -15,6 +15,9 @@ import PickPanel from "./PickPanel"
 import { Show } from "./common/Show"
 import AiGenerator from "./AIGenerator"
 import FigmaManager from "./FigmaManager"
+import { PageColorExtraction } from "./PageColorExtraction"
+
+const queryClient = new QueryClient()
 
 const App = () => {
   const [state, dispatch] = useReducer(globalReducer, initGlobalState)
@@ -62,10 +65,11 @@ const App = () => {
   }, [])
 
   return (
-    <GlobalStateContext.Provider value={{ state, dispatch }}>
-      <ToastContext.Provider
-        value={{ state: toastState, dispatch: toastDispatch }}
-      >
+    <QueryClientProvider client={queryClient}>
+      <GlobalStateContext.Provider value={{ state, dispatch }}>
+        <ToastContext.Provider
+          value={{ state: toastState, dispatch: toastDispatch }}
+        >
         <ExtensionContainer>
           <Show if={tab === null}>
             <MainMenu setTab={setTab} />
@@ -99,14 +103,15 @@ const App = () => {
             />
           </Show>
           <Show if={tab === "FIGMA_MANAGER"}>
-            <FigmaManager setTab={setTab}></FigmaManager>
+            <FigmaManager setTab={setTab}/>
           </Show>
           <Show if={tab === "ADD_SHEET"}>
             <AddSheet setTab={setTab} />
           </Show>
         </ExtensionContainer>
-      </ToastContext.Provider>
-    </GlobalStateContext.Provider>
+        </ToastContext.Provider>
+      </GlobalStateContext.Provider>
+    </QueryClientProvider>
   )
 }
 

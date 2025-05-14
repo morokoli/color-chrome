@@ -2,7 +2,7 @@ import { useRequestStatus } from './useRequestStatus'
 import { config } from '@/v2/others/config'
 import axios, { AxiosError } from 'axios'
 
-const instance = axios.create({
+export const axiosInstance = axios.create({
   baseURL: config.api.baseURL,
   timeout: config.api.timeout,
   withCredentials: true,
@@ -33,7 +33,7 @@ export function useAPI<T, E extends Record<string, unknown>>(
   const call = (payload: T | undefined = undefined) => {
     return new Promise<E>((resolve, reject) => {
       setStatusLoading()
-      instance
+      axiosInstance
         .request({ url: args.url, method: args.method, data: payload, headers: {
           "Authorization": args.jwtToken ? `Bearer ${args.jwtToken}` : undefined
         } })
