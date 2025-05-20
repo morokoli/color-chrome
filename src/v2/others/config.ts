@@ -28,6 +28,8 @@ export const config = {
       figmaGetProjects: "/figma/projects",
       figmaGetFiles: "/figma/files",
       figmaAddColors: "/figma/add-colors",
+      figmaDeleteAccount: "/figma/delete-account",
+      figmaDeleteTeam: "/figma/delete-team",
     },
   },
   toast: {

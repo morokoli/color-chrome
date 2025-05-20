@@ -5,6 +5,8 @@ import {
   useFigmaAddColors,
   useFigmaAddTeam,
   useFigmaBindAccount,
+  useFigmaDeleteAccount,
+  useFigmaDeleteTeam,
   useFigmaGetAccounts,
   useFigmaGetProjects,
   useFigmaGetTeams,
@@ -41,6 +43,8 @@ const Right = () => {
   const toast = useToast()
 
   const { mutateAsync: bindAccountMutation } = useFigmaBindAccount()
+  const { mutateAsync: deleteAccountMutation } = useFigmaDeleteAccount()
+  const { mutateAsync: deleteTeamMutation } = useFigmaDeleteTeam()
   const { mutateAsync: addColorsMutation } = useFigmaAddColors()
   const { data: accountsData, isLoading: isAccountsLoading } =
     useFigmaGetAccounts()
@@ -163,14 +167,17 @@ const Right = () => {
   useEffect(() => {
     if (!isAccountsLoading && accountsData?.data?.accounts) {
       setAccounts(accountsData.data.accounts)
-      setSelectedAccount(accountsData.data.accounts[0] ?? "Figma Account")
+      setSelectedAccount(accountsData.data.accounts[0] ?? "")
     }
   }, [isAccountsLoading, accountsData])
 
   const getTeams = async () => {
     const figmaTabs = await chrome.tabs.query({ active: true })
     const figmaTab = figmaTabs[0]
-    if (figmaTab?.url?.includes("figma.com")) {
+    if (
+      figmaTab?.url?.includes("figma.com") &&
+      figmaTab?.url?.includes("team")
+    ) {
       setTeamsModalOpen(true)
     } else {
       setFigmaModalOpen(true)
@@ -197,6 +204,34 @@ const Right = () => {
         url: config.api.baseURL,
       })
     }
+  }
+
+  const deleteAccount = async (email: string) => {
+    const response = await deleteAccountMutation({
+      email: email,
+    })
+    if (response.data.message === "Account deleted") {
+      setAccounts(accounts.filter((account) => account !== email))
+      setSelectedAccount(
+        accounts.find((account) => account !== email)?.name ?? "",
+      )
+    }
+    console.log("response", response)
+  }
+
+  const deleteTeam = async (teamId: string) => {
+    const response = await deleteTeamMutation({
+      email: selectedAccount,
+      teamId: teamId,
+    })
+
+    if (response.data.message === "Team deleted") {
+      setTeams(teams.filter((team) => team.id !== teamId))
+      setSelectedTeam(
+        teams.find((team) => team.id !== teamId)?.name ?? "Figma Team",
+      )
+    }
+    console.log("response", response)
   }
 
   const connectFigmaAccount = async () => {
@@ -296,6 +331,18 @@ const Right = () => {
     toast.display("success", response.data.message[0].message)
   }
 
+  let warning = ''
+
+  if (!selectedAccount) {
+    warning = "Please select a figma account to continue"
+  } else if (!selectedTeam) {
+    warning = "Please select a team to continue"
+  } else if (!(selectedProjects.length > 0)) {
+    warning = "Please select a project to continue"
+  } else if (!(selectedFiles.length > 0)) {
+    warning = "Please select a file to continue"
+  }
+
   return (
     <div className="relative min-h-[100vh] overflow-y-auto p-4">
       <div className="flex mb-4 gap-4 grid grid-cols-2">
@@ -304,40 +351,56 @@ const Right = () => {
           accounts={accounts}
           onSelectAccount={handleSelectAccount}
           onConnectAccount={connectFigmaAccount}
+          onDeleteAccount={deleteAccount}
         />
 
-        <TeamsDropdown
-          selectedTeam={selectedTeam}
-          teams={teams}
-          onSelectTeam={handleSelectTeam}
-          onConnectTeam={getTeams}
-        />
+        {selectedAccount && (
+          <TeamsDropdown
+            selectedTeam={selectedTeam}
+            teams={teams}
+            onSelectTeam={handleSelectTeam}
+            onConnectTeam={getTeams}
+            onDeleteTeam={deleteTeam}
+          />
+        )}
 
-        <ProjectDropdown
-          selectedProjects={selectedProjects}
-          projects={projects}
-          onSelectProjects={handleSelectProjects}
-        />
+        {selectedTeam && (
+          <ProjectDropdown
+            selectedProjects={selectedProjects}
+            projects={projects}
+            onSelectProjects={handleSelectProjects}
+          />
+        )}
 
-        <MultiSelectDropdown<FigmaFile>
-          selected={selectedFiles}
-          items={files}
-          onSelect={(newSelected) => setSelectedFiles(newSelected)}
-          renderItem={(file: FigmaFile) => file?.name}
-          renderSelected={(selected: FigmaFile[]) => {
-            if (selected.length === 0) return "Select Files"
-            if (selected.length === 1) return selected[0]?.name
-            return `${selected.length} files selected`
-          }}
-        />
+        {selectedProjects.length > 0 && (
+          <MultiSelectDropdown<FigmaFile>
+            placeholder="Select Files"
+            selected={selectedFiles}
+            items={files}
+            onSelect={(newSelected) => setSelectedFiles(newSelected)}
+            renderItem={(file: FigmaFile) => file?.name}
+            renderSelected={(selected: FigmaFile[]) => {
+              if (selected.length === 0) return "Select Files"
+              if (selected.length === 1) return selected[0]?.name
+              return `${selected.length} files selected`
+            }}
+          />
+        )}
 
-        <button
+        {/* <button
           onClick={connectFigmaAccount}
           className="border p-1 w-full text-sm"
         >
           Connect Figma Account
-        </button>
+        </button> */}
       </div>
+
+      {warning && (
+        <div className="bg-[#F6FF03] p-2 mb-4 border text-sm">
+          {warning}
+        </div>
+      )}
+
 
       <SlashNameInputs
         inputs={slashNameInputs}
@@ -362,14 +425,16 @@ const Right = () => {
         }
       />
 
-      <div className="flex justify-between mt-2">
-        <button onClick={handleSaveChanges} className="border p-2">
-          Save Changes
-        </button>
-        <button onClick={handleAddColors} className="bg-black text-white p-2">
-          Export
-        </button>
-      </div>
+      {selectedFiles.length > 0 && (
+        <div className="flex justify-between mt-2">
+          <button onClick={handleSaveChanges} className="border p-2">
+            Save Changes
+          </button>
+          <button onClick={handleAddColors} className="bg-black text-white p-2">
+            Export
+          </button>
+        </div>
+      )}
 
       <TeamsModal
         isOpen={teamsModalOpen}

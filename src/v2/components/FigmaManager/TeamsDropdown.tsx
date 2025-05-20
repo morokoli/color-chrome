@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react"
 import { Dropdown } from "./Dropdown"
+import cancelIcon from "../../assets/images/icons/menu/cancel.svg"
 
 interface TeamsDropdownProps {
   selectedTeam: string
@@ -9,6 +10,7 @@ interface TeamsDropdownProps {
   }[]
   onSelectTeam: (team: string) => void
   onConnectTeam: () => void
+  onDeleteTeam: (teamId: string) => void
 }
 
 export const TeamsDropdown = ({
@@ -16,15 +18,34 @@ export const TeamsDropdown = ({
   teams,
   onSelectTeam,
   onConnectTeam,
+  onDeleteTeam,
 }: Omit<TeamsDropdownProps, "isDropdownOpen" | "onToggleDropdown">) => {
   return (
     <Dropdown
+      placeholder="Select a team"
       selected={selectedTeam}
       items={teams.map((team) => team.name)}
       renderSelected={(team) => (
         <p className="text-ellipsis overflow-hidden">{team}</p>
       )}
-      renderItem={(team) => team}
+      renderItem={(teamName) => {
+        const team = teams.find((t) => t.name === teamName);
+        return (
+          <div className="text-ellipsis overflow-hidden flex justify-between items-center w-full group">
+            <span className="text-ellipsis overflow-hidden">{teamName}</span>
+            <img
+              src={cancelIcon}
+              alt="Delete"
+              className="w-4 h-4 opacity-0 group-hover:opacity-100 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log("team", team)
+                if (team) onDeleteTeam(team.id);
+              }}
+            />
+          </div>
+        );
+      }}
       onSelect={onSelectTeam}
       renderFooter={() => (
         <div

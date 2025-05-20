@@ -77,6 +77,18 @@ const Left: React.FC<Props> = ({setTab}) => {
     jwtToken: state.user?.jwtToken,
   })
 
+  console.group("UpdateLogs")
+  console.log("files", files)
+  console.log("selectedColorsFromFile", selectedColorsFromFile)
+  console.log("sheets", sheets)
+  console.log("visibleSheets", visibleSheets)
+  console.log("hueFilter", hueFilter[0], hueFilter[1])
+  console.log("saturationFilter", saturationFilter[0], saturationFilter[1])
+  console.log("lightnessFilter", lightnessFilter[0], lightnessFilter[1])
+  console.log("rankingFilter", rankingFilter[0], rankingFilter[1])
+  console.log("searchQuery", searchQuery)
+  console.groupEnd()
+
   // Функція, яка підвантажує parsedData для конкретного файлу
   const handleColorClick = async (color: RowData, sheetData: SheetData, rowIndex: number) => {
     try {
@@ -108,16 +120,8 @@ const Left: React.FC<Props> = ({setTab}) => {
     }
   }
 
-  const handleRemoveFile = () => {
-    if (confirmFileId) {
-      setSheets((prev) =>
-        prev.filter((sheet) => sheet.spreadsheetId !== confirmFileId),
-      )
-      setVisibleSheets((prev) =>
-        prev.filter((sheet) => sheet.spreadsheetId !== confirmFileId),
-      )
-      setConfirmFileId(null)
-    }
+  const onRemoveFileRequest = (fileId: string) => {
+    setConfirmFileId(fileId)
   }
 
   const handleAddFile = async () => {
@@ -213,6 +217,8 @@ const Left: React.FC<Props> = ({setTab}) => {
       {/* Sheet Selection Dropdown */}
       <div className="mb-4">
         <MultiSelectDropdown
+          isSearchable
+          placeholder="Select Sheets"
           selected={visibleSheets}
           items={sheets}
           renderItem={(sheet) => sheet.sheetName}
@@ -285,7 +291,7 @@ const Left: React.FC<Props> = ({setTab}) => {
           rankingFilter={rankingFilter}
           searchQuery={searchQuery}
           onColorClick={handleColorClick}
-          onRemove={handleRemoveFile}
+          onRemove={onRemoveFileRequest}
         />
       ))}
 
@@ -294,8 +300,7 @@ const Left: React.FC<Props> = ({setTab}) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded w-[400px] text-center border shadow-lg">
             <p className="text-[#CC0000] font-bold text-lg mb-4">
-              Sheet will be removed from this page only. If you want to remove
-              from extension, go to Sheet Manager.
+              Sheet will be removed from the entire extension. Are you sure?
             </p>
             <div className="flex justify-around">
               <button

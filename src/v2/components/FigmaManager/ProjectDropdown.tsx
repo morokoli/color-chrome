@@ -16,6 +16,7 @@ export const ProjectDropdown = ({
 }: ProjectDropdownProps) => {
   return (
     <MultiSelectDropdown
+      placeholder="Select Projects"
       selected={selectedProjects}
       items={projects.map((project) => project.name)}
       renderSelected={(selected) => {
