@@ -108,6 +108,9 @@ const App = () => {
           <Show if={tab === "ADD_SHEET"}>
             <AddSheet setTab={setTab} />
           </Show>
+          <Show if={tab === "COLOR_EXTRACTION"}>
+            <PageColorExtraction setTab={setTab} />
+          </Show>
         </ExtensionContainer>
         </ToastContext.Provider>
       </GlobalStateContext.Provider>

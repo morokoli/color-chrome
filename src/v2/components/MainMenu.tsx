@@ -62,6 +62,10 @@ const MainMenu: FC<Props> = ({ setTab }) => {
     },
   ]
 
+  const logInHandler = () => {
+    setTab("ADD_SHEET")
+  }
+
   const openFileHandler = () => {
     const fileUrl =
       "https://docs.google.com/spreadsheets/d/" + state.selectedFile // Change to your file's URL
@@ -106,6 +110,15 @@ const MainMenu: FC<Props> = ({ setTab }) => {
           className="h-[22px] w-full text-black text-[10px] bg-white"
         >
           {"Log Out"}
+        </button>
+      )}
+
+      {!state.user && (
+        <button
+          onClick={logInHandler}
+          className="h-[22px] w-full text-black text-[10px] bg-white"
+        >
+          {"Log In"}
         </button>
       )}
     </div>
