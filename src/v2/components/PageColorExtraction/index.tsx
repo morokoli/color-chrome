@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react"
 import Color from "color"
 import { extractColors } from "extract-colors"
-import * as Tooltip from '@radix-ui/react-tooltip'
+import * as Tooltip from "@radix-ui/react-tooltip"
 import { ColorDropdown } from "./ColorDropdown"
+import { useGlobalState } from "@/v2/hooks/useGlobalState"
+import { useAddMultipleColors } from "@/v2/api/sheet.api"
+import { useToast } from "@/v2/hooks/useToast"
 
-export type Color = {
+export type ColorType = {
   color: string
   name: string
   hex: string
@@ -22,7 +25,19 @@ export const PageColorExtraction = ({
 }: {
   setTab: React.Dispatch<React.SetStateAction<string | null>>
 }) => {
-  const [colorArray, setColorArray] = useState<Color[][]>([])
+  const [colorArray, setColorArray] = useState<ColorType[][]>([])
+  const [selectedColors, setSelectedColors] = useState<ColorType[]>([])
+  const { state } = useGlobalState()
+  const { addMultipleColors, data: addMultipleColorsData } =
+    useAddMultipleColors()
+  const toast = useToast()
+
+  useEffect(() => {
+    console.log(addMultipleColorsData)
+    if (addMultipleColorsData && addMultipleColorsData.done) {
+      toast.display("success", "Colors added successfully")
+    }
+  }, [addMultipleColorsData])
 
   useEffect(() => {
     chrome.tabs
@@ -47,21 +62,25 @@ export const PageColorExtraction = ({
         const colorMap = new Map<string, ImportedColor[]>()
         const sumMap = new Map<string, ImportedColor>()
         for (const src of html.imageSrcArr) {
-          const colors = await extractColors(src.src)
-          for (const color of colors) {
-            if (sumMap.has(color.hex)) {
-              const existing: ImportedColor = sumMap.get(color.hex)!
-              sumMap.set(color.hex, {
-                ...existing,
-                weight: existing.weight + src.weight,
-              })
-            } else {
-              sumMap.set(color.hex, {
-                key: "image/color",
-                value: color.hex,
-                weight: src.weight * color.area,
-              })
+          try {
+            const colors = await extractColors(src.src)
+            for (const color of colors) {
+              if (sumMap.has(color.hex)) {
+                const existing: ImportedColor = sumMap.get(color.hex)!
+                sumMap.set(color.hex, {
+                  ...existing,
+                  weight: existing.weight + src.weight,
+                })
+              } else {
+                sumMap.set(color.hex, {
+                  key: "image/color",
+                  value: color.hex,
+                  weight: src.weight * color.area,
+                })
+              }
             }
+          } catch (error) {
+            console.log(error)
           }
         }
         for (const styleArr of html.styleArr) {
@@ -103,7 +122,7 @@ export const PageColorExtraction = ({
           }
         }
 
-        const colorArray: Color[][] = Array.from(colorMap.values())
+        const colorArray: ColorType[][] = Array.from(colorMap.values())
           .map((colorArr) =>
             colorArr
               .map((color) => ({
@@ -137,34 +156,81 @@ export const PageColorExtraction = ({
     setColorArray(colorArray.filter((_, i) => i !== index))
   }
 
-  const handleChangeColor = (arrIndex: number, index: number, color: Color) => {
+  const handleChangeColor = (
+    arrIndex: number,
+    index: number,
+    color: ColorType,
+  ) => {
     const newColorArray = new Array(...colorArray)
     newColorArray[arrIndex][index] = color
     setColorArray(newColorArray)
   }
 
+  const handleSave = () => {
+    const { files, selectedFile } = state
+    const selectedFileData = files.find(
+      (file) => file.spreadsheetId === selectedFile,
+    )
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const url = tabs[0].url
+      const rows = selectedColors.map((color) => {
+        const colorObj = new Color(color.hex)
+        return {
+          timestamp: Date.now(),
+          url,
+          hex: colorObj.hex(),
+          hsl: colorObj.hsl().toString(),
+          rgb: colorObj.rgb().toString(),
+          ranking: "0",
+          comments: "",
+          slashNaming: color.name,
+          tags: "",
+          additionalColumns: [],
+        }
+      })
+      addMultipleColors({
+        spreadsheetId: selectedFile!,
+        sheetName: selectedFileData?.sheets?.[0]?.name || "",
+        sheetId: selectedFileData?.sheets?.[0]?.id || null!,
+        rows,
+      })
+    })
+  }
+
   return (
     <Tooltip.Provider>
-      <div className="flex flex-col h-[937px] w-[817px] gap-16 bg-white p-9 overflow-y-scroll">
-        <div className="flex flex-col gap-2">
-          {colorArray.map((colorArr, arrIndex) => (
-            <ColorDropdown
-              handleDeleteColorArr={handleDeleteColorArr}
-              colorArray={colorArr}
-              handleChangeColor={handleChangeColor}
-              arrIndex={arrIndex}
-              handleDeleteColor={handleDeleteColor}
-            />
-          ))}
+      <div className="flex flex-col w-[800px] h-[600px] gap-16 bg-white p-9 overflow-y-scroll">
+        <div className="flex flex-col gap-2 max-h-[calc(100%-100px)] overflow-y-scroll">
+          {colorArray.length > 0 ? (
+            colorArray.map((colorArr, arrIndex) => (
+              <ColorDropdown
+                key={arrIndex + "color-dropdown"}
+                handleDeleteColorArr={handleDeleteColorArr}
+                colorArray={colorArr}
+                handleChangeColor={handleChangeColor}
+                arrIndex={arrIndex}
+                handleDeleteColor={handleDeleteColor}
+                selectedColors={selectedColors}
+                setSelectedColors={setSelectedColors}
+              />
+            ))
+          ) : (
+            <div className="flex flex-col gap-2 text-lg">
+              <p>Scanning page...</p>
+            </div>
+          )}
         </div>
-        <div className="flex flex-row justify-between">
+        <div className="fixed bottom-10 left-0 right-0 flex flex-row justify-between p-8 pb-2 bg-white z-1">
           <button
             className="bg-white p-4 px-8 border-2 border-black text-xl"
             onClick={() => setTab(null)}
           >
             Back
           </button>
-          <button className="bg-black text-white p-4 px-8 border-2 border-black text-xl">
+          <button
+            onClick={handleSave}
+            className="bg-black text-white p-4 px-8 border-2 border-black text-xl"
+          >
             Save
           </button>
         </div>
@@ -172,8 +238,6 @@ export const PageColorExtraction = ({
     </Tooltip.Provider>
   )
 }
-
-
 
 const scanPageHtml = () => {
   const styleArr: any[] = []
@@ -187,9 +251,7 @@ const scanPageHtml = () => {
   document.body.appendChild(dummy)
 
   const defaultStyles = getComputedStyle(dummy)
-  const sampleObjectStyleMap = new Map(
-    Object.entries(defaultStyles),
-  )
+  const sampleObjectStyleMap = new Map(Object.entries(defaultStyles))
   const imageSrcArr: { src: string; weight: number }[] = []
   const fetchStyleList = ["color", "Color", "Fill", "fill"]
 

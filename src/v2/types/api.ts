@@ -1,4 +1,5 @@
 import { Sheet, Column, RowData } from "@/v1/types/general"
+import { Color } from "../components/PageColorExtraction"
 
 export type RefreshAccessTokenResponse = {
   accessToken: string
@@ -68,6 +69,24 @@ export type AddColorRequest = {
   sheetName: string
   sheetId: number
   row: {
+    timestamp: number
+    url: string
+    hex: string
+    hsl: string
+    rgb: string
+    ranking?: string | number
+    comments?: string | undefined
+    slashNaming: string
+    tags: string
+    additionalColumns: Omit<Column, "id">[]
+  }
+}
+
+export type AddMultipleColorsRequest = {
+  spreadsheetId: string
+  sheetName: string
+  sheetId: number
+  rows: {
     timestamp: number
     url: string
     hex: string

@@ -3,7 +3,8 @@ import { XMarkIcon } from "@heroicons/react/24/outline"
 import { ChevronDownIcon } from "@heroicons/react/24/outline"
 import * as Tooltip from "@radix-ui/react-tooltip"
 import { useState } from "react"
-import type { Color } from "./index"
+import type { ColorType } from "./index"
+import { useToast } from "@/v2/hooks/useToast"
 
 export const ColorDropdown = ({
   colorArray,
@@ -11,14 +12,32 @@ export const ColorDropdown = ({
   arrIndex,
   handleDeleteColor,
   handleDeleteColorArr,
+  selectedColors,
+  setSelectedColors,
 }: {
-  colorArray: Color[]
-  handleChangeColor: (arrIndex: number, index: number, color: Color) => void
+  colorArray: ColorType[]
+  handleChangeColor: (arrIndex: number, index: number, color: ColorType) => void
   arrIndex: number
   handleDeleteColor: (arrIndex: number, index: number) => void
   handleDeleteColorArr: (index: number) => void
+  selectedColors: ColorType[]
+  setSelectedColors: (colors: ColorType[]) => void
 }) => {
+  const toast = useToast()
   const [isOpen, setIsOpen] = useState(false)
+
+  const handleCopyColor = (color: ColorType) => {
+    navigator.clipboard.writeText(color.hex)
+    toast.display("success", "Color copied to clipboard")
+  }
+
+  const handleCheckboxClick = (color: ColorType) => {
+    if (selectedColors.includes(color)) {
+      setSelectedColors(selectedColors.filter((c) => c !== color))
+    } else {
+      setSelectedColors([...selectedColors, color])
+    }
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -31,7 +50,7 @@ export const ColorDropdown = ({
             <ChevronDownIcon
               style={{
                 transition: "transform 0.3s ease-in-out",
-                transform: isOpen ? "rotate(-90deg)" : "rotate(0deg)",
+                transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
               }}
               className="w-6 h-6"
             />
@@ -40,7 +59,8 @@ export const ColorDropdown = ({
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
               <div
-                className="min-w-[40px] h-10 border-2 border-black"
+                onClick={() => handleCopyColor(colorArray[0])}
+                className="min-w-[40px] h-10 border-2 border-black cursor-pointer"
                 style={{ backgroundColor: colorArray[0].hex }}
               />
             </Tooltip.Trigger>
@@ -71,7 +91,15 @@ export const ColorDropdown = ({
         }}
       >
         {colorArray.map((color, index) => (
-          <div className="flex flex-row gap-4 pl-14">
+          <div className="flex flex-row gap-4">
+            <div className="min-w-[40px] h-10 flex items-center justify-center text-base">
+              <input
+                type="checkbox"
+                checked={selectedColors.includes(color)}
+                className="color-checkbox"
+                onChange={() => handleCheckboxClick(color)}
+              />
+            </div>
             <div className="min-w-[40px] h-10 border border-black flex items-center justify-center text-base">
               {color.prevalence > 0.01
                 ? (color.prevalence * 100).toFixed(0) + "%"
