@@ -77,18 +77,6 @@ const Left: React.FC<Props> = ({setTab}) => {
     jwtToken: state.user?.jwtToken,
   })
 
-  console.group("UpdateLogs")
-  console.log("files", files)
-  console.log("selectedColorsFromFile", selectedColorsFromFile)
-  console.log("sheets", sheets)
-  console.log("visibleSheets", visibleSheets)
-  console.log("hueFilter", hueFilter[0], hueFilter[1])
-  console.log("saturationFilter", saturationFilter[0], saturationFilter[1])
-  console.log("lightnessFilter", lightnessFilter[0], lightnessFilter[1])
-  console.log("rankingFilter", rankingFilter[0], rankingFilter[1])
-  console.log("searchQuery", searchQuery)
-  console.groupEnd()
-
   // Функція, яка підвантажує parsedData для конкретного файлу
   const handleColorClick = async (color: RowData, sheetData: SheetData, rowIndex: number) => {
     try {
