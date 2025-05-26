@@ -22,6 +22,18 @@ body {
   flex-direction: column;
 }
 
+.color-checkbox {
+  min-width: 25px;
+  min-height: 25px;
+  border: 1px solid #000;
+  background-color: #fff;
+}
+
+.color-checkbox[type="checkbox"]:checked::before {
+  top: 0px;
+  left: 6px;
+}
+
 /* @font-face {
   font-family: 'Montserrat Light 300';
   src: local('Montserrat Light'), url('../fonts/Montserrat-Light.ttf') format('truetype');

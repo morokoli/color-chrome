@@ -14,6 +14,7 @@ export const config = {
       sheetGetByURL: "/api/sheets/get-by-url",
       checkSheetValid: "/api/sheets/check-sheet-valid",
       addColor: "/api/sheets/add-color",
+      addMultipleColors: "/api/sheets/add-multiple-colors",
       updateRow: "/api/sheets/update-row",
       deleteRow: "/api/sheets/delete-row",
       checkAddOrUpdate: "/api/sheets/check-add-or-update",

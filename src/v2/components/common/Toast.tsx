@@ -11,7 +11,7 @@ type Props = {
 
 export const Toast: FC<Props> = (props) => (
   <Show if={props.message !== null}>
-    <div>
+    <div className='relative'>
       <div
         className={classNames(
           "flex space-x-2 px-4 py-2 text-xs w-100 w-full border-b-2",
