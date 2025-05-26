@@ -11,6 +11,7 @@ interface TeamsDropdownProps {
   onSelectTeam: (team: string) => void
   onConnectTeam: () => void
   onDeleteTeam: (teamId: string) => void
+  isVisible?: boolean
 }
 
 export const TeamsDropdown = ({
@@ -19,9 +20,11 @@ export const TeamsDropdown = ({
   onSelectTeam,
   onConnectTeam,
   onDeleteTeam,
+  isVisible = true,
 }: Omit<TeamsDropdownProps, "isDropdownOpen" | "onToggleDropdown">) => {
   return (
     <Dropdown
+      isVisible={isVisible}
       placeholder="Select a team"
       selected={selectedTeam}
       items={teams.map((team) => team.name)}

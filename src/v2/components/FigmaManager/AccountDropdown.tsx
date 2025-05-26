@@ -10,6 +10,7 @@ interface AccountDropdownProps {
   onSelectAccount: (account: string) => void
   onConnectAccount: () => void
   onDeleteAccount: (account: string) => void
+  isVisible?: boolean
 }
 
 export const AccountDropdown = ({
@@ -18,9 +19,11 @@ export const AccountDropdown = ({
   onSelectAccount,
   onConnectAccount,
   onDeleteAccount,
+  isVisible = true,
 }: Omit<AccountDropdownProps, "isDropdownOpen" | "onToggleDropdown">) => {
   return (
     <Dropdown
+      isVisible={isVisible}
       placeholder="Select an account"
       selected={selectedAccount}
       items={accounts}

@@ -1,10 +1,12 @@
 import * as Tooltip from "@radix-ui/react-tooltip"
+import { X } from "lucide-react"
 
 interface ColorListProps {
   colors: ColorItem[]
   activeColors: number[]
   onCheckboxClick: (colorId: number) => void
   onRemoveColor: (color: string) => void
+  handleManualSlashNamingChange: (colorId: number, slashNaming: string) => void
 }
 
 interface ColorItem {
@@ -29,9 +31,22 @@ export const ColorList = ({
   activeColors,
   onCheckboxClick,
   onRemoveColor,
+  handleManualSlashNamingChange,
 }: ColorListProps) => {
   return (
     <>
+      {colors.length > 0 && (
+        <div className={`flex p-1`}>
+          <input
+            type="checkbox"
+            checked={activeColors.length > 0}
+            className="mr-2"
+            onChange={() => {
+              onCheckboxClick(colors.length)
+            }}
+          />
+        </div>
+      )}
       {Array.isArray(colors) &&
         colors.map((item, i) => {
           const isDuplicate = !!item.animated && item.animated >= 1
@@ -39,7 +54,11 @@ export const ColorList = ({
             <div
               key={item.color.hex + i}
               className={`flex items-center p-1 animate-highlight`}
-              style={{ animation: isDuplicate ? "highlight 2s ease-in-out infinite" : "none", }}
+              style={{
+                animation: isDuplicate
+                  ? "highlight 2s ease-in-out infinite"
+                  : "none",
+              }}
             >
               <input
                 type="checkbox"
@@ -77,14 +96,19 @@ export const ColorList = ({
                   </Tooltip.Portal>
                 </Tooltip.Root>
               </Tooltip.Provider>
-              <div className="border p-2 flex-grow bg-gray-100 rounded">
-                {item.slashNaming || "No slashNaming"}
-              </div>
+              <input
+                type="text"
+                className="border p-2 flex-grow bg-gray-100 rounded"
+                value={item.slashNaming || "No slashNaming"}
+                onChange={(e) =>
+                  handleManualSlashNamingChange(i, e.target.value)
+                }
+              />
               <button
                 className="border p-2 ml-2"
                 onClick={() => onRemoveColor(item.color.hex)}
               >
-                ✖
+                <X size={16} />
               </button>
             </div>
           )

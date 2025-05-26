@@ -1,5 +1,6 @@
 import { ChevronDown, Search } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
+import { CollapsibleBox } from "../CollapsibleBox"
 
 interface DropdownProps<T> {
   selected: T | null
@@ -11,6 +12,7 @@ interface DropdownProps<T> {
   renderFooter?: () => React.ReactNode
   isSearchable?: boolean
   placeholder?: string
+  isVisible?: boolean
 }
 
 export const Dropdown = <T,>({
@@ -23,6 +25,7 @@ export const Dropdown = <T,>({
   renderFooter,
   isSearchable = false,
   placeholder = "Select an option",
+  isVisible = true,
 }: DropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -30,7 +33,10 @@ export const Dropdown = <T,>({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false)
       }
     }
@@ -48,10 +54,15 @@ export const Dropdown = <T,>({
   })
 
   return (
-    <div className={`relative text-sm grow`} style={{ width }} ref={dropdownRef}>
-      {isOpen ? (
-        <div className="flex items-center border">
-          {isSearchable && (
+    <div
+      className={`relative text-sm grow`}
+      style={{ width }}
+      ref={dropdownRef}
+    >
+      <CollapsibleBox isOpen={isVisible} maxHeight="800px">
+        {isOpen ? (
+          <div className="flex items-center border">
+            {isSearchable && (
             <div className="flex items-center gap-2 px-3 py-2 flex-grow">
               <Search size={16} className="text-gray-500" />
               <input
@@ -66,14 +77,20 @@ export const Dropdown = <T,>({
           )}
           {!isSearchable && (
             <div className="flex items-center gap-2 px-3 py-2 flex-grow text-ellipsis whitespace-nowrap overflow-hidden w-full">
-              {selected ? renderSelected(selected) : <span className="text-gray-500 text-ellipsis overflow-hidden">{placeholder}</span>}
+              {selected ? (
+                renderSelected(selected)
+              ) : (
+                <span className="text-gray-500 text-ellipsis overflow-hidden">
+                  {placeholder}
+                </span>
+              )}
             </div>
           )}
           <button
             onClick={() => setIsOpen(false)}
-            className={`px-3 py-2 ${isSearchable ? 'border-l' : ''} flex items-center`}
+            className={`px-3 py-2 ${isSearchable ? "border-l" : ""} flex items-center`}
           >
-            <ChevronDown size={18} />
+            <ChevronDown size={18} className="min-w-[18px]" />
           </button>
         </div>
       ) : (
@@ -81,10 +98,15 @@ export const Dropdown = <T,>({
           onClick={() => setIsOpen(true)}
           className="w-full flex justify-between items-center border px-3 py-2 text-ellipsis overflow-hidden"
         >
-          {selected ? renderSelected(selected) : <span className="text-gray-500">{placeholder}</span>}
-          <ChevronDown size={18} />
+          {selected ? (
+            renderSelected(selected)
+          ) : (
+            <span className="text-gray-500">{placeholder}</span>
+          )}
+          <ChevronDown size={18} className="min-w-[18px]" />
         </button>
-      )}
+        )}
+      </CollapsibleBox>
 
       {isOpen && (
         <div className="absolute w-full border mt-1 bg-white z-10 max-h-60 overflow-y-auto shadow-lg shadow-gray-300">
