@@ -25,14 +25,11 @@ export const PageColorExtraction = ({
   const [colorArray, setColorArray] = useState<Color[][]>([])
 
   useEffect(() => {
-    console.log("Color Extraction")
     chrome.tabs
       .query({ active: true, currentWindow: true })
       .then((tabs) => {
         const activeTab = tabs[0]
         const activeTabId = activeTab.id
-
-        console.log(chrome.scripting)
 
         return chrome.scripting.executeScript({
           target: { tabId: activeTabId! },
@@ -47,7 +44,6 @@ export const PageColorExtraction = ({
           styleArr: ImportedColor[][]
           imageSrcArr: { src: string; weight: number }[]
         } = results[0].result
-        console.log(html)
         const colorMap = new Map<string, ImportedColor[]>()
         const sumMap = new Map<string, ImportedColor>()
         for (const src of html.imageSrcArr) {
@@ -91,8 +87,6 @@ export const PageColorExtraction = ({
           }
         }
 
-        console.log(sumMap)
-
         const colorArr: ImportedColor[] = Array.from(sumMap.values())
 
         for (const color of colorArr) {
@@ -108,8 +102,6 @@ export const PageColorExtraction = ({
             ])
           }
         }
-
-        console.log(colorMap)
 
         const colorArray: Color[][] = Array.from(colorMap.values())
           .map((colorArr) =>
@@ -189,7 +181,6 @@ const scanPageHtml = () => {
 
   const coreNode = document.body
   let totalWeight = 0
-  console.log("coreNode", coreNode)
 
   const colorMap = new Map()
   const dummy = document.createElement("element-" + new Date().getTime())
@@ -222,7 +213,6 @@ const scanPageHtml = () => {
       2
 
     if (tagName === "img") {
-      console.log("img", htmlNode)
       imageSrcArr.push({
         src: (htmlNode as HTMLImageElement).src,
         weight: areaWeight,
@@ -298,9 +288,6 @@ const scanPageHtml = () => {
   for (const [key, value] of colorMap.entries()) {
     colorMap.set(key, { ...value, weight: value.weight / totalWeight })
   }
-
-  console.log("colorMap", colorMap)
-  console.log("imageSrcArr", imageSrcArr)
 
   return { totalWeight, styleArr, imageSrcArr }
 }
