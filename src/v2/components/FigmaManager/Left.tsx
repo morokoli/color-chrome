@@ -108,16 +108,8 @@ const Left: React.FC<Props> = ({setTab}) => {
     }
   }
 
-  const handleRemoveFile = () => {
-    if (confirmFileId) {
-      setSheets((prev) =>
-        prev.filter((sheet) => sheet.spreadsheetId !== confirmFileId),
-      )
-      setVisibleSheets((prev) =>
-        prev.filter((sheet) => sheet.spreadsheetId !== confirmFileId),
-      )
-      setConfirmFileId(null)
-    }
+  const onRemoveFileRequest = (fileId: string) => {
+    setConfirmFileId(fileId)
   }
 
   const handleAddFile = async () => {
@@ -213,6 +205,8 @@ const Left: React.FC<Props> = ({setTab}) => {
       {/* Sheet Selection Dropdown */}
       <div className="mb-4">
         <MultiSelectDropdown
+          isSearchable
+          placeholder="Select Sheets"
           selected={visibleSheets}
           items={sheets}
           renderItem={(sheet) => sheet.sheetName}
@@ -285,7 +279,7 @@ const Left: React.FC<Props> = ({setTab}) => {
           rankingFilter={rankingFilter}
           searchQuery={searchQuery}
           onColorClick={handleColorClick}
-          onRemove={handleRemoveFile}
+          onRemove={onRemoveFileRequest}
         />
       ))}
 
@@ -294,8 +288,7 @@ const Left: React.FC<Props> = ({setTab}) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded w-[400px] text-center border shadow-lg">
             <p className="text-[#CC0000] font-bold text-lg mb-4">
-              Sheet will be removed from this page only. If you want to remove
-              from extension, go to Sheet Manager.
+              Sheet will be removed from the entire extension. Are you sure?
             </p>
             <div className="flex justify-around">
               <button

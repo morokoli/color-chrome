@@ -2,7 +2,7 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { config } from "@/v2/others/config"
 import { useEffect, useState } from "react"
-
+import figmaScreenshot from "@/v2/assets/images/figmaScreenshot.png"
 interface ModalProps {
   isOpen: boolean
   onClose: () => void
@@ -66,14 +66,7 @@ export const TeamsModal = ({
         <p>
           Select a team that you want to add in the figma tab and click submit
         </p>
-        <input
-          value={teamName}
-          type="text"
-          placeholder="Custom Team Name"
-          onChange={(e) => {
-            setTeamName(e.target.value)
-          }}
-        />
+       <p className="text-center text-lg font-bold">{teamName ? teamName : "Loading..."}</p>
         <button className="border p-1 text-sm" onClick={() => onSubmit(teamName)}>
           Submit
         </button>
@@ -90,13 +83,14 @@ export const OpenFigmaModal = ({
 
   return (
     <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-50">
-      <div className="bg-white p-6 m-6 rounded border flex flex-col justify-center gap-4">
+      <div className="bg-white p-6 m-6 rounded border flex flex-col justify-center items-center gap-4">
         <h2 className="text-xl mb-4 text-center">Adding a team</h2>
         <p>
-          To add a team, open figma, select the team you want to add and click
+          To add a team, open the main page offigma, select the team you want to add and click
           this button again
         </p>
-        <button className="border p-1 text-sm" onClick={onOpenTab}>
+        <img className="w-52 h-auto" src={figmaScreenshot} alt="figma screenshot" />
+        <button className="border p-1 text-sm w-full" onClick={onOpenTab}>
           Open tab
         </button>
       </div>

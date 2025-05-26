@@ -83,7 +83,10 @@ export const useFigmaAddTeam = () => {
   })
 }
 
-export const useFigmaGetProjects = (teamId: string | undefined, email: string | undefined) => {
+export const useFigmaGetProjects = (
+  teamId: string | undefined,
+  email: string | undefined,
+) => {
   const { state } = useGlobalState()
   return useQuery<FigmaGetProjectsResponse, Error>({
     queryKey: ["figma-get-projects", teamId, email],
@@ -102,7 +105,10 @@ export const useFigmaGetProjects = (teamId: string | undefined, email: string | 
   })
 }
 
-export const useFigmaMultipleProjects = (teamIds: string[], email: string | undefined) => {
+export const useFigmaMultipleProjects = (
+  teamIds: string[],
+  email: string | undefined,
+) => {
   const { state } = useGlobalState()
   return useQueries<FigmaGetProjectsResponse[]>({
     queries: teamIds.map((teamId) => ({
@@ -122,7 +128,10 @@ export const useFigmaMultipleProjects = (teamIds: string[], email: string | unde
   })
 }
 
-export const useFigmaGetFiles = (projectId: string | undefined, email: string | undefined) => {
+export const useFigmaGetFiles = (
+  projectId: string | undefined,
+  email: string | undefined,
+) => {
   const { state } = useGlobalState()
   return useQuery<FigmaGetFilesResponse, Error>({
     queryKey: ["figma-get-files", projectId, email],
@@ -141,21 +150,27 @@ export const useFigmaGetFiles = (projectId: string | undefined, email: string | 
   })
 }
 
-export const useFigmaMultipleProjectsFiles = (projectIds: string[], email: string | undefined) => {
+export const useFigmaMultipleProjectsFiles = (
+  projectIds: string[],
+  email: string | undefined,
+) => {
   const { state } = useGlobalState()
   return useQueries<FigmaGetFilesResponse[]>({
     queries: projectIds.map((projectId) => ({
       queryKey: ["figma-get-files", projectId, email],
       queryFn: async () => {
-        const response = await axiosInstance.get(config.api.endpoints.figmaGetFiles, {
-          headers: {
-            Authorization: `Bearer ${state.user?.jwtToken}`,
+        const response = await axiosInstance.get(
+          config.api.endpoints.figmaGetFiles,
+          {
+            headers: {
+              Authorization: `Bearer ${state.user?.jwtToken}`,
+            },
+            params: {
+              projectId,
+              email,
+            },
           },
-          params: {
-            projectId,
-            email,
-          },
-        })
+        )
         return response.data
       },
     })),
@@ -163,7 +178,15 @@ export const useFigmaMultipleProjectsFiles = (projectIds: string[], email: strin
 }
 export const useFigmaAddColors = () => {
   const { state } = useGlobalState()
-  return useMutation<any, Error, { fileIds: string[]; colors: { hex: string; slashName: string }[]; email: string }>({
+  return useMutation<
+    any,
+    Error,
+    {
+      fileIds: string[]
+      colors: { hex: string; slashName: string }[]
+      email: string
+    }
+  >({
     mutationFn: ({ fileIds, colors, email }) => {
       return axiosInstance.post(
         config.api.endpoints.figmaAddColors,
@@ -174,6 +197,34 @@ export const useFigmaAddColors = () => {
           },
         },
       )
+    },
+  })
+}
+
+export const useFigmaDeleteAccount = () => {
+  const { state } = useGlobalState()
+  return useMutation<any, Error, { email: string }>({
+    mutationFn: ({ email }) => {
+      return axiosInstance.delete(config.api.endpoints.figmaDeleteAccount, {
+        headers: {
+          Authorization: `Bearer ${state.user?.jwtToken}`,
+        },
+        data: { email },
+      })
+    },
+  })
+}
+
+export const useFigmaDeleteTeam = () => {
+  const { state } = useGlobalState()
+  return useMutation<any, Error, { email: string; teamId: string }>({
+    mutationFn: ({ email, teamId }) => {
+      return axiosInstance.delete(config.api.endpoints.figmaDeleteTeam, {
+        headers: {
+          Authorization: `Bearer ${state.user?.jwtToken}`,
+        },
+        data: { email, teamId },
+      })
     },
   })
 }

@@ -98,7 +98,7 @@ const Select: FC<ISelectProps> = ({
       })
   }
 
-  const onClickHandler = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onClickHandler = () => {
     if (!selectedFile && files.length === 0 && setTab) {
       setTab("ADD_SHEET")
     }

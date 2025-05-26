@@ -7,15 +7,19 @@ interface ProjectDropdownProps {
     id: string
   }[]
   onSelectProjects: (projects: string[]) => void
+  isVisible?: boolean
 }
 
 export const ProjectDropdown = ({
   selectedProjects,
   projects,
   onSelectProjects,
+  isVisible = true,
 }: ProjectDropdownProps) => {
   return (
     <MultiSelectDropdown
+      isVisible={isVisible}
+      placeholder="Select Projects"
       selected={selectedProjects}
       items={projects.map((project) => project.name)}
       renderSelected={(selected) => {

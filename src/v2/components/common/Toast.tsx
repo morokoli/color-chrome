@@ -11,10 +11,10 @@ type Props = {
 
 export const Toast: FC<Props> = (props) => (
   <Show if={props.message !== null}>
-    <div className='relative z-10'>
+    <div className='relative'>
       <div
         className={classNames(
-          "flex space-x-2 px-4 py-2 text-xs w-100 absolute bottom-0 right-0 w-full border-b-2",
+          "flex space-x-2 px-4 py-2 text-xs w-100 w-full border-b-2",
           {
             "bg-custom-green border-custom-green text-white":
               props.type === "success",
