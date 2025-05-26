@@ -1,5 +1,5 @@
 import { ChevronDown, Search } from "lucide-react"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 
 interface DropdownProps<T> {
   selected: T | null
@@ -26,6 +26,20 @@ export const Dropdown = <T,>({
 }: DropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   const filteredItems = items.filter((item) => {
     if (!isSearchable) return true
@@ -34,7 +48,7 @@ export const Dropdown = <T,>({
   })
 
   return (
-    <div className={`relative text-sm grow`} style={{ width }}>
+    <div className={`relative text-sm grow`} style={{ width }} ref={dropdownRef}>
       {isOpen ? (
         <div className="flex items-center border">
           {isSearchable && (
