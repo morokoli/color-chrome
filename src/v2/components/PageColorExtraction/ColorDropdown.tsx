@@ -39,10 +39,32 @@ export const ColorDropdown = ({
     }
   }
 
+  const handleSelectAll = () => {
+    setSelectedColors([...selectedColors, ...colorArray])
+  }
+
+  const handleDeselectAll = () => {
+    setSelectedColors(selectedColors.filter((c) => !colorArray.includes(c)))
+  }
+
+  const handleMainCheckboxClick = () => {
+    if (selectedColors.some((c) => colorArray.includes(c))) {
+      handleDeselectAll()
+    } else {
+      handleSelectAll()
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-row gap-4 justify-between">
-        <div className="flex flex-row gap-4">
+        <div className="flex flex-row gap-4 items-center">
+          <input
+            type="checkbox"
+            checked={selectedColors.some((c) => colorArray.includes(c))}
+            className="color-checkbox"
+            onChange={handleMainCheckboxClick}
+          />
           <button
             className="min-w-[40px] h-10 flex items-center justify-center"
             onClick={() => setIsOpen(!isOpen)}
@@ -105,23 +127,6 @@ export const ColorDropdown = ({
                 ? (color.prevalence * 100).toFixed(0) + "%"
                 : "<1%"}
             </div>
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <div
-                  className="min-w-[40px] h-10 border-2 border-black"
-                  style={{ backgroundColor: color.hex }}
-                />
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-black text-white px-2 py-1 rounded text-sm"
-                  sideOffset={5}
-                >
-                  {color.hex}
-                  <Tooltip.Arrow className="fill-black" />
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
             <input
               type="text"
               className="w-full border border-grey p-1 p-y-2 text-xl"

@@ -23,7 +23,7 @@ const FigmaManager: React.FC<Props> = ({ setTab }) => {
         transitionDuration={300}
         renderHidden={true}
       >
-        <div className="flex-1 min-w-0 overflow-y-scroll">
+        <div className="flex flex-row flex-1 min-w-0 overflow-y-scroll">
           <Left setTab={setTab} />
         </div>
       </CollapsibleBoxHorizontal>

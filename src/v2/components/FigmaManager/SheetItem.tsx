@@ -75,7 +75,7 @@ const SheetItem: React.FC<SheetItemProps> = ({
                   color.lightness <= lightnessFilter[1] &&
                   ((color.ranking >= rankingFilter[0] &&
                     color.ranking <= rankingFilter[1]) ||
-                    ([undefined, null, ""].includes(color.ranking) &&
+                    ([undefined, null, "", "0"].includes(color.ranking) &&
                       rankingFilter[0] === 1)) &&
                   (color.slashNaming
                     ?.toLowerCase()

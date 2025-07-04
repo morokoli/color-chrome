@@ -4,6 +4,7 @@ import { X } from "lucide-react"
 interface ColorListProps {
   colors: ColorItem[]
   activeColors: number[]
+  clearColors: () => void
   onCheckboxClick: (colorId: number) => void
   onRemoveColor: (color: string) => void
   handleManualSlashNamingChange: (colorId: number, slashNaming: string) => void
@@ -29,6 +30,7 @@ interface ColorItem {
 export const ColorList = ({
   colors,
   activeColors,
+  clearColors,
   onCheckboxClick,
   onRemoveColor,
   handleManualSlashNamingChange,
@@ -36,7 +38,7 @@ export const ColorList = ({
   return (
     <>
       {colors.length > 0 && (
-        <div className={`flex p-1`}>
+        <div className={`flex p-1 justify-between items-center`}>
           <input
             type="checkbox"
             checked={activeColors.length > 0}
@@ -45,6 +47,12 @@ export const ColorList = ({
               onCheckboxClick(colors.length)
             }}
           />
+          <button
+            className="border p-2 ml-2"
+            onClick={() => clearColors()}
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
       {Array.isArray(colors) &&

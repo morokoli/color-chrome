@@ -12,13 +12,13 @@ import SheetItem from "./SheetItem"
 import { MultiSelectDropdown } from "./MultiSelectDropdown"
 
 interface Props {
-  setTab: (tab: string | null) => void;
+  setTab: (tab: string | null) => void  
 }
 
-const Left: React.FC<Props> = ({setTab}) => {
+const Left: React.FC<Props> = ({ setTab }) => {
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
-  const { files, selectedColorsFromFile  } = state
+  const { files, selectedColorsFromFile } = state
   const [sheets, setSheets] = useState<any[]>([])
   const [visibleSheets, setVisibleSheets] = useState<any[]>([])
   const [hueFilter, setHueFilter] = useState<[number, number]>([0, 360])
@@ -78,7 +78,11 @@ const Left: React.FC<Props> = ({setTab}) => {
   })
 
   // Функція, яка підвантажує parsedData для конкретного файлу
-  const handleColorClick = async (color: RowData, sheetData: SheetData, rowIndex: number) => {
+  const handleColorClick = async (
+    color: RowData,
+    sheetData: SheetData,
+    rowIndex: number,
+  ) => {
     try {
       // шукаємо відповідний рядок
       const slashNaming = color?.slashNaming || ""
@@ -100,7 +104,7 @@ const Left: React.FC<Props> = ({setTab}) => {
 
       dispatch({
         type: "ADD_SELECTED_COLOR_FROM_FILE",
-        payload: { color:fullColor, slashNaming },
+        payload: { color: fullColor, slashNaming },
       })
     } catch (err) {
       toast.display("error", "Failed to load sheet data")
@@ -178,156 +182,164 @@ const Left: React.FC<Props> = ({setTab}) => {
   }
 
   return (
-    <div className="relative h-full overflow-y-auto p-4">
-      <div className="flex mb-4">
-        <input
-          type="text"
-          onChange={(e) => setFileURL(e.target.value)}
-          placeholder="Sheet URL"
-          className="border p-2 flex-grow"
-        />
-        <button onClick={handleAddFile} className="ml-2 border p-2">
-          Add
-        </button>
-      </div>
+    <>
+      <div className="relative h-full overflow-y-auto p-4">
+        <div className="flex mb-4">
+          <input
+            type="text"
+            onChange={(e) => setFileURL(e.target.value)}
+            placeholder="Sheet URL"
+            className="border p-2 flex-grow"
+          />
+          <button onClick={handleAddFile} className="ml-2 border p-2">
+            Add
+          </button>
+        </div>
 
-      {/* Search Input */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Search"
-          className="border p-2 w-full"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
+        {/* Search Input */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search"
+            className="border p-2 w-full"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
 
-      {/* Sheet Selection Dropdown */}
-      <div className="mb-4">
-        <MultiSelectDropdown
-          isSearchable
-          placeholder="Select Sheets"
-          selected={visibleSheets}
-          items={sheets}
-          renderItem={(sheet) => sheet.sheetName}
-          renderSelected={(selected) =>
-            selected.length === sheets.length
-              ? "All Sheets"
-              : `${selected.length} Sheet${selected.length === 1 ? "" : "s"}`
-          }
-          onSelect={(selectedSheets) => setVisibleSheets(selectedSheets)}
-          width="100%"
-        />
-      </div>
+        {/* Sheet Selection Dropdown */}
+        <div className="mb-4">
+          <MultiSelectDropdown
+            isSearchable
+            placeholder="Select Sheets"
+            selected={visibleSheets}
+            items={sheets}
+            renderItem={(sheet) => sheet.sheetName}
+            renderSelected={(selected) =>
+              selected.length === sheets.length
+                ? "All Sheets"
+                : `${selected.length} Sheet${selected.length === 1 ? "" : "s"}`
+            }
+            onSelect={(selectedSheets) => setVisibleSheets(selectedSheets)}
+            width="100%"
+          />
+        </div>
 
-      {/* Sliders */}
-      <div className="flex justify-around mb-4 gap-4">
-        <DualThumbSlider
-          value={hueFilter}
-          onValueChange={(value) => setHueFilter(value as [number, number])}
-          max={360}
-          step={1}
-          label="Hue"
-          unit="°"
-          showGradient
-          thumbColors={[
-            `hsl(${hueFilter[0]}, 100%, 50%)`,
-            `hsl(${hueFilter[1]}, 100%, 50%)`,
-          ]}
-        />
+        {/* Sliders */}
+        <div className="flex justify-around mb-4 gap-4">
+          <DualThumbSlider
+            value={hueFilter}
+            onValueChange={(value) => setHueFilter(value as [number, number])}
+            max={360}
+            step={1}
+            label="Hue"
+            unit="°"
+            showGradient
+            thumbColors={[
+              `hsl(${hueFilter[0]}, 100%, 50%)`,
+              `hsl(${hueFilter[1]}, 100%, 50%)`,
+            ]}
+          />
 
-        <DualThumbSlider
-          value={saturationFilter}
-          onValueChange={(value) =>
-            setSaturationFilter(value as [number, number])
-          }
-          max={100}
-          step={1}
-          label="Saturation"
-          unit="%"
-        />
+          <DualThumbSlider
+            value={saturationFilter}
+            onValueChange={(value) =>
+              setSaturationFilter(value as [number, number])
+            }
+            max={100}
+            step={1}
+            label="Saturation"
+            unit="%"
+          />
 
-        <DualThumbSlider
-          value={lightnessFilter}
-          onValueChange={(value) =>
-            setLightnessFilter(value as [number, number])
-          }
-          max={100}
-          step={1}
-          label="Lightness"
-          unit="%"
-        />
+          <DualThumbSlider
+            value={lightnessFilter}
+            onValueChange={(value) =>
+              setLightnessFilter(value as [number, number])
+            }
+            max={100}
+            step={1}
+            label="Lightness"
+            unit="%"
+          />
 
-        <DualThumbSlider
-          value={rankingFilter}
-          onValueChange={(value) => setRankingFilter(value as [number, number])}
-          max={100}
-          min={1}
-          step={1}
-          label="Ranking"
-        />
-      </div>
+          <DualThumbSlider
+            value={rankingFilter}
+            onValueChange={(value) =>
+              setRankingFilter(value as [number, number])
+            }
+            max={100}
+            min={1}
+            step={1}
+            label="Ranking"
+          />
+        </div>
 
-      {/* Sheets List */}
-      {visibleSheets.map((sheet) => (
-        <SheetItem
-          key={sheet.spreadsheetId}
-          sheet={sheet}
-          hueFilter={hueFilter}
-          saturationFilter={saturationFilter}
-          lightnessFilter={lightnessFilter}
-          rankingFilter={rankingFilter}
-          searchQuery={searchQuery}
-          onColorClick={handleColorClick}
-          onRemove={onRemoveFileRequest}
-        />
-      ))}
+        {/* Sheets List */}
+        {visibleSheets.map((sheet) => (
+          <SheetItem
+            key={sheet.spreadsheetId}
+            sheet={sheet}
+            hueFilter={hueFilter}
+            saturationFilter={saturationFilter}
+            lightnessFilter={lightnessFilter}
+            rankingFilter={rankingFilter}
+            searchQuery={searchQuery}
+            onColorClick={handleColorClick}
+            onRemove={onRemoveFileRequest}
+          />
+        ))}
 
-      {/* Confirmation Dialog */}
-      {confirmFileId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded w-[400px] text-center border shadow-lg">
-            <p className="text-[#CC0000] font-bold text-lg mb-4">
-              Sheet will be removed from the entire extension. Are you sure?
-            </p>
-            <div className="flex justify-around">
-              <button
-                className="px-6 py-2 border text-gray-700 font-semibold"
-                onClick={() => setConfirmFileId(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-6 py-2 border border-[#CC0000] text-[#CC0000] font-semibold"
-                onClick={() => {
-                  // Remove from global state
-                  dispatch({ type: "REMOVE_FILES", payload: confirmFileId })
+        {/* Confirmation Dialog */}
+        {confirmFileId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+            <div className="bg-white p-6 rounded w-[400px] text-center border shadow-lg">
+              <p className="text-[#CC0000] font-bold text-lg mb-4">
+                Sheet will be removed from the entire extension. Are you sure?
+              </p>
+              <div className="flex justify-around">
+                <button
+                  className="px-6 py-2 border text-gray-700 font-semibold"
+                  onClick={() => setConfirmFileId(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-6 py-2 border border-[#CC0000] text-[#CC0000] font-semibold"
+                  onClick={() => {
+                    // Remove from global state
+                    dispatch({ type: "REMOVE_FILES", payload: confirmFileId })
 
-                  // Remove from local state
-                  setSheets((prev) =>
-                    prev.filter(
-                      (sheet) => sheet.spreadsheetId !== confirmFileId,
-                    ),
-                  )
-                  setVisibleSheets((prev) =>
-                    prev.filter(
-                      (sheet) => sheet.spreadsheetId !== confirmFileId,
-                    ),
-                  )
-                  setConfirmFileId(null)
+                    // Remove from local state
+                    setSheets((prev) =>
+                      prev.filter(
+                        (sheet) => sheet.spreadsheetId !== confirmFileId,
+                      ),
+                    )
+                    setVisibleSheets((prev) =>
+                      prev.filter(
+                        (sheet) => sheet.spreadsheetId !== confirmFileId,
+                      ),
+                    )
+                    setConfirmFileId(null)
 
-                  // Show success message
-                  toast.display("success", "Spreadsheet removed successfully")
-                }}
-              >
-                Remove
-              </button>
+                    // Show success message
+                    toast.display("success", "Spreadsheet removed successfully")
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      <button onClick={handleBack} className="border p-2">Go Back</button>
-    </div>
+        )}
+        <button onClick={handleBack} style={{zIndex: 1000}} className="fixed bottom-4 border p-2">
+          Go Back
+        </button>
+      </div>
+      <div style={{ width: "1px", marginTop: "10px", height: "545px", marginLeft: "7px", backgroundColor: "#E0E0E0" }}></div>
+      <div style={{ height: "50px" }}/>
+    </>
   )
 }
 

@@ -169,8 +169,9 @@ const Right = ({
         setActiveColors(selectedColorsFromFile.map((_, i) => i))
         const parts = getSlashNameParts(0)
         const sharedParts = parts.map((part) =>
-          selectedColorsFromFile
-            .every((color) => color.slashNaming.includes(part))
+          selectedColorsFromFile.every((color) =>
+            color.slashNaming.includes(part),
+          )
             ? part
             : "",
         )
@@ -398,12 +399,24 @@ const Right = ({
     toast.display("success", response.data.message[0].message)
   }
 
-  const handleManualSlashNamingChange = (colorId: number, slashNameInput: string) => {
-    const newSlashNaming = slashNameInput.replace(/\s+/g, "").replace(/ /g, "/").replace(/\//g, " / ")
+  const handleManualSlashNamingChange = (
+    colorId: number,
+    slashNameInput: string,
+  ) => {
+    const newSlashNaming = slashNameInput
+      .replace(/\s+/g, "")
+      .replace(/ /g, "/")
+      .replace(/\//g, " / ")
     dispatch({
       type: "UPDATE_SELECTED_COLOR_SLASHNAMING",
       payload: { colors: [colorId], slashNaming: newSlashNaming },
     })
+  }
+
+  const clearColors = () => {
+    setActiveColors([])
+    setSlashNameInputs(["", "", "", "", ""])
+    dispatch({ type: "CLEAR_SELECTED_COLORS_FROM_FILE" })
   }
 
   let warning = ""
@@ -493,10 +506,13 @@ const Right = ({
         />
 
         <div className="bg-[#F6FF03] p-2 mb-4 border text-sm">
-          <strong>!!! Warning !!!:</strong> Slash Name changes do not persist in the extension unless you save them
+          Slash Name changes are applied for Figma Export only. If you want to
+          save them to the spreadsheet, you need to click the "Save Changes"
+          button.
         </div>
 
         <ColorList
+          clearColors={clearColors}
           colors={selectedColorsFromFile}
           activeColors={activeColors}
           onCheckboxClick={handleCheckboxClick}
@@ -509,14 +525,18 @@ const Right = ({
           handleManualSlashNamingChange={handleManualSlashNamingChange}
         />
 
-        <div className="flex justify-between mt-2">
-          <button onClick={handleSaveChanges} className="border p-2">
+        <div
+          style={{ width: "360px" }}
+          className="fixed bottom-4 width flex justify-between mt-2"
+        >
+          <button onClick={handleSaveChanges} className="border bg-white p-2">
             Save Changes
           </button>
           <button onClick={handleAddColors} className="bg-black text-white p-2">
             Export
           </button>
         </div>
+        <div style={{ height: "50px" }}/>
       </CollapsibleBox>
 
       <TeamsModal

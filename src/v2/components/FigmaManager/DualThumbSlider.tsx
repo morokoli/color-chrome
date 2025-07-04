@@ -1,6 +1,6 @@
 import * as Slider from "@radix-ui/react-slider"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { useState } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 
 interface DualThumbSliderProps {
   value: [number, number]
@@ -12,6 +12,7 @@ interface DualThumbSliderProps {
   unit?: string
   showGradient?: boolean
   thumbColors?: [string, string]
+  debounceDelay?: number
 }
 
 const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
@@ -24,17 +25,53 @@ const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
   unit = "",
   showGradient = false,
   thumbColors,
+  debounceDelay = 300,
 }) => {
   const [isMinThumbVisible, setIsMinThumbVisible] = useState(false)
   const [isMaxThumbVisible, setIsMaxThumbVisible] = useState(false)
   const [isMinThumbHovered, setIsMinThumbHovered] = useState(false)
   const [isMaxThumbHovered, setIsMaxThumbHovered] = useState(false)
+  
+  // Local state for immediate UI updates
+  const [localValue, setLocalValue] = useState(value)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Custom handler to prevent thumbs from crossing
+  // Update local value when prop value changes
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
+  // Debounced value change handler
+  const debouncedOnValueChange = useCallback((newValue: [number, number]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    
+    timeoutRef.current = setTimeout(() => {
+      onValueChange(newValue)
+    }, debounceDelay)
+  }, [onValueChange, debounceDelay])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Custom handler to prevent thumbs from crossing and handle debouncing
   const handleValueChange = (newValue: number[]) => {
     // Ensure min thumb doesn't exceed max thumb
     if (newValue[0] <= newValue[1]) {
-      onValueChange(newValue as [number, number])
+      const valueTuple = newValue as [number, number]
+      
+      // Update local state immediately for smooth UI
+      setLocalValue(valueTuple)
+      
+      // Debounce the actual value change
+      debouncedOnValueChange(valueTuple)
     }
   }
 
@@ -43,7 +80,7 @@ const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
       <Tooltip.Provider>
         <Slider.Root
           className="relative flex items-center select-none touch-none w-full h-5"
-          value={value}
+          value={localValue}
           onValueChange={handleValueChange}
           max={max}
           min={min}
@@ -68,7 +105,7 @@ const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
           <Tooltip.Root open={isMinThumbVisible || isMinThumbHovered}>
             <Tooltip.Trigger asChild>
               <Slider.Thumb
-                className="block w-4 h-4 bg-white border-2 border-black rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                className="block w-4 h-4 bg-white border-2 border-black hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"
                 aria-label={`${label} minimum`}
                 style={
                   thumbColors?.[0]
@@ -91,14 +128,14 @@ const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
                 sideOffset={5}
                 side="bottom"
               >
-                {value[0]}{unit}
+                {localValue[0]}{unit}
               </Tooltip.Content>
             </Tooltip.Portal>
           </Tooltip.Root>
           <Tooltip.Root open={isMaxThumbVisible || isMaxThumbHovered}>
             <Tooltip.Trigger asChild>
               <Slider.Thumb
-                className="block w-4 h-4 bg-white border-2 border-black rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                className="block w-4 h-4 bg-white border-2 border-black hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"
                 aria-label={`${label} maximum`}
                 style={
                   thumbColors?.[1]
@@ -121,7 +158,7 @@ const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
                 sideOffset={5}
                 side="bottom"
               >
-                {value[1]}{unit}
+                {localValue[1]}{unit}
               </Tooltip.Content>
             </Tooltip.Portal>
           </Tooltip.Root>

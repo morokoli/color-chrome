@@ -45,7 +45,7 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       menuName: "COMMENT",
     },
     {
-      title: "Figma (Beta)",
+      title: "Figma Upload",
       icon: figmaIcon,
       menuName: "FIGMA_MANAGER",
     },

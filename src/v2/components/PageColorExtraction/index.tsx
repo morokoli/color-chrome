@@ -33,7 +33,6 @@ export const PageColorExtraction = ({
   const toast = useToast()
 
   useEffect(() => {
-    console.log(addMultipleColorsData)
     if (addMultipleColorsData && addMultipleColorsData.done) {
       toast.display("success", "Colors added successfully")
     }
@@ -61,28 +60,36 @@ export const PageColorExtraction = ({
         } = results[0].result
         const colorMap = new Map<string, ImportedColor[]>()
         const sumMap = new Map<string, ImportedColor>()
+        const promiseArr: Promise<any>[] = []
         for (const src of html.imageSrcArr) {
-          try {
-            const colors = await extractColors(src.src)
-            for (const color of colors) {
-              if (sumMap.has(color.hex)) {
-                const existing: ImportedColor = sumMap.get(color.hex)!
-                sumMap.set(color.hex, {
-                  ...existing,
-                  weight: existing.weight + src.weight,
-                })
-              } else {
-                sumMap.set(color.hex, {
-                  key: "image/color",
-                  value: color.hex,
-                  weight: src.weight * color.area,
-                })
+          promiseArr.push(
+            new Promise(async (resolve, reject) => {
+              try {
+                const colors = await extractColors(src.src)
+                for (const color of colors) {
+                  if (sumMap.has(color.hex)) {
+                    const existing: ImportedColor = sumMap.get(color.hex)!
+                    sumMap.set(color.hex, {
+                      ...existing,
+                      weight: existing.weight + src.weight,
+                    })
+                  } else {
+                    sumMap.set(color.hex, {
+                      key: "image/color",
+                      value: color.hex,
+                      weight: src.weight * color.area,
+                    })
+                  }
+                }
+                resolve(true)
+              } catch (error) {
+                console.log(error)
+                reject(error)
               }
-            }
-          } catch (error) {
-            console.log(error)
-          }
+            }),
+          )
         }
+       
         for (const styleArr of html.styleArr) {
           for (const style of styleArr) {
             try {
@@ -105,6 +112,8 @@ export const PageColorExtraction = ({
             } catch (error) {}
           }
         }
+
+        await Promise.all(promiseArr)
 
         const colorArr: ImportedColor[] = Array.from(sumMap.values())
 
@@ -242,111 +251,123 @@ export const PageColorExtraction = ({
 const scanPageHtml = () => {
   const styleArr: any[] = []
   const regexExtractor = /\d*/
+  const extractUrlRegex = /url\((['"]?)([^'"]+)\1\)/
+  const fetchStyleList = ["color", "Color", "Fill", "fill"]
+  const borderKeywords = ["border", "Border"]
 
-  const coreNode = document.body
+
+  
+
   let totalWeight = 0
 
   const colorMap = new Map()
-  const dummy = document.createElement("element-" + new Date().getTime())
-  document.body.appendChild(dummy)
 
-  const defaultStyles = getComputedStyle(dummy)
-  const sampleObjectStyleMap = new Map(Object.entries(defaultStyles))
   const imageSrcArr: { src: string; weight: number }[] = []
-  const fetchStyleList = ["color", "Color", "Fill", "fill"]
+
+  // Cache for computed styles
+  const styleCache = new Map<HTMLElement, CSSStyleDeclaration>()
 
   const checkStyle = (style: string) => {
     return fetchStyleList.some((fetchStyle) => style.includes(fetchStyle))
   }
 
-  const scanNode = (htmlNode: HTMLElement, prefix: string = "") => {
-    const styleMap = []
-    const style = window.getComputedStyle(htmlNode)
-    const tagName = htmlNode.tagName.toLowerCase()
+  const isBorderStyle = (key: string) => {
+    return borderKeywords.some((border) => key.includes(border))
+  }
 
-    const extractUrlRegex = /url\((['"]?)([^'"]+)\1\)/
-
-    const areaWeight =
-      Number(regexExtractor.exec(style.width)?.[0]) *
-      Number(regexExtractor.exec(style.height)?.[0])
-    const perimeterWeight =
-      (Number(regexExtractor.exec(style.width)?.[0]) +
-        Number(regexExtractor.exec(style.height)?.[0])) *
-      2
-
-    if (tagName === "img") {
-      imageSrcArr.push({
-        src: (htmlNode as HTMLImageElement).src,
-        weight: areaWeight,
-      })
+  const getComputedStyleCached = (node: HTMLElement) => {
+    if (!styleCache.has(node)) {
+      styleCache.set(node, window.getComputedStyle(node))
     }
+    return styleCache.get(node)!
+  }
 
-    for (const [key, value] of Object.entries(style)) {
-      if (value === sampleObjectStyleMap.get(key)) {
-        continue
+  const scanPage = async () => {
+    console.log("scanning page")
+    const elements = document.querySelectorAll("*, svg *")
+    console.log("elements", elements)
+    for (const element of elements) {
+      const style = getComputedStyleCached(element as HTMLElement)
+      const properties = {
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        borderColor: style.borderColor,
+        boxShadow: style.boxShadow,
+        fill: style.fill,
+        stroke: style.stroke,
+        svgfill: element.getAttribute("fill"), // Direct SVG attributes
+        svgstroke: element.getAttribute("stroke"), // Direct SVG attributes
+        backgroundImage: style.backgroundImage,
       }
-      if (key === "backgroundImage" && !!value && value !== "none") {
-        const match = value.match(extractUrlRegex)
-        if (match) {
+      const tagName = element.tagName.toLowerCase()
+      const styleMap = []
+
+      // Calculate weights
+      const width = Number(regexExtractor.exec(style.width)?.[0]) || 0
+      const height = Number(regexExtractor.exec(style.height)?.[0]) || 0
+      const areaWeight = width * height
+      const perimeterWeight = (width + height) * 2
+
+      // Handle images
+      if (tagName === "img") {
+        const imgSrc = (element as HTMLImageElement).src
+        if (imgSrc) {
           imageSrcArr.push({
-            src: match[2],
+            src: imgSrc,
             weight: areaWeight,
           })
         }
       }
-      if (checkStyle(key)) {
-        if (colorMap.has(value + tagName + "/" + key)) {
-          const existing = colorMap.get(value + tagName + "/" + key)
-          if (key.includes("border") || key.includes("Border")) {
-            colorMap.set(value + tagName + "/" + key, {
-              ...existing,
-              weight: existing.weight + perimeterWeight,
-            })
-          } else {
-            colorMap.set(value + tagName + "/" + key, {
-              ...existing,
-              weight: existing.weight + areaWeight,
-            })
-          }
-        } else {
-          if (key.includes("border") || key.includes("Border")) {
-            colorMap.set(value + tagName + key, {
-              key: tagName + "/" + key,
-              value: value.toString(),
-              weight: perimeterWeight,
-            })
-          } else {
-            colorMap.set(value + tagName + "/" + key, {
-              key: tagName + "/" + key,
-              value: value.toString(),
+
+      // Process styles
+      for (const [key, value] of Object.entries(properties)) {
+        if (key === "backgroundImage" && value && value !== "none") {
+          const match = value.match(extractUrlRegex)
+          if (match) {
+            imageSrcArr.push({
+              src: match[2],
               weight: areaWeight,
             })
           }
         }
-        if (key.includes("border") || key.includes("Border")) {
+
+        if (checkStyle(key)) {
+          const isBorder = isBorderStyle(key)
+          const weight = isBorder ? perimeterWeight : areaWeight
+          const mapKey = value + tagName + "/" + key
+
+          if (colorMap.has(mapKey)) {
+            const existing = colorMap.get(mapKey)
+            colorMap.set(mapKey, {
+              ...existing,
+              weight: existing.weight + weight,
+            })
+          } else {
+            colorMap.set(mapKey, {
+              key: tagName + "/" + key,
+              value: value?.toString() || "",
+              weight,
+            })
+          }
+
           styleMap.push({
             key: tagName + "/" + key,
-            value: value,
-            weight: perimeterWeight,
-          })
-        } else {
-          styleMap.push({
-            key: tagName + "/" + key,
-            value: value,
-            weight: areaWeight,
+            value,
+            weight,
           })
         }
       }
-    }
-    styleArr.push(styleMap)
-    if (styleMap.length > 0) totalWeight += areaWeight
 
-    for (const child of htmlNode.children) {
-      scanNode(child as HTMLElement)
+      if (styleMap.length > 0) {
+        styleArr.push(styleMap)
+        totalWeight += areaWeight
+      }
     }
+    console.log("styleArr", styleArr)
   }
 
-  scanNode(coreNode)
+  scanPage()
+
   for (const [key, value] of colorMap.entries()) {
     colorMap.set(key, { ...value, weight: value.weight / totalWeight })
   }
