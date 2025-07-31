@@ -40,12 +40,12 @@ const MainMenu: FC<Props> = ({ setTab }) => {
       menuName: "AI_GENERATOR",
     },
     {
-      title: "History",
+      title: "History & Editor",
       icon: historyIcon,
       menuName: "COMMENT",
     },
     {
-      title: "Figma Upload",
+      title: "Figma Export",
       icon: figmaIcon,
       menuName: "FIGMA_MANAGER",
     },

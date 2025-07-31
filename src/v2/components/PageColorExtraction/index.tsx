@@ -2,10 +2,11 @@ import { useEffect, useState } from "react"
 import Color from "color"
 import { extractColors } from "extract-colors"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { ColorDropdown } from "./ColorDropdown"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useAddMultipleColors } from "@/v2/api/sheet.api"
 import { useToast } from "@/v2/hooks/useToast"
+import copyIcon from "@/v2/assets/images/icons/menu/copy.svg"
+import { CheckCheckIcon, CheckIcon, TicketIcon } from "lucide-react"
 
 export type ColorType = {
   color: string
@@ -28,6 +29,9 @@ export const PageColorExtraction = ({
   const [colorArray, setColorArray] = useState<ColorType[][]>([])
   const [selectedColors, setSelectedColors] = useState<ColorType[]>([])
   const { state } = useGlobalState()
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle")
   const { addMultipleColors, data: addMultipleColorsData } =
     useAddMultipleColors()
   const toast = useToast()
@@ -53,195 +57,371 @@ export const PageColorExtraction = ({
         })
       })
       .then(async (results) => {
-        const html: {
-          totalWeight: number
-          styleArr: ImportedColor[][]
-          imageSrcArr: { src: string; weight: number }[]
-        } = results[0].result
-        const colorMap = new Map<string, ImportedColor[]>()
-        const sumMap = new Map<string, ImportedColor>()
-        const promiseArr: Promise<any>[] = []
-        for (const src of html.imageSrcArr) {
-          promiseArr.push(
-            new Promise(async (resolve, reject) => {
-              try {
-                const colors = await extractColors(src.src)
-                for (const color of colors) {
-                  if (sumMap.has(color.hex)) {
-                    const existing: ImportedColor = sumMap.get(color.hex)!
-                    sumMap.set(color.hex, {
-                      ...existing,
-                      weight: existing.weight + src.weight,
-                    })
-                  } else {
-                    sumMap.set(color.hex, {
-                      key: "image/color",
-                      value: color.hex,
-                      weight: src.weight * color.area,
-                    })
+        try {
+          const html: {
+            totalWeight: number
+            styleArr: ImportedColor[][]
+            imageSrcArr: { src: string; weight: number }[]
+          } = results[0].result
+          const colorMap = new Map<string, ImportedColor[]>()
+          const sumMap = new Map<string, ImportedColor>()
+          const promiseArr: Promise<any>[] = []
+          for (const src of html.imageSrcArr) {
+            promiseArr.push(
+              new Promise(async (resolve, reject) => {
+                try {
+                  const colors = await extractColors(src.src).catch((error) => {
+                    console.log("Heh", error)
+                    return []
+                  })
+                  for (const color of colors) {
+                    if (sumMap.has(color.hex)) {
+                      const existing: ImportedColor = sumMap.get(color.hex)!
+                      sumMap.set(color.hex, {
+                        ...existing,
+                        weight: existing.weight + src.weight,
+                      })
+                    } else {
+                      sumMap.set(color.hex, {
+                        key: "image/color",
+                        value: color.hex,
+                        weight: src.weight * color.area,
+                      })
+                    }
                   }
+                  resolve(true)
+                } catch (error) {
+                  console.log("fgdf", error)
+                  reject(error)
                 }
-                resolve(true)
+              }),
+            )
+          }
+
+          for (const styleArr of html.styleArr) {
+            for (const style of styleArr) {
+              try {
+                const color = Color(style.value)
+                if (sumMap.has(color.hex().toString() + style.key)) {
+                  const existing: ImportedColor = sumMap.get(
+                    color.hex().toString() + style.key,
+                  )!
+                  sumMap.set(color.hex().toString() + style.key, {
+                    ...existing,
+                    weight: existing.weight + style.weight,
+                  })
+                } else {
+                  sumMap.set(color.hex().toString() + style.key, {
+                    key: style.key,
+                    value: color.hex().toString(),
+                    weight: style.weight,
+                  })
+                }
               } catch (error) {
                 console.log(error)
-                reject(error)
               }
-            }),
-          )
-        }
-       
-        for (const styleArr of html.styleArr) {
-          for (const style of styleArr) {
-            try {
-              const color = Color(style.value)
-              if (sumMap.has(color.hex().toString() + style.key)) {
-                const existing: ImportedColor = sumMap.get(
-                  color.hex().toString() + style.key,
-                )!
-                sumMap.set(color.hex().toString() + style.key, {
-                  ...existing,
-                  weight: existing.weight + style.weight,
-                })
-              } else {
-                sumMap.set(color.hex().toString() + style.key, {
-                  key: style.key,
-                  value: color.hex().toString(),
-                  weight: style.weight,
-                })
-              }
-            } catch (error) {}
+            }
           }
-        }
 
-        await Promise.all(promiseArr)
+          await Promise.allSettled(promiseArr)
 
-        const colorArr: ImportedColor[] = Array.from(sumMap.values())
+          console.log(sumMap)
 
-        for (const color of colorArr) {
-          if (colorMap.has(color.value)) {
-            const existing: ImportedColor[] = colorMap.get(color.value)!
-            colorMap.set(color.value, [
-              ...existing,
-              { key: color.key, value: color.value, weight: color.weight },
-            ])
-          } else {
-            colorMap.set(color.value, [
-              { key: color.key, value: color.value, weight: color.weight },
-            ])
+          const colorArr: ImportedColor[] = Array.from(sumMap.values())
+
+          for (const color of colorArr) {
+            if (colorMap.has(color.value)) {
+              const existing: ImportedColor[] = colorMap.get(color.value)!
+              colorMap.set(color.value, [
+                ...existing,
+                { key: color.key, value: color.value, weight: color.weight },
+              ])
+            } else {
+              colorMap.set(color.value, [
+                { key: color.key, value: color.value, weight: color.weight },
+              ])
+            }
           }
+
+          const colorArray: ColorType[][] = Array.from(colorMap.values())
+            .map((colorArr) =>
+              colorArr
+                .map((color) => ({
+                  color: color.value,
+                  name: color.key,
+                  hex: color.value,
+                  prevalence: color.weight / html.totalWeight,
+                }))
+                .sort((a, b) => {
+                  return b.prevalence - a.prevalence
+                }),
+            )
+            .sort((a, b) => {
+              return b[0].prevalence - a[0].prevalence
+            })
+
+          setColorArray(colorArray)
+        } catch (error) {
+          console.log("Heh", error)
         }
-
-        const colorArray: ColorType[][] = Array.from(colorMap.values())
-          .map((colorArr) =>
-            colorArr
-              .map((color) => ({
-                color: color.value,
-                name: color.key,
-                hex: color.value,
-                prevalence: color.weight / html.totalWeight,
-              }))
-              .sort((a, b) => {
-                return b.prevalence - a.prevalence
-              }),
-          )
-          .sort((a, b) => {
-            return b[0].prevalence - a[0].prevalence
-          })
-
-        setColorArray(colorArray)
       })
       .catch((error) => {
-        console.log(error)
+        console.log("fgdf", error)
       })
   }, [])
-
-  const handleDeleteColor = (arrIndex: number, index: number) => {
-    const newColorArray = new Array(...colorArray)
-    newColorArray[arrIndex].splice(index, 1)
-    setColorArray(newColorArray)
-  }
-
-  const handleDeleteColorArr = (index: number) => {
-    setColorArray(colorArray.filter((_, i) => i !== index))
-  }
-
-  const handleChangeColor = (
-    arrIndex: number,
-    index: number,
-    color: ColorType,
-  ) => {
-    const newColorArray = new Array(...colorArray)
-    newColorArray[arrIndex][index] = color
-    setColorArray(newColorArray)
-  }
 
   const handleSave = () => {
     const { files, selectedFile } = state
     const selectedFileData = files.find(
       (file) => file.spreadsheetId === selectedFile,
     )
+    if (!selectedFile) {
+      toast.display("error", "Please select a google sheet")
+      return
+    }
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const url = tabs[0].url
       const rows = selectedColors.map((color) => {
+        const colorArr = colorArray.find(
+          (arr) => arr[0].hex === color.hex,
+        )
+        const comments =
+          "This color is used as: " +
+            colorArr?.map((color) => color.name).join(", ") || "No comments"
         const colorObj = new Color(color.hex)
         return {
           timestamp: Date.now(),
           url,
           hex: colorObj.hex(),
-          hsl: colorObj.hsl().toString(),
-          rgb: colorObj.rgb().toString(),
+          hsl: colorObj.hsl().round(1).toString(),
+          rgb: colorObj.rgb().round(1).toString(),
           ranking: "0",
-          comments: "",
+          comments: comments,
           slashNaming: color.name,
           tags: "",
           additionalColumns: [],
         }
       })
+      setSaveStatus("loading")
       addMultipleColors({
         spreadsheetId: selectedFile!,
         sheetName: selectedFileData?.sheets?.[0]?.name || "",
         sheetId: selectedFileData?.sheets?.[0]?.id || null!,
         rows,
       })
+      setSaveStatus("success")
     })
+  }
+
+  useEffect(() => {
+    if (saveStatus === "success") {
+      setTimeout(() => {
+        setSaveStatus("idle")
+      }, 2000)
+    }
+  }, [saveStatus])
+
+  const handleSelectColorGroup = (color: ColorType) => {
+    if (selectedColors.some((c) => c.hex === color.hex)) {
+      setSelectedColors(selectedColors.filter((c) => c.hex !== color.hex))
+    } else {
+      setSelectedColors([...selectedColors, color])
+    }
+  }
+
+  const handleSelectAllColors = () => {
+    setSelectedColors(colorArray.map((arr) => arr[0]))
+  }
+
+  const handleDeselectAllColors = () => {
+    setSelectedColors([])
   }
 
   return (
     <Tooltip.Provider>
-      <div className="flex flex-col w-[800px] h-[600px] gap-16 bg-white p-9 overflow-y-scroll">
-        <div className="flex flex-col gap-2 max-h-[calc(100%-100px)] overflow-y-scroll">
+      <div
+        className="flex flex-col w-[800px] bg-white p-9 overflow-y-scroll"
+        style={{ height: toast.state.message ? "556px" : "600px" }}
+      >
+        <div className="flex flex-row justify-center w-full">
+          <p className="text-lg">Selected Colors: {selectedColors.length}</p>
+        </div>
+        {selectedColors.length === 0 ? (
+          <button
+            className="border-none p-2 text-xl max-w-[160px] mb-4"
+            onClick={handleSelectAllColors}
+          >
+            Select All
+          </button>
+        ) : (
+          <button
+            className="bg-gray-200 text-black p-2 text-xl max-w-[160px] mb-4"
+            onClick={handleDeselectAllColors}
+          >
+            Deselect All
+          </button>
+        )}
+
+        <div className="flex flex-row flex-wrap gap-2 max-h-[calc(100%-100px)] overflow-y-scroll">
           {colorArray.length > 0 ? (
-            colorArray.map((colorArr, arrIndex) => (
-              <ColorDropdown
-                key={arrIndex + "color-dropdown"}
-                handleDeleteColorArr={handleDeleteColorArr}
-                colorArray={colorArr}
-                handleChangeColor={handleChangeColor}
-                arrIndex={arrIndex}
-                handleDeleteColor={handleDeleteColor}
-                selectedColors={selectedColors}
-                setSelectedColors={setSelectedColors}
-              />
-            ))
+            colorArray.map((colorArr, arrIndex) => {
+              const isDark = Color(colorArr[0].hex).isDark()
+              const isSelected = selectedColors.some(
+                (c) => c.hex === colorArr[0].hex,
+              )
+              return (
+                <Tooltip.Root>
+                  <Tooltip.Trigger asChild>
+                    <div
+                      onClick={() => handleSelectColorGroup(colorArr[0])}
+                      className={`min-w-[40px] min-h-10 border-2 cursor-pointer`}
+                      style={{
+                        transition: "all 0.2s ease-in-out",
+                        backgroundColor: colorArr[0].hex,
+                        border: isSelected
+                          ? `4px solid ${isDark ? "lightgrey" : "black"}`
+                          : `2px solid ${isDark ? "lightgrey" : "black"}`,
+                      }}
+                    >
+                        <CheckIcon
+                          strokeWidth={3}
+                          color={isDark ? "lightgrey" : "black"}
+                          className="w-8 h-8"
+                          opacity={isSelected ? 1 : 0}
+                          style={{
+                            transition: "all 0.2s ease-in-out",
+                          }}
+                        />
+                    </div>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-black text-white px-2 py-1 rounded text-sm"
+                      sideOffset={5}
+                    >
+                      {colorArr[0].hex}
+                      <Tooltip.Arrow className="fill-black" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              )
+            })
           ) : (
             <div className="flex flex-col gap-2 text-lg">
               <p>Scanning page...</p>
             </div>
           )}
         </div>
-        <div className="fixed bottom-10 left-0 right-0 flex flex-row justify-between p-8 pb-2 bg-white z-1">
-          <button
-            className="bg-white p-4 px-8 border-2 border-black text-xl"
-            onClick={() => setTab(null)}
-          >
-            Back
-          </button>
-          <button
-            onClick={handleSave}
-            className="bg-black text-white p-4 px-8 border-2 border-black text-xl"
-          >
-            Save
-          </button>
+        <div className="fixed bottom-10 left-0 right-0 flex flex-col justify-between p-8 pb-2 bg-white z-1">
+          {selectedColors.length > 0 &&
+            (!selectedColors.every(
+              (color) => color.hex === selectedColors[0].hex,
+            ) ? (
+              <></>
+            ) : (
+              (() => {
+                const colorArr =
+                  colorArray[
+                    colorArray.findIndex(
+                      (arr) => arr[0].hex === selectedColors[0].hex,
+                    )
+                  ]
+                const titleColor = new Color(colorArr[0].hex)
+                return (
+                  <>
+                    <div className="flex flex-row gap-2 text-lg mb-2 flex-wrap max-h-[200px] overflow-y-scroll">
+                      <div
+                        className="min-w-[40px] min-h-10 border-2 border-black cursor-pointer"
+                        style={{
+                          backgroundColor: selectedColors[0]?.hex,
+                        }}
+                      />
+                      <button
+                        className="text-sm border-2 border-black bg-gray-200 p-1 cursor-pointer flex items-center"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            titleColor.hex().toString(),
+                          )
+                          toast.display("success", "Copied to clipboard")
+                        }}
+                      >
+                        <img
+                          src={copyIcon}
+                          alt="copy"
+                          className="w-4 h-4 mr-1"
+                        />
+                        {titleColor.hex().toString()}
+                      </button>
+                      <button
+                        className="text-sm border-2 border-black bg-gray-200 p-1 cursor-pointer flex items-center"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            titleColor.hsl().round().toString(),
+                          )
+                          toast.display("success", "Copied to clipboard")
+                        }}
+                      >
+                        <img
+                          src={copyIcon}
+                          alt="copy"
+                          className="w-4 h-4 mr-1"
+                        />
+                        {titleColor.hsl().round().toString()}
+                      </button>
+                      <button
+                        className="text-sm border-2 border-black bg-gray-200 p-1 cursor-pointer flex items-center"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            titleColor.rgb().round().toString(),
+                          )
+                          toast.display("success", "Copied to clipboard")
+                        }}
+                      >
+                        <img
+                          src={copyIcon}
+                          alt="copy"
+                          className="w-4 h-4 mr-1"
+                        />
+                        {titleColor.rgb().round().toString()}
+                      </button>
+                    </div>
+                    <div className="flex flex-row gap-2 flex-wrap mb-4 max-h-[200px] overflow-y-scroll">
+                      {colorArr.map((color) => (
+                        <div
+                          style={{
+                            lineHeight: "1.7rem",
+                          }}
+                          className="text-sm border-2 border-black p-1"
+                        >
+                          {color.name}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )
+              })()
+            ))}
+          <div className="flex flex-row justify-between">
+            <button
+              className="bg-white p-4 px-8 border-2 border-black text-xl"
+              onClick={() => setTab(null)}
+            >
+              Back
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!state.selectedFile}
+              className={`${state.selectedFile ? "bg-black text-white" : "bg-gray-200 text-black"} p-4 px-8 border-2 border-black text-xl`}
+            >
+              {state.selectedFile
+                ? saveStatus === "loading"
+                  ? "Saving..."
+                  : saveStatus === "success"
+                    ? "Saved"
+                    : "Save"
+                : "Please Select Google Sheet"}
+            </button>
+          </div>
         </div>
       </div>
     </Tooltip.Provider>
@@ -254,9 +434,6 @@ const scanPageHtml = () => {
   const extractUrlRegex = /url\((['"]?)([^'"]+)\1\)/
   const fetchStyleList = ["color", "Color", "Fill", "fill"]
   const borderKeywords = ["border", "Border"]
-
-
-  
 
   let totalWeight = 0
 
@@ -372,5 +549,7 @@ const scanPageHtml = () => {
     colorMap.set(key, { ...value, weight: value.weight / totalWeight })
   }
 
-  return { totalWeight, styleArr, imageSrcArr }
+  //temporarily removes imageSrcArr due to chrome extension limitations
+
+  return { totalWeight, styleArr, imageSrcArr: [] }
 }
