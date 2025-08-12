@@ -85,7 +85,7 @@ const Left: React.FC<Props> = ({ setTab }) => {
   ) => {
     try {
       // шукаємо відповідний рядок
-      const slashNaming = color?.slashNaming || ""
+      const slash_naming = color?.slash_naming || ""
 
       const presentColor = selectedColorsFromFile.find(
         (selectedColor) => selectedColor.color.hex === color.hex,
@@ -104,7 +104,7 @@ const Left: React.FC<Props> = ({ setTab }) => {
 
       dispatch({
         type: "ADD_SELECTED_COLOR_FROM_FILE",
-        payload: { color: fullColor, slashNaming },
+        payload: { color: fullColor, slash_naming },
       })
     } catch (err) {
       toast.display("error", "Failed to load sheet data")
@@ -158,9 +158,9 @@ const Left: React.FC<Props> = ({ setTab }) => {
                 hue: splitHSL?.[1],
                 saturation: splitHSL?.[2],
                 lightness: splitHSL?.[3],
-                slashNaming:
+                slash_naming:
                   elem?.additionalColumns?.find(
-                    (col) => col.name === "slashNaming",
+                    (col) => col.name === "slash_naming",
                   )?.value || "",
               }
             }),

@@ -19,7 +19,7 @@ const initialState = {
   url: '',
   ranking: 0,
   comments: '',
-  slashNaming: '',
+  slash_naming: '',
   tags: '',
 };
 
@@ -61,7 +61,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           timestamp: new Date().valueOf(),
           url: formData.url,
           hex: selectedColorHEX,
-          slashNaming: formData.slashNaming,
+          slash_naming: formData.slash_naming,
           tags: formData.tags,
           hsl: colors.hexToHSL(selectedColorHEX),
           rgb: colors.hexToRGB(selectedColorHEX),

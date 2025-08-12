@@ -52,7 +52,7 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
             rgb: colors.hexToRGB(color),
             comments: '',
             ranking: '',
-            slashNaming: '',
+            slash_naming: '',
             tags: '',
             additionalColumns: [],
           },

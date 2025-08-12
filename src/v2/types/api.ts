@@ -76,7 +76,7 @@ export type AddColorRequest = {
     rgb: string
     ranking?: string | number
     comments?: string | undefined
-    slashNaming: string
+    slash_naming: string
     tags: string
     additionalColumns: Omit<Column, "id">[]
   }
@@ -94,7 +94,7 @@ export type AddMultipleColorsRequest = {
     rgb: string
     ranking?: string | number
     comments?: string | undefined
-    slashNaming: string
+    slash_naming: string
     tags: string
     additionalColumns: Omit<Column, "id">[]
   }
@@ -160,7 +160,7 @@ export type UpdateRowRequest = {
     hex: string
     hsl: string
     rgb: string
-    slashNaming: string
+    slash_naming: string
     tags: string
     ranking?: string | number
     comments?: string | undefined

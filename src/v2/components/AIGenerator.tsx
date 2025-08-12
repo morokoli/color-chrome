@@ -117,7 +117,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           rgb: colors.hexToRGB(respColor),
           comments: colorDescription,
           ranking: "",
-          slashNaming: "",
+          slash_naming: "",
           tags: "",
           additionalColumns: [],
         },

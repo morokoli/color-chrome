@@ -63,7 +63,7 @@ const Left: FC<Props> = ({
           rgb: colors.hexToRGB(color),
           comments: '',
           ranking: '',
-          slashNaming: '',
+          slash_naming: '',
           tags: '',
           additionalColumns: [],
         },

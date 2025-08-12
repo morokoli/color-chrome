@@ -1,14 +1,14 @@
 interface SlashNameInputsProps {
   inputs: string[]
   onInputChange: (inputs: string[]) => void
-  onChangeSlashNaming: () => void
+  onChangeslash_naming: () => void
 }
 
 // Slash Name Inputs Component
 export const SlashNameInputs = ({
   inputs,
   onInputChange,
-  onChangeSlashNaming,
+  onChangeslash_naming,
 }: SlashNameInputsProps) => {
   return (
     <>
@@ -28,7 +28,7 @@ export const SlashNameInputs = ({
           />
         ))}
         <button
-          onClick={onChangeSlashNaming}
+          onClick={onChangeslash_naming}
           className="border p-2 bg-black text-white min-w-[154px]"
         >
           Change Slash Name

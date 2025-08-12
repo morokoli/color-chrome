@@ -7,7 +7,7 @@ interface ColorListProps {
   clearColors: () => void
   onCheckboxClick: (colorId: number) => void
   onRemoveColor: (color: string) => void
-  handleManualSlashNamingChange: (colorId: number, slashNaming: string) => void
+  handleManualslash_namingChange: (colorId: number, slash_naming: string) => void
 }
 
 interface ColorItem {
@@ -24,7 +24,7 @@ interface ColorItem {
     }[]
   }
   animated?: number
-  slashNaming: string
+  slash_naming: string
 }
 
 export const ColorList = ({
@@ -33,7 +33,7 @@ export const ColorList = ({
   clearColors,
   onCheckboxClick,
   onRemoveColor,
-  handleManualSlashNamingChange,
+  handleManualslash_namingChange,
 }: ColorListProps) => {
   return (
     <>
@@ -107,9 +107,9 @@ export const ColorList = ({
               <input
                 type="text"
                 className="border p-2 flex-grow bg-gray-100 rounded"
-                value={item.slashNaming || "No slashNaming"}
+                value={item.slash_naming || "No slash_naming"}
                 onChange={(e) =>
-                  handleManualSlashNamingChange(i, e.target.value)
+                  handleManualslash_namingChange(i, e.target.value)
                 }
               />
               <button

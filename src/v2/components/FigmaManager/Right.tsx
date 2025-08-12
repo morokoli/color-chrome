@@ -15,7 +15,7 @@ import {
 import { ColorList } from "@/v2/components/FigmaManager/ColorList"
 import { AccountDropdown } from "./AccountDropdown"
 import { TeamsModal, OpenFigmaModal } from "./FigmaModals"
-import { SlashNameInputs } from "./SlashNameInputs"
+import { slash_nameInputs } from "./slash_nameInputs"
 import { TeamsDropdown } from "./TeamsDropdown"
 import { ProjectDropdown } from "./ProjectDropdown"
 import { MultiSelectDropdown } from "./MultiSelectDropdown"
@@ -25,6 +25,7 @@ import { useAPI } from "@/v2/hooks/useAPI"
 import { UpdateRowRequest } from "@/v2/types/api"
 import { DeletionConfirmationModal } from "./DeletionConfirmationModal"
 import { CollapsibleBox } from "../CollapsibleBox"
+import { SlashNameInputs } from "./SlashNameInputs"
 
 interface FigmaFile {
   name: string
@@ -38,7 +39,7 @@ const Right = ({
 }) => {
   const { state, dispatch } = useGlobalState()
   const { selectedColorsFromFile } = state
-  const [slashNameInputs, setSlashNameInputs] = useState<string[]>([
+  const [slash_nameInputs, setslash_nameInputs] = useState<string[]>([
     "",
     "",
     "",
@@ -155,8 +156,8 @@ const Right = ({
   }
 
   const handleCheckboxClick = (colorId: number) => {
-    const getSlashNameParts = (colorId: number) => {
-      const parts = selectedColorsFromFile[colorId]?.slashNaming
+    const getslash_nameParts = (colorId: number) => {
+      const parts = selectedColorsFromFile[colorId]?.slash_naming
         .split("/")
         .map((p) => p.trim())
         .slice(0, 5)
@@ -167,19 +168,19 @@ const Right = ({
     if (colorId === selectedColorsFromFile.length) {
       if (activeColors.length === 0) {
         setActiveColors(selectedColorsFromFile.map((_, i) => i))
-        const parts = getSlashNameParts(0)
+        const parts = getslash_nameParts(0)
         const sharedParts = parts.map((part) =>
           selectedColorsFromFile.every((color) =>
-            color.slashNaming.includes(part),
+            color.slash_naming.includes(part),
           )
             ? part
             : "",
         )
         const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
-        setSlashNameInputs(filled)
+        setslash_nameInputs(filled)
       } else {
         setActiveColors([])
-        setSlashNameInputs(["", "", "", "", ""])
+        setslash_nameInputs(["", "", "", "", ""])
       }
       return
     }
@@ -189,36 +190,36 @@ const Right = ({
       setActiveColors(filteredColors)
 
       if (filteredColors.length === 0) {
-        setSlashNameInputs(["", "", "", "", ""])
+        setslash_nameInputs(["", "", "", "", ""])
       } else if (filteredColors.length === 1) {
-        const parts = getSlashNameParts(filteredColors[0])
+        const parts = getslash_nameParts(filteredColors[0])
         const filled = [...parts, "", "", "", "", ""].slice(0, 5)
-        setSlashNameInputs(filled)
+        setslash_nameInputs(filled)
       } else {
-        const parts = getSlashNameParts(filteredColors[0])
+        const parts = getslash_nameParts(filteredColors[0])
         const sharedParts = parts.map((part) =>
           selectedColorsFromFile
             .filter(
               (_, index) => activeColors.includes(index) && index !== colorId,
             )
-            .every((color) => color.slashNaming.includes(part))
+            .every((color) => color.slash_naming.includes(part))
             ? part
             : "",
         )
         const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
-        setSlashNameInputs(filled)
+        setslash_nameInputs(filled)
       }
     } else {
-      const parts = getSlashNameParts(colorId)
+      const parts = getslash_nameParts(colorId)
       const sharedParts = parts.map((part) =>
         selectedColorsFromFile
           .filter((_, index) => activeColors.includes(index))
-          .every((color) => color.slashNaming.includes(part))
+          .every((color) => color.slash_naming.includes(part))
           ? part
           : "",
       )
       const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
-      setSlashNameInputs(filled)
+      setslash_nameInputs(filled)
       setActiveColors([...activeColors, colorId])
     }
   }
@@ -243,12 +244,12 @@ const Right = ({
     }
   }
 
-  const handleChangeSlashNaming = () => {
+  const handleChangeslash_naming = () => {
     if (!activeColors.length) return
-    const newSlashNaming = slashNameInputs.filter(Boolean).join(" / ")
+    const newslash_naming = slash_nameInputs.filter(Boolean).join(" / ")
     dispatch({
-      type: "UPDATE_SELECTED_COLOR_SLASHNAMING",
-      payload: { colors: activeColors, slashNaming: newSlashNaming },
+      type: "UPDATE_SELECTED_COLOR_slash_naming",
+      payload: { colors: activeColors, slash_naming: newslash_naming },
     })
   }
 
@@ -377,7 +378,7 @@ const Right = ({
         sheetName: color.color.sheetData.sheetName,
         row: {
           ...color.color,
-          slashNaming: color.slashNaming,
+          slash_naming: color.slash_naming,
           timestamp: Date.now(),
         },
       })
@@ -392,30 +393,30 @@ const Right = ({
       fileIds: selectedFiles.map((file) => file.key),
       colors: selectedColorsFromFile.map((color) => ({
         hex: color.color.hex,
-        slashName: color.slashNaming,
+        slash_name: color.slash_naming,
       })),
       email: selectedAccount,
     })
     toast.display("success", response.data.message[0].message)
   }
 
-  const handleManualSlashNamingChange = (
+  const handleManualslash_namingChange = (
     colorId: number,
-    slashNameInput: string,
+    slash_nameInput: string,
   ) => {
-    const newSlashNaming = slashNameInput
+    const newslash_naming = slash_nameInput
       .replace(/\s+/g, "")
       .replace(/ /g, "/")
       .replace(/\//g, " / ")
     dispatch({
-      type: "UPDATE_SELECTED_COLOR_SLASHNAMING",
-      payload: { colors: [colorId], slashNaming: newSlashNaming },
+      type: "UPDATE_SELECTED_COLOR_slash_naming",
+      payload: { colors: [colorId], slash_naming: newslash_naming },
     })
   }
 
   const clearColors = () => {
     setActiveColors([])
-    setSlashNameInputs(["", "", "", "", ""])
+    setslash_nameInputs(["", "", "", "", ""])
     dispatch({ type: "CLEAR_SELECTED_COLORS_FROM_FILE" })
   }
 
@@ -500,9 +501,9 @@ const Right = ({
         maxHeight={`${selectedColorsFromFile.length * 100 + 500}px`}
       >
         <SlashNameInputs
-          inputs={slashNameInputs}
-          onInputChange={setSlashNameInputs}
-          onChangeSlashNaming={handleChangeSlashNaming}
+          inputs={slash_nameInputs}
+          onInputChange={setslash_nameInputs}
+          onChangeslash_naming={handleChangeslash_naming}
         />
 
         <div className="bg-[#F6FF03] p-2 mb-4 border text-sm">
@@ -522,7 +523,7 @@ const Right = ({
               payload: color,
             })
           }
-          handleManualSlashNamingChange={handleManualSlashNamingChange}
+          handleManualslash_namingChange={handleManualslash_namingChange}
         />
 
         <div

@@ -13,7 +13,7 @@ export type GlobalState = {
       rgb: string
       additionalColumns: { name: string; value: string }[]
     }
-    slashNaming: string
+    slash_naming: string
     animated?: number
   }[]
 }
@@ -84,7 +84,7 @@ export type RowData = {
   addedBy: string
   ranking?: string | number
   comments?: string
-  slashNaming?: string
+  slash_naming?: string
   additionalColumns: Omit<Column, "id">[]
 }
 

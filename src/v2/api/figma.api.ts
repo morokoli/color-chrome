@@ -183,7 +183,7 @@ export const useFigmaAddColors = () => {
     Error,
     {
       fileIds: string[]
-      colors: { hex: string; slashName: string }[]
+      colors: { hex: string; slash_name: string }[]
       email: string
     }
   >({

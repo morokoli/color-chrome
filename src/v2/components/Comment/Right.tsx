@@ -13,7 +13,7 @@ type initialState = {
   url: string
   ranking: number
   comments: string
-  slashNaming: string
+  slash_naming: string
   tags: string
 }
 
@@ -36,7 +36,7 @@ const colData = [
     placeholder: "Url",
   },
   {
-    name: "slashNaming",
+    name: "slash_naming",
     placeholder: "Slash Naming ex: a/b/c",
   },
   {

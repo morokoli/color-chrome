@@ -77,7 +77,7 @@ const SheetItem: React.FC<SheetItemProps> = ({
                     color.ranking <= rankingFilter[1]) ||
                     ([undefined, null, "", "0"].includes(color.ranking) &&
                       rankingFilter[0] === 1)) &&
-                  (color.slashNaming
+                  (color.slash_naming
                     ?.toLowerCase()
                     ?.includes(searchQuery.toLowerCase()) ||
                     searchQuery.length == 0)
@@ -112,8 +112,8 @@ const SheetItem: React.FC<SheetItemProps> = ({
                         <div>Hex: {color.hex}</div>
                         {color.rgb && <div>RGB: {color.rgb}</div>}
                         {color.hsl && <div>HSL: {color.hsl}</div>}
-                        {color.slashNaming && (
-                          <div>Slash Naming: {color.slashNaming}</div>
+                        {color.slash_naming && (
+                          <div>Slash Naming: {color.slash_naming}</div>
                         )}
                         {color.comments && (
                           <div>Comments: {color.comments}</div>

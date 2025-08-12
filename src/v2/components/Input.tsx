@@ -26,7 +26,7 @@ const Input: FC<InputProps> = ({ name, value, onChange, placeholder, disabled, h
   const regex = /^[a-zA-Z0-9]*(\/[a-zA-Z0-9]+){0,3}$/;
 
   const handleValidate = () => {
-    if (name !== 'slashNaming' || !setError) return
+    if (name !== 'slash_naming' || !setError) return
       if (regex.test(value!)) {
         setError(false)
       } else {
@@ -56,7 +56,7 @@ const Input: FC<InputProps> = ({ name, value, onChange, placeholder, disabled, h
           sheetName={selectedFileData?.sheets?.[0]?.name || ''}
         />
       )}
-      {name === 'slashNaming' && error && (
+      {name === 'slash_naming' && error && (
         <div className='text-[10px] text-red-500 absolute bottom-[-13px]'>
           {'Format a/b/c, no spaces, max 3 "/"'}
         </div>

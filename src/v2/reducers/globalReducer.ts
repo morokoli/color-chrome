@@ -46,13 +46,13 @@ export type Action =
     }
   | {
       type: "ADD_SELECTED_COLOR_FROM_FILE"
-      payload: { color: { hex: string; hsl: string; rgb: string, additionalColumns: { name: string, value: string }[] }; slashNaming: string }
+      payload: { color: { hex: string; hsl: string; rgb: string, additionalColumns: { name: string, value: string }[] }; slash_naming: string }
     }
   | { type: "REMOVE_SELECTED_COLOR_FROM_FILE"; payload: string }
   | { type: "CLEAR_SELECTED_COLORS_FROM_FILE" }
   | {
-      type: "UPDATE_SELECTED_COLOR_SLASHNAMING"
-      payload: { colors: number[]; slashNaming: string }
+      type: "UPDATE_SELECTED_COLOR_slash_naming"
+      payload: { colors: number[]; slash_naming: string }
     }
 
 export function globalReducer(state: GlobalState, action: Action): GlobalState {
@@ -216,12 +216,12 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         draft.selectedColorsFromFile = []
       })
 
-    case "UPDATE_SELECTED_COLOR_SLASHNAMING":
+    case "UPDATE_SELECTED_COLOR_slash_naming":
       return produce(state, (draft) => {
         // 🔁 Оновлюємо в selectedColorsFromFile
         for (const colorId of action.payload.colors) {
-          draft.selectedColorsFromFile[colorId].slashNaming =
-            action.payload.slashNaming
+          draft.selectedColorsFromFile[colorId].slash_naming =
+            action.payload.slash_naming
         }
 
         // 🔁 Оновлюємо напряму в parsedData
@@ -230,7 +230,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
             (row) => row.hex === draft.selectedColorsFromFile[colorId].color.hex,
           )
           if (row) {
-            row.slashNaming = action.payload.slashNaming
+            row.slash_naming = action.payload.slash_naming
           }
         }
       })
