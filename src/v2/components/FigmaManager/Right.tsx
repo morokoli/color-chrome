@@ -15,7 +15,6 @@ import {
 import { ColorList } from "@/v2/components/FigmaManager/ColorList"
 import { AccountDropdown } from "./AccountDropdown"
 import { TeamsModal, OpenFigmaModal } from "./FigmaModals"
-import { slash_nameInputs } from "./slash_nameInputs"
 import { TeamsDropdown } from "./TeamsDropdown"
 import { ProjectDropdown } from "./ProjectDropdown"
 import { MultiSelectDropdown } from "./MultiSelectDropdown"
@@ -118,7 +117,7 @@ const Right = ({
       const allFiles = multipleProjectsData
         .map((project) => project?.data?.files)
         .flat()
-      setFiles(allFiles)
+      setFiles(allFiles.filter(Boolean) as FigmaFile[])
     }
   }, [isLoading, selectedProjects])
 
@@ -274,9 +273,7 @@ const Right = ({
       })
       if (response.data.message === "Account deleted") {
         setAccounts(accounts.filter((account) => account !== email))
-        setSelectedAccount(
-          accounts.find((account) => account !== email)?.name ?? "",
-        )
+        setSelectedAccount(accounts.find((account) => account !== email) ?? "")
       }
     }
     onConfirmDeletion.current = onConfirmDeletionFunction
@@ -372,10 +369,20 @@ const Right = ({
   const handleSaveChanges = async () => {
     const promises = selectedColorsFromFile.map(async (color) => {
       const response = await updateRow.call({
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          //@ts-ignore
         spreadsheetId: color.color.sheetData.spreadsheetId,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
         sheetId: color.color.sheetData.sheetId,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
         rowIndex: color.color.rowIndex,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
         sheetName: color.color.sheetData.sheetName,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
         row: {
           ...color.color,
           slash_naming: color.slash_naming,

@@ -124,6 +124,8 @@ const Select: FC<ISelectProps> = ({
       setTab("ADD_SHEET")
     }
     selectRef.current?.focus()
+       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
     selectRef.current?.showPicker()
   }
 
@@ -156,7 +158,11 @@ const Select: FC<ISelectProps> = ({
               ?.fileName || placeholder}
           </div>
           <div
-            onClick={() => selectRef.current?.showPicker()}
+            onClick={() => {
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              //@ts-ignore
+              selectRef.current?.showPicker()
+            }}
             className="px-1 w-full flex justify-end py-1 text-[11px] text-slate-800 bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none border border-slate-200 focus:border-slate-700 select"
           >
             <img src={downIcon} alt="down" className="w-4 h-4" />

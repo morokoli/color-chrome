@@ -6,6 +6,7 @@ import Input from "../Input"
 import Select from "../Select"
 import RangeSlider from "../RangeSlider"
 import AddColumnForm from "../AddColumnForm"
+import TagsInput from "../TagsInput"
 
 import logoIcon from "@/v2/assets/images/logo.png"
 
@@ -41,7 +42,7 @@ const colData = [
   },
   {
     name: "tags",
-    placeholder: "Tags ex: a/b/c or a, b, c",
+    placeholder: "Tags ex: a, b, c",
   },
 ]
 
@@ -157,13 +158,15 @@ const Right: FC<Props> = ({
             colorswithyou.com
           </a>
         </div>
-        <button
-          onClick={openFileHandler}
-          disabled={!selectedFile}
-          className="h-[40px] w-[85px] text-black text-[14px] border border-solid border-black"
-        >
-          {"Go to sheet"}
-        </button>
+        {state.user && (
+          <button
+            onClick={openFileHandler}
+            disabled={!selectedFile}
+            className="h-[40px] w-[85px] text-black text-[14px] border border-solid border-black"
+          >
+            {"Go to sheet"}
+          </button>
+        )}
       </div>
       <Select
         isComment
@@ -173,16 +176,27 @@ const Right: FC<Props> = ({
         placeholder="Add Google Sheet to Save Colors"
       />
       {colData.map((data) => (
-        <Input
-          error={error}
-          key={data.name}
-          name={data.name}
-          setError={setError}
-          disabled={isDisable}
-          onChange={handleChange}
-          value={formData[data.name]}
-          placeholder={data.placeholder}
-        />
+        data.name === 'tags' ? (
+          <TagsInput
+            key={data.name}
+            name={data.name}
+            disabled={isDisable}
+            onChange={handleChange}
+            value={formData[data.name]}
+            placeholder={data.placeholder}
+          />
+        ) : (
+          <Input
+            error={error}
+            key={data.name}
+            name={data.name}
+            setError={setError}
+            disabled={isDisable}
+            onChange={handleChange}
+            value={formData[data.name]}
+            placeholder={data.placeholder}
+          />
+        )
       ))}
       <textarea
         name="comments"

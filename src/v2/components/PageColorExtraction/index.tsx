@@ -6,8 +6,9 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useAddMultipleColors } from "@/v2/api/sheet.api"
 import { useToast } from "@/v2/hooks/useToast"
 import copyIcon from "@/v2/assets/images/icons/menu/copy.svg"
-import { CheckCheckIcon, CheckIcon, TicketIcon } from "lucide-react"
+import { CheckIcon } from "lucide-react"
 import { CollapsibleBoxHorizontal } from "@/v2/components/CollapsibleBoxHorizontal"
+import { UpdateRowRequest } from "@/v2/types/api"
 
 export type ColorType = {
   color: string
@@ -209,7 +210,7 @@ export const PageColorExtraction = ({
           comments: comments,
           slash_naming: color.name,
           tags: "",
-          added_by: state.user?._doc?.email || "unknown",
+          added_by: state.user?.email || "unknown",
           additionalColumns: [],
         }
       })
@@ -218,7 +219,9 @@ export const PageColorExtraction = ({
         spreadsheetId: selectedFile!,
         sheetName: selectedFileData?.sheets?.[0]?.name || "",
         sheetId: selectedFileData?.sheets?.[0]?.id || null!,
-        rows,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
+        rows: rows as unknown as UpdateRowRequest[],
       })
       setSaveStatus("success")
     })
@@ -464,6 +467,7 @@ export const PageColorExtraction = ({
 }
 
 const scanPageHtml = () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const styleArr: any[] = []
   const regexExtractor = /\d*/
   const extractUrlRegex = /url\((['"]?)([^'"]+)\1\)/

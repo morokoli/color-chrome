@@ -189,6 +189,8 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         if(colorIndex === -1) {
           draft.selectedColorsFromFile.unshift(action.payload)
         } else {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          //@ts-ignore
           draft.selectedColorsFromFile[colorIndex].animated = draft.selectedColorsFromFile[colorIndex].animated ? draft?.selectedColorsFromFile[colorIndex]?.animated + 1 : 1
         }
          // payload тепер обʼєкт

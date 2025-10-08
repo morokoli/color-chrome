@@ -26,7 +26,6 @@ const initialState = {
 const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     const toast = useToast()
     const { state } = useGlobalState();
-    const { colorHistory } = state;
     const [ selectedColor, setSelectedColor ] = useState<number | null>(null);
     const [ addNewColorLoading, setAddNewColorLoading ] = useState<boolean>(false);
     /* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -41,7 +40,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
 
     const handleSave = (newColor?:string) => {
       const selectedFileData = state.files.find(item => item.spreadsheetId === state.selectedFile);
-      const selectedColorHEX = newColor ? newColor : colorHistory[selectedColor!];
+      const selectedColorHEX = newColor ? newColor : state.colorHistory[selectedColor!];
   
       // Step 1: Find keys from the input object that are not in initialState
       const additionalKeys = Object.keys(formData).filter(key => !(key in initialState));
@@ -62,7 +61,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           url: formData.url,
           hex: selectedColorHEX,
           slash_naming: formData.slash_naming,
-          tags: formData.tags,
+          tags: Array.isArray(formData.tags) ? formData.tags : (formData.tags ? formData.tags.split(/[,/]/).map((tag: string) => tag.trim()).filter((tag: string) => tag) : []),
           hsl: colors.hexToHSL(selectedColorHEX),
           rgb: colors.hexToRGB(selectedColorHEX),
           comments: formData?.comments || '',

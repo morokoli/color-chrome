@@ -1,4 +1,4 @@
-import {useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, forwardRef, useImperativeHandle } from 'react';
 import { AddColorRequest, AddColorResponse } from '@/v2/types/api';
 import { useGlobalState } from '@/v2/hooks/useGlobalState';
 import { useToast } from '@/v2/hooks/useToast';
@@ -53,7 +53,7 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
             comments: '',
             ranking: '',
             slash_naming: '',
-            tags: '',
+            tags: [],
             additionalColumns: [],
           },
         })
