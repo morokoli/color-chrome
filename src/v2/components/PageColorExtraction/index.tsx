@@ -75,7 +75,7 @@ export const PageColorExtraction = ({
           } = results[0].result
           const colorMap = new Map<string, ImportedColor[]>()
           const sumMap = new Map<string, ImportedColor>()
-          const promiseArr: Promise<any>[] = []
+          const promiseArr: Promise<unknown>[] = []
           for (const src of html.imageSrcArr) {
             promiseArr.push(
               new Promise(async (resolve, reject) => {
@@ -516,7 +516,7 @@ const scanPageHtml = () => {
         backgroundImage: style.backgroundImage,
       }
       const tagName = element.tagName.toLowerCase()
-      const styleMap = []
+      const styleMap: unknown[] = []
 
       // Calculate weights
       const width = Number(regexExtractor.exec(style.width)?.[0]) || 0
@@ -570,7 +570,7 @@ const scanPageHtml = () => {
             key: tagName + "/" + key,
             value,
             weight,
-          })
+          } as unknown)
         }
       }
 

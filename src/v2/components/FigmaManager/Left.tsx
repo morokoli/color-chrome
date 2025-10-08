@@ -12,7 +12,7 @@ import SheetItem from "./SheetItem"
 import { MultiSelectDropdown } from "./MultiSelectDropdown"
 
 interface Props {
-  setTab: (tab: string | null) => void  
+  setTab: (tab: string | null) => void
 }
 
 const Left: React.FC<Props> = ({ setTab }) => {
@@ -67,7 +67,7 @@ const Left: React.FC<Props> = ({ setTab }) => {
   const { getSheet, data: getSheetData } = useGetSheet(fileURL)
 
   const [confirmFileId, setConfirmFileId] = useState<string | null>(null)
-
+  console.log("visible", visibleSheets)
   const checkSheetValid = useAPI<
     CheckSheetValidRequest,
     CheckSheetValidResponse
