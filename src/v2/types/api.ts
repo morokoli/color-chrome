@@ -1,5 +1,4 @@
 import { Sheet, Column, RowData } from "@/v1/types/general"
-import { Color } from "../components/PageColorExtraction"
 
 export type RefreshAccessTokenResponse = {
   accessToken: string

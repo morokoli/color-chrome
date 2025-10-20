@@ -15,7 +15,7 @@ import {
 import { ColorList } from "@/v2/components/FigmaManager/ColorList"
 import { AccountDropdown } from "./AccountDropdown"
 import { TeamsModal, OpenFigmaModal } from "./FigmaModals"
-import { slash_nameInputs } from "./slash_nameInputs"
+// import { slash_nameInputs } from "./slash_nameInputs"
 import { TeamsDropdown } from "./TeamsDropdown"
 import { ProjectDropdown } from "./ProjectDropdown"
 import { MultiSelectDropdown } from "./MultiSelectDropdown"
@@ -118,7 +118,7 @@ const Right = ({
       const allFiles = multipleProjectsData
         .map((project) => project?.data?.files)
         .flat()
-      setFiles(allFiles)
+      setFiles(allFiles as any)
     }
   }, [isLoading, selectedProjects])
 
