@@ -10,7 +10,7 @@ import { useAPI } from '@/v2/hooks/useAPI'
 
 import PickBtn from '../common/PickBtn'
 import ColorHistory from '../ColorHistory'
-import ColorCodeButtons from '../ColorCodeButtons';
+import ColorCodeButtons from '../ColorCodeButtons'
 
 interface Props {
   selectedColor: null | number;
@@ -64,7 +64,7 @@ const Left: FC<Props> = ({
           comments: '',
           ranking: '',
           slash_naming: '',
-          tags: '',
+          tags: [],
           additionalColumns: [],
         },
       })
@@ -90,15 +90,15 @@ const Left: FC<Props> = ({
 
   const handleClickAccept = () => {
     if (!selectedFile) {
-      dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete });
-    } else {
-      addColorToFile(colorFromPallete);
+      dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
+    }
+    
+    addColorToFile(colorFromPallete);
   
       dispatch({
         type: "ADD_FILE_COLOR_HISTORY",
-        payload: { spreadsheetId: selectedFile, color: colorFromPallete },
+        payload: { spreadsheetId: selectedFile!, color: colorFromPallete },
       });
-    }
   
     setCurrentColor(colorFromPallete);
   };

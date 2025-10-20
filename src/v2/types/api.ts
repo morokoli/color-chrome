@@ -76,7 +76,7 @@ export type AddColorRequest = {
     ranking?: string | number
     comments?: string | undefined
     slash_naming: string
-    tags: string
+    tags: string[]
     additionalColumns: Omit<Column, "id">[]
   }
 }
