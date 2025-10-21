@@ -12,6 +12,7 @@ import {
   useFigmaGetTeams,
   useFigmaMultipleProjectsFiles,
 } from "@/v2/api/figma.api"
+import { omit } from "es-toolkit/object"
 import { ColorList } from "@/v2/components/FigmaManager/ColorList"
 import { AccountDropdown } from "./AccountDropdown"
 import { TeamsModal, OpenFigmaModal } from "./FigmaModals"
@@ -369,8 +370,8 @@ const Right = ({
   const handleSaveChanges = async () => {
     const promises = selectedColorsFromFile.map(async (color) => {
       const response = await updateRow.call({
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          //@ts-ignore
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
         spreadsheetId: color.color.sheetData.spreadsheetId,
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         //@ts-ignore
@@ -384,7 +385,17 @@ const Right = ({
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         //@ts-ignore
         row: {
-          ...color.color,
+          ...omit(color.color as Record<string, any>, [
+            "id",
+            "hue",
+            "saturation",
+            "ligthness",
+            "sheetData",
+            "rowIndex",
+            "tags",
+          ]),
+          colorId: (color.color as any).id,
+          tags: ((color.color as any).tags ? [(color.color as any).tags] : []) as any,
           slash_naming: color.slash_naming,
           timestamp: Date.now(),
         },

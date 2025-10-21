@@ -101,7 +101,7 @@ const Left: React.FC<Props> = ({ setTab }) => {
         sheetData: sheetData,
         rowIndex: rowIndex,
       }
-
+console.log(fullColor)
       dispatch({
         type: "ADD_SELECTED_COLOR_FROM_FILE",
         payload: { color: fullColor, slash_naming },
@@ -276,7 +276,9 @@ const Left: React.FC<Props> = ({ setTab }) => {
         </div>
 
         {/* Sheets List */}
-        {visibleSheets.map((sheet) => (
+        {visibleSheets.map((sheet) => {
+          console.log(sheet)
+          return (
           <SheetItem
             key={sheet.spreadsheetId}
             sheet={sheet}
@@ -288,7 +290,7 @@ const Left: React.FC<Props> = ({ setTab }) => {
             onColorClick={handleColorClick}
             onRemove={onRemoveFileRequest}
           />
-        ))}
+        )})}
 
         {/* Confirmation Dialog */}
         {confirmFileId && (

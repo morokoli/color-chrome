@@ -63,8 +63,6 @@ const SheetItem: React.FC<SheetItemProps> = ({
         <div className="flex flex-wrap content-baseline">
           <Tooltip.Provider>
             {(sheet.colorHistory || [])
-              .slice()
-              .reverse()
               .filter((color: any) => {
                 return (
                   color.hue >= hueFilter[0] &&

@@ -72,6 +72,7 @@ export type DriveFileCreateFormFieldsWithId = DriveFileCreateFormFields & {
 }
 
 export type RowData = {
+  id?: string;
   year: number | string
   month: number | string
   day: number | string

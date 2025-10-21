@@ -8,12 +8,12 @@ interface TagsInputProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-const TagsInput: FC<TagsInputProps> = ({ 
-  name, 
+const TagsInput: FC<TagsInputProps> = ({
+  name,
   value = '', 
-  disabled, 
-  placeholder, 
-  onChange 
+  disabled,
+  placeholder,
+  onChange
 }) => {
   const [tags, setTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -28,17 +28,6 @@ const TagsInput: FC<TagsInputProps> = ({
     }
   }, [value])
 
-  // Обновляем родительский компонент при изменении тегов
-  useEffect(() => {
-    const tagsString = tags.join(', ')
-    const syntheticEvent = {
-      target: {
-        name,
-        value: tagsString
-      }
-    } as React.ChangeEvent<HTMLInputElement>
-    onChange(syntheticEvent)
-  }, [tags, name, onChange])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
@@ -56,6 +45,14 @@ const TagsInput: FC<TagsInputProps> = ({
   const addTag = () => {
     const newTag = inputValue.trim()
     if (newTag && !tags.includes(newTag)) {
+      const tagsString = [...tags, newTag].join(", ")
+      const syntheticEvent = {
+        target: {
+          name,
+          value: tagsString,
+        },
+      } as React.ChangeEvent<HTMLInputElement>
+      onChange(syntheticEvent)
       setTags([...tags, newTag])
       setInputValue('')
     }

@@ -39,9 +39,9 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
     })
 
     const handleSave = (newColor?:string) => {
+      console.log('data', formData)
       const selectedFileData = state.files.find(item => item.spreadsheetId === state.selectedFile);
       const selectedColorHEX = newColor ? newColor : state.colorHistory[selectedColor!];
-  
       // Step 1: Find keys from the input object that are not in initialState
       const additionalKeys = Object.keys(formData).filter(key => !(key in initialState));
   
@@ -50,7 +50,7 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
         name: key,
         value: formData[key]
       }));
-
+console.log('file data', selectedFileData)
       call({
         spreadsheetId: state.selectedFile!,
         sheetName: selectedFileData?.sheets?.[0]?.name || '',
@@ -67,6 +67,8 @@ const Comment: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
           comments: formData?.comments || '',
           ranking: String(formData?.ranking) || '',
           additionalColumns: additionalColumns,
+          colorId: state.parsedData[selectedColor!].id,
+          // id: state.parsedData[selectedColor!].id,
         },
       })
       .then(() => {

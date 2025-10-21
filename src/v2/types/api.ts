@@ -164,6 +164,7 @@ export type UpdateRowRequest = {
     ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]
+    colorId?: string
   }
 }
 

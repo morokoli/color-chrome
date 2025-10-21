@@ -25,6 +25,7 @@
     "axios": "^1.6.2",
     "classnames": "^2.3.2",
     "color": "^5.0.0",
+    "es-toolkit": "^1.40.0",
     "extract-colors": "^4.2.0",
     "immer": "^10.0.3",
     "lucide-react": "^0.487.0",
