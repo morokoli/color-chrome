@@ -60,7 +60,9 @@ const ColorHistory: FC<Props> = ({ selectedColor, setSelectedColor, setCurrentCo
       call({
         spreadsheetId: selectedFile,
         sheetId: selectedFileData?.sheets?.[0]?.id,
-        deleteRows: [selectedColor],
+        sheetName: selectedFileData?.sheets?.[0]?.name,
+        colorId: state.parsedData[selectedColor].id,
+        rowIndex: selectedColor,
        })
       .then((data) => {
         if (data.done) {

@@ -190,7 +190,9 @@ export type GetAdditionalColumnsResponse = {
 
 export type DeleteRowRequest = {
   spreadsheetId: string
-  deleteRows: number[]
+  rowIndex: number
+  colorId?: string
+  sheetName?: string
   sheetId?: number
 }
 
