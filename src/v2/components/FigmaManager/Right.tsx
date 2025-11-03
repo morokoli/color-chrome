@@ -387,9 +387,15 @@ const Right = ({
         row: {
           ...omit(color.color as Record<string, any>, [
             "id",
+            "year",
+            "month",
+            "day",
+            "hours",
+            "minutes",
+            "addedBy",
             "hue",
             "saturation",
-            "ligthness",
+            "lightness",
             "sheetData",
             "rowIndex",
             "tags",
