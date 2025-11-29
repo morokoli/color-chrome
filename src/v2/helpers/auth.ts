@@ -17,8 +17,15 @@ export const Auth = {
         },
       })
 
+      if (!res.ok) {
+        console.warn("Failed to refresh token:", res.status)
+        return
+      }
+
       const bodyJson = await res.json()
-      setToken(bodyJson.data as RefreshAccessTokenResponse)
+      if (bodyJson.data) {
+        setToken(bodyJson.data as RefreshAccessTokenResponse)
+      }
     } catch (err) {
       console.warn(err)
     }

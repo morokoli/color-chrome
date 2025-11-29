@@ -19,6 +19,7 @@ interface OpenFigmaModalProps extends ModalProps {
 
 export const TeamsModal = ({
   isOpen,
+  onClose,
   onSubmit,
   selectedAccount,
 }: TeamsModalProps) => {
@@ -36,21 +37,33 @@ export const TeamsModal = ({
         const figmaUrlRegex = /\/(\d+)\//
         const figmaTeamId = figmaTab?.url?.match(figmaUrlRegex)?.[1]
         if (figmaTeamId) {
-          const result = await axiosInstance.get(
-            config.api.endpoints.figmaGetProjects,
-            {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
+          try {
+            const result = await axiosInstance.get(
+              config.api.endpoints.figmaGetProjects,
+              {
+                headers: {
+                  Authorization: `Bearer ${state.user?.jwtToken}`,
+                },
+                params: {
+                  teamId: figmaTeamId,
+                  email: selectedAccount,
+                },
               },
-              params: {
-                teamId: figmaTeamId,
-                email: selectedAccount,
-              },
-            },
-          )
-
-          console.log(result.data)
-          setTeamName(result.data.teamName)
+            )
+            if (result.data.message === "User does not have access to this team." || !result.data.teamName) {
+              setTeamName("No access - make sure the Figma account email matches the team owner")
+            } else {
+              setTeamName(result.data.teamName)
+            }
+          } catch (error: any) {
+            if (error.response?.data?.message === "User does not have access to this team.") {
+              setTeamName("No access - make sure you're logged into the correct Figma account")
+            } else {
+              setTeamName("Error loading team")
+            }
+          }
+        } else {
+          setTeamName("No team found in URL")
         }
       }
       getFigmaTeamId()
@@ -67,9 +80,14 @@ export const TeamsModal = ({
           Select a team that you want to add in the figma tab and click submit
         </p>
        <p className="text-center text-lg font-bold">{teamName ? teamName : "Loading..."}</p>
-        <button className="border p-1 text-sm" onClick={() => onSubmit(teamName)}>
-          Submit
-        </button>
+        <div className="flex gap-4">
+          <button className="border p-1 text-sm" onClick={onClose}>
+            Close
+          </button>
+          <button className="border p-1 text-sm" onClick={() => onSubmit(teamName)}>
+            Submit
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -24,7 +24,7 @@ export const DeletionConfirmationModal = ({
           <button className="border p-1 text-sm" onClick={onClose}>
             Cancel
           </button>
-          <button className="border p-1 text-sm" onClick={() => onConfirm.current()}>
+          <button className="border p-1 text-sm" onClick={() => { onConfirm.current(); onClose(); }}>
             Confirm
           </button> 
         </div>
