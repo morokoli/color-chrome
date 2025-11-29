@@ -1,9 +1,19 @@
 import tinycolor from 'tinycolor2'
 
 export const colors = {
+  // Expand 3-char hex to 6-char hex
+  expandHex(hex: string): string {
+    const shortHex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex)
+    if (shortHex) {
+      return `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`
+    }
+    return hex.startsWith('#') ? hex : `#${hex}`
+  },
+
   hexToRGB(hex: string): string {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    if (!result) return "RGB"
+    const expandedHex = this.expandHex(hex)
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(expandedHex)
+    if (!result) return "rgb(0, 0, 0)"
 
     const rgb = {
       r: parseInt(result[1], 16),
@@ -15,8 +25,9 @@ export const colors = {
   },
 
   hexToHSL(hex: string): string {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    if (!result) return "HSL"
+    const expandedHex = this.expandHex(hex)
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(expandedHex)
+    if (!result) return "hsl(0, 0%, 0%)"
 
     let r = parseInt(result[1], 16)
     let g = parseInt(result[2], 16)

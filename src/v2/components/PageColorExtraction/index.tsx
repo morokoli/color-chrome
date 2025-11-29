@@ -58,6 +58,14 @@ export const PageColorExtraction = ({
       .then((tabs) => {
         const activeTab = tabs[0]
         const activeTabId = activeTab.id
+        const url = activeTab.url || ""
+
+        // Check if we're on a restricted page
+        if (url.startsWith("chrome://") || url.startsWith("chrome-extension://") || url.startsWith("about:")) {
+          console.warn("Cannot scan chrome:// or extension pages")
+          setColorArray([])
+          return Promise.reject(new Error("Cannot scan this page type"))
+        }
 
         return chrome.scripting.executeScript({
           target: { tabId: activeTabId! },
@@ -111,21 +119,29 @@ export const PageColorExtraction = ({
           for (const styleArr of html.styleArr) {
             for (const style of styleArr) {
               try {
-                const color = Color(style.value)
-                if (sumMap.has(color.hex().toString() + style.key)) {
-                  const existing: ImportedColor = sumMap.get(
-                    color.hex().toString() + style.key,
-                  )!
-                  sumMap.set(color.hex().toString() + style.key, {
-                    ...existing,
-                    weight: existing.weight + style.weight,
-                  })
-                } else {
-                  sumMap.set(color.hex().toString() + style.key, {
-                    key: style.key,
-                    value: color.hex().toString(),
-                    weight: style.weight,
-                  })
+                // Handle multiple color values (e.g., border-color: #fff #000 #ccc)
+                const colorValues = style.value.split(' ').filter((v: string) => v.trim())
+                for (const colorValue of colorValues) {
+                  try {
+                    const color = Color(colorValue)
+                    if (sumMap.has(color.hex().toString() + style.key)) {
+                      const existing: ImportedColor = sumMap.get(
+                        color.hex().toString() + style.key,
+                      )!
+                      sumMap.set(color.hex().toString() + style.key, {
+                        ...existing,
+                        weight: existing.weight + style.weight / colorValues.length,
+                      })
+                    } else {
+                      sumMap.set(color.hex().toString() + style.key, {
+                        key: style.key,
+                        value: color.hex().toString(),
+                        weight: style.weight / colorValues.length,
+                      })
+                    }
+                  } catch {
+                    // Skip invalid color values
+                  }
                 }
               } catch (error) {
                 console.log(error)
@@ -198,7 +214,14 @@ export const PageColorExtraction = ({
         const comments =
           "This color is used as: " +
             colorArr?.map((color) => color.name).join(", ") || "No comments"
-        const colorObj = new Color(color.hex)
+
+        // Extract first hex color if multiple are present (e.g., from border-color)
+        let hexValue = color.hex
+        if (hexValue.includes(' ')) {
+          hexValue = hexValue.split(' ')[0]
+        }
+
+        const colorObj = new Color(hexValue)
         console.log("state.user", state.user)
         return {
           timestamp: Date.now(),
@@ -332,6 +355,7 @@ export const PageColorExtraction = ({
               ) : (
                 <div className="flex flex-col gap-2 text-lg">
                   <p>Scanning page...</p>
+                  <p className="text-sm text-gray-500">Note: Cannot scan chrome:// or extension pages</p>
                 </div>
               )}
             </div>
