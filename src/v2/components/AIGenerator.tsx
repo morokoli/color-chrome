@@ -15,7 +15,7 @@ interface Props {
   copyToClipboard: (text: string, selection: null | string) => void
 }
 
-const AIGenerator: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
+const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
   const toast = useToast()
   const [loading, setLoading] = useState<boolean>(false)
   const [respColor, setRespColor] = useState<string>("")
@@ -94,7 +94,7 @@ const AIGenerator: FC<Props> = ({ setTab, selected, copyToClipboard }) => {
       for (const hex of colorList) {
         await addColor.call({
           spreadsheetId: selectedFile!,
-          sheetName: selectedFileData?.sheets?.[0]?.name || selectedFileData?.sheetName || "",
+          sheetName: selectedFileData?.sheets?.[0]?.name || "",
           sheetId: sheetId !== undefined ? sheetId : null!,
           row: {
             timestamp: new Date().valueOf(),
