@@ -1,7 +1,8 @@
 import tinycolor from "tinycolor2"
 
 export const colors = {
-  hexToRGB(hex: string): string {
+  hexToRGB(hex: string | null | undefined): string {
+    if (!hex) return 'rgb(0, 0, 0)'
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
     if (!result) return "-"
 
@@ -14,7 +15,8 @@ export const colors = {
     return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
   },
 
-  hexToHSL(hex: string): string {
+  hexToHSL(hex: string | null | undefined): string {
+    if (!hex) return 'hsl(0, 0%, 0%)'
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
     if (!result) return "-"
 

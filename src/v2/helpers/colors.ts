@@ -2,7 +2,8 @@ import tinycolor from 'tinycolor2'
 
 export const colors = {
   // Expand 3-char hex to 6-char hex
-  expandHex(hex: string): string {
+  expandHex(hex: string | null | undefined): string {
+    if (!hex) return '#000000'
     const shortHex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex)
     if (shortHex) {
       return `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`
@@ -10,7 +11,8 @@ export const colors = {
     return hex.startsWith('#') ? hex : `#${hex}`
   },
 
-  hexToRGB(hex: string): string {
+  hexToRGB(hex: string | null | undefined): string {
+    if (!hex) return 'rgb(0, 0, 0)'
     const expandedHex = this.expandHex(hex)
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(expandedHex)
     if (!result) return "rgb(0, 0, 0)"
@@ -24,7 +26,8 @@ export const colors = {
     return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
   },
 
-  hexToHSL(hex: string): string {
+  hexToHSL(hex: string | null | undefined): string {
+    if (!hex) return 'hsl(0, 0%, 0%)'
     const expandedHex = this.expandHex(hex)
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(expandedHex)
     if (!result) return "hsl(0, 0%, 0%)"
