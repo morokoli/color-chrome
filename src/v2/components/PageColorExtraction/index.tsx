@@ -119,32 +119,27 @@ export const PageColorExtraction = ({
           for (const styleArr of html.styleArr) {
             for (const style of styleArr) {
               try {
-                // Handle multiple color values (e.g., border-color: #fff #000 #ccc)
-                const colorValues = style.value.split(' ').filter((v: string) => v.trim())
-                for (const colorValue of colorValues) {
-                  try {
-                    const color = Color(colorValue)
-                    if (sumMap.has(color.hex().toString() + style.key)) {
-                      const existing: ImportedColor = sumMap.get(
-                        color.hex().toString() + style.key,
-                      )!
-                      sumMap.set(color.hex().toString() + style.key, {
-                        ...existing,
-                        weight: existing.weight + style.weight / colorValues.length,
-                      })
-                    } else {
-                      sumMap.set(color.hex().toString() + style.key, {
-                        key: style.key,
-                        value: color.hex().toString(),
-                        weight: style.weight / colorValues.length,
-                      })
-                    }
-                  } catch {
-                    // Skip invalid color values
-                  }
+                // Handle color values
+                if (!style.value) continue
+
+                const color = Color(style.value)
+                const hexKey = color.hex().toString() + style.key
+
+                if (sumMap.has(hexKey)) {
+                  const existing: ImportedColor = sumMap.get(hexKey)!
+                  sumMap.set(hexKey, {
+                    ...existing,
+                    weight: existing.weight + style.weight,
+                  })
+                } else {
+                  sumMap.set(hexKey, {
+                    key: style.key,
+                    value: color.hex().toString(),
+                    weight: style.weight,
+                  })
                 }
-              } catch (error) {
-                console.log(error)
+              } catch {
+                // Skip invalid color values
               }
             }
           }
@@ -522,7 +517,7 @@ const scanPageHtml = () => {
     return styleCache.get(node)!
   }
 
-  const scanPage = async () => {
+  const scanPage = () => {
     console.log("scanning page")
     const elements = document.querySelectorAll("*, svg *")
     console.log("elements", elements)
@@ -571,7 +566,7 @@ const scanPageHtml = () => {
           }
         }
 
-        if (checkStyle(key)) {
+        if (checkStyle(key) && value && value !== "none" && value !== "rgba(0, 0, 0, 0)" && value !== "transparent") {
           const isBorder = isBorderStyle(key)
           const weight = isBorder ? perimeterWeight : areaWeight
           const mapKey = value + tagName + "/" + key
