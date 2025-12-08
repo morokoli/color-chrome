@@ -15,6 +15,7 @@ export const config = {
       checkSheetValid: "/api/sheets/check-sheet-valid",
       addColor: "/api/database-sheets/add-color",
       addMultipleColors: "/api/database-sheets/add-multiple-colors",
+      upsertColors: "/api/database-sheets/upsert-colors",
       updateRow: "/api/database-sheets/update-row",
       deleteRow: "/api/database-sheets/delete-row",
       checkAddOrUpdate: "/api/sheets/check-add-or-update",
@@ -34,7 +35,7 @@ export const config = {
     },
   },
   toast: {
-    timeout: 5_000,
+    timeout: 2_000,
   },
   limitations: {
     maxFiles: 2,

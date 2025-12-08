@@ -1,4 +1,4 @@
-import { Sheet, Column, RowData } from "@/v1/types/general"
+import { Sheet, Column, RowData } from "@/v2/types/general"
 
 export type RefreshAccessTokenResponse = {
   accessToken: string
@@ -96,7 +96,7 @@ export type AddMultipleColorsRequest = {
     slash_naming: string
     tags: string
     additionalColumns: Omit<Column, "id">[]
-  }
+  }[]
 }
 
 export type FigmaGetAccountsResponse = {
@@ -160,7 +160,7 @@ export type UpdateRowRequest = {
     hsl: string
     rgb: string
     slash_naming: string
-    tags: string
+    tags: string[]
     ranking?: string | number
     comments?: string | undefined
     additionalColumns: Omit<Column, "id">[]

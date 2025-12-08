@@ -1,21 +1,25 @@
 import { FC } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { eraseAllCookies } from "@/v2/helpers/cookie"
+import {
+  Pipette,
+  Sparkles,
+  History,
+  Copy,
+  FileSpreadsheet,
+  LogOut,
+  LogIn,
+  ExternalLink,
+  Figma,
+  PanelTop,
+} from "lucide-react"
 
-import Select from "@/v2/components/Select"
-
-import pickIcon from "@/v2/assets/images/icons/menu/pick.svg"
-import copyIcon from "@/v2/assets/images/icons/menu/copy.svg"
-import sheetIcon from "@/v2/assets/images/icons/menu/sheet.svg"
-import aigeneratorIcon from "@/v2/assets/images/icons/menu/aigenerator.svg"
-import figmaIcon from "@/v2/assets/images/icons/menu/figma.svg"
-import historyIcon from "@/v2/assets/images/icons/menu/history.svg"
-import colorExtraction from "@/v2/assets/images/icons/menu/colorExtraction.svg"
 interface Props {
   setTab: (tab: string | null) => void
+  onPickColor: () => void
 }
 
-const MainMenu: FC<Props> = ({ setTab }) => {
+const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
   const { state, dispatch } = useGlobalState()
 
   const logOutHandler = async () => {
@@ -23,42 +27,14 @@ const MainMenu: FC<Props> = ({ setTab }) => {
     dispatch({ type: "RESET_STATE" })
   }
 
-  const data = [
-    {
-      title: "Pick Color",
-      icon: pickIcon,
-      menuName: "PICK_PANEL",
-    },
-    {
-      title: "Website Colors",
-      icon: colorExtraction,
-      menuName: "COLOR_EXTRACTION",
-    },
-    {
-      title: "Ai Generator",
-      icon: aigeneratorIcon,
-      menuName: "AI_GENERATOR",
-    },
-    {
-      title: "History & Editor",
-      icon: historyIcon,
-      menuName: "COMMENT",
-    },
-    {
-      title: "Figma Export",
-      icon: figmaIcon,
-      menuName: "FIGMA_MANAGER",
-    },
-    {
-      title: "Copy",
-      icon: copyIcon,
-      menuName: "COPY",
-    },
-    {
-      title: "Sheet Manager",
-      icon: sheetIcon,
-      menuName: "ADD_SHEET",
-    },
+  const menuItems = [
+    { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
+    { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
+    { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
+    { title: "History & Editor", icon: History, menuName: "COMMENT" },
+    { title: "Figma", icon: Figma, menuName: "FIGMA_MANAGER" },
+    { title: "Copy", icon: Copy, menuName: "COPY" },
+    { title: "Sheet Manager", icon: FileSpreadsheet, menuName: "ADD_SHEET" },
   ]
 
   const logInHandler = () => {
@@ -67,57 +43,70 @@ const MainMenu: FC<Props> = ({ setTab }) => {
 
   const openFileHandler = () => {
     const fileUrl =
-      "https://docs.google.com/spreadsheets/d/" + state.selectedFile // Change to your file's URL
+      "https://docs.google.com/spreadsheets/d/" + state.selectedFile
     window.open(fileUrl, "_blank")
   }
 
+  // Get selected file name
+  const selectedFileName = state.files.find(
+    (f) => f.spreadsheetId === state.selectedFile
+  )?.fileName
+
   return (
-    // zoom - smaller main menu to 20% / title - 22px at standart
-    <div className="w-[200px] border-2 zoom-08">
-      {data.map((item, index) => (
-        <div
-          key={item.title}
-          onClick={() => setTab(item.menuName!)}
-          className={`cursor-pointer flex h-[40px] items-center text-2xl border-b border-solid ${
-            index !== 0 ? "mt-[-2px]" : ""
-          }`}
-        >
-          <div className="h-[23px] w-[25px] ml-2 mr-5">
-            <img src={item.icon} alt="icon" className="h-full w-full" />
-          </div>
-          <div className="text-[18px]">{item.title}</div>
-        </div>
-      ))}
-      <div className="text-[10px] text-center">
-        Choose the Sheet to save your colors
+    <div className="w-[200px] bg-white rounded-md shadow-sm border border-gray-200">
+      {/* Menu Items */}
+      <div className="py-1">
+        {menuItems.map((item) => {
+          const Icon = item.icon
+          return (
+            <button
+              key={item.title}
+              onClick={() => item.action ? item.action() : setTab(item.menuName!)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              {Icon && <Icon className="w-4 h-4 text-gray-600" />}
+              <span className="text-[13px] text-gray-800">{item.title}</span>
+            </button>
+          )
+        })}
       </div>
 
-      <Select placeholder="Add sheet" setTab={setTab} />
-
+      {/* Selected Sheet Display */}
       {state.selectedFile && (
-        <button
-          onClick={openFileHandler}
-          className="h-[22px] w-full text-black text-[10px] bg-white border-b border-solid"
-        >
-          {"Open file"}
-        </button>
+        <>
+          <div className="h-px bg-gray-200" />
+          <div className="px-3 py-2">
+            <p className="text-[10px] text-gray-400 mb-1">Saving to</p>
+            <button
+              onClick={openFileHandler}
+              className="w-full flex items-center justify-between text-left group"
+            >
+              <span className="text-[12px] text-gray-700 truncate max-w-[150px]">
+                {selectedFileName || "Sheet"}
+              </span>
+              <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-gray-600" />
+            </button>
+          </div>
+        </>
       )}
 
-      {state.user && (
+      {/* Auth Button */}
+      <div className="h-px bg-gray-200" />
+      {state.user ? (
         <button
           onClick={logOutHandler}
-          className="h-[22px] w-full text-black text-[10px] bg-white"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors"
         >
-          {"Log Out"}
+          <LogOut className="w-3 h-3" />
+          Log Out
         </button>
-      )}
-
-      {!state.user && (
+      ) : (
         <button
           onClick={logInHandler}
-          className="h-[22px] w-full text-black text-[10px] bg-white"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
         >
-          {"Log In"}
+          <LogIn className="w-3 h-3" />
+          Log In
         </button>
       )}
     </div>

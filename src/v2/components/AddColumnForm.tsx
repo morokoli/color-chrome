@@ -1,5 +1,5 @@
 import { FC, useState } from 'react'
-import { AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse } from '@/v1/types/api'
+import { AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse } from '@/v2/types/api'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
 import { config } from '@/v2/others/config'
@@ -42,7 +42,13 @@ const AddColumnForm: FC<Props> = ({ disabled }) => {
       columnName: columnName,
      })
     .then(() => {
-      dispatch({ type: "ADD_NEW_COLUMN", payload: { name: columnName, value: '' } })
+      dispatch({
+        type: "ADD_NEW_COLUMN",
+        payload: {
+          spreadsheetId: file.spreadsheetId,
+          column: { name: columnName, value: '' }
+        }
+      })
       setColumnName('')
 
       toast.display("success", "Column created successfully")

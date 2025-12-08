@@ -4,7 +4,7 @@ export type GlobalState = {
   user: AuthUser | null
   parsedData: RowData[]
   colorHistory: string[]
-  newColumns: NewColumn[]
+  newColumns: Record<string, NewColumn[]>  // keyed by spreadsheetId
   selectedFile: string | null
   selectedColorsFromFile: {
     color: {

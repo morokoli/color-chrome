@@ -7,24 +7,49 @@ const initState: GlobalState = {
   files: [],
   user: null,
   color: null,
-  newColumns: [],
+  newColumns: {},
   parsedData: [],
   colorHistory: [],
   selectedFile: null,
   selectedColorsFromFile: [],
 } as const
 
-export const initGlobalState: GlobalState = storedState ?? initState
+// Migrate old state format (newColumns was array, now it's object)
+const migrateState = (state: GlobalState | null | undefined): GlobalState | null => {
+  if (!state) return null
+
+  // If newColumns is an array (old format), convert to empty object
+  if (Array.isArray(state.newColumns)) {
+    return {
+      ...state,
+      newColumns: {}
+    }
+  }
+
+  // Ensure newColumns is an object
+  if (typeof state.newColumns !== 'object' || state.newColumns === null) {
+    return {
+      ...state,
+      newColumns: {}
+    }
+  }
+
+  return state
+}
+
+export const initGlobalState: GlobalState = migrateState(storedState) ?? initState
 
 export type Action =
   | { type: "RESET_STATE" }
-  | { type: "CLEAR_NEW_COLUMNS" }
+  | { type: "CLEAR_NEW_COLUMNS"; payload: string }  // payload is spreadsheetId
   | { type: "ADD_FILES"; payload: File }
   | { type: "REMOVE_FILES"; payload: string }
   | { type: "SET_COLOR"; payload: string }
   | { type: "ADD_COLOR_HISTORY"; payload: string }
   | { type: "CLEAR_COLOR_HISTORY" }
-  | { type: "ADD_NEW_COLUMN"; payload: NewColumn }
+  | { type: "REMOVE_OLDEST_COLOR_HISTORY" }
+  | { type: "ADD_NEW_COLUMN"; payload: { spreadsheetId: string; column: NewColumn } }
+  | { type: "REMOVE_NEW_COLUMN"; payload: { spreadsheetId: string; columnName: string } }
   | { type: "SET_SELECTED_FILE"; payload: string }
   | { type: "SET_PARSED_DATA"; payload: RowData[] }
   | { type: "SET_USER"; payload: GlobalState["user"] }
@@ -83,7 +108,24 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "ADD_NEW_COLUMN":
       return produce(state, (draft) => {
-        draft.newColumns.push(action.payload)
+        const { spreadsheetId, column } = action.payload
+        if (!draft.newColumns[spreadsheetId]) {
+          draft.newColumns[spreadsheetId] = []
+        }
+        // Only add if not already exists
+        if (!draft.newColumns[spreadsheetId].some(c => c.name === column.name)) {
+          draft.newColumns[spreadsheetId].push(column)
+        }
+      })
+
+    case "REMOVE_NEW_COLUMN":
+      return produce(state, (draft) => {
+        const { spreadsheetId, columnName } = action.payload
+        if (draft.newColumns[spreadsheetId]) {
+          draft.newColumns[spreadsheetId] = draft.newColumns[spreadsheetId].filter(
+            (col) => col.name !== columnName
+          )
+        }
       })
 
     case "ADD_FILES":
@@ -121,6 +163,13 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         draft.colorHistory = []
       })
 
+    case "REMOVE_OLDEST_COLOR_HISTORY":
+      return produce(state, (draft) => {
+        if (draft.colorHistory.length > 0) {
+          draft.colorHistory.shift() // Remove the oldest (first) color
+        }
+      })
+
     case "UPDATE_FILE_COLOR_HISTORY":
       return produce(state, (draft) => {
         const file = draft.files.find(
@@ -133,22 +182,18 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "CLEAR_NEW_COLUMNS":
       return produce(state, (draft) => {
-        draft.newColumns = []
+        draft.newColumns[action.payload] = []
       })
 
     case "RESET_STATE":
       return produce(state, (draft) => {
-        const notSignInUserState = {
-          files: [],
-          user: null,
-          newColumns: [],
-          parsedData: [],
-          selectedFile: null,
-          color: null,
-          colorHistory: [],
-          selectedColorsFromFile: [],
-        }
-        Object.assign(draft, notSignInUserState)
+        // Preserve files, selectedFile, and colorHistory on logout
+        // Only clear user auth and temporary data
+        draft.user = null
+        draft.parsedData = []
+        draft.color = null
+        draft.selectedColorsFromFile = []
+        // Keep: files, selectedFile, newColumns, colorHistory
       })
 
     case "ADD_FILE_COLOR_HISTORY": {

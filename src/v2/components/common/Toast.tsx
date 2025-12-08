@@ -1,8 +1,6 @@
 import { FC } from 'react'
-import classNames from 'classnames'
 import { Show } from './Show'
-
-import { CheckCircleIcon, XCircleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
+import { CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 
 type Props = {
   message: string | null
@@ -11,28 +9,26 @@ type Props = {
 
 export const Toast: FC<Props> = (props) => (
   <Show if={props.message !== null}>
-    <div className='relative'>
+    <div className="fixed top-2 right-2 z-50 animate-fade-in">
       <div
-        className={classNames(
-          "flex space-x-2 px-4 py-2 text-xs w-100 w-full border-b-2",
-          {
-            "bg-custom-green border-custom-green text-white":
-              props.type === "success",
-            "bg-red-600 border-red-600 text-white": props.type === "error",
-            "bg-orange-600 border-orange-600 text-white": props.type === "info",
-          },
-        )}
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded shadow-md text-[11px] ${
+          props.type === "success"
+            ? "bg-emerald-500 text-white"
+            : props.type === "error"
+            ? "bg-red-500 text-white"
+            : "bg-amber-500 text-white"
+        }`}
       >
         {props.type === "success" && (
-          <CheckCircleIcon className="h-4 w-4 text-white my-auto" />
+          <CheckCircle className="h-3 w-3 shrink-0" />
         )}
         {props.type === "error" && (
-          <XCircleIcon className="h-4 w-4 text-white my-auto" />
+          <XCircle className="h-3 w-3 shrink-0" />
         )}
         {props.type === "info" && (
-          <InformationCircleIcon className="h-4 w-4 text-white my-auto" />
+          <AlertCircle className="h-3 w-3 shrink-0" />
         )}
-        <span className="my-auto">{props.message}</span>
+        <span>{props.message}</span>
       </div>
     </div>
   </Show>

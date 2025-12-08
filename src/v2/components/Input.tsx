@@ -35,7 +35,7 @@ const Input: FC<InputProps> = ({ name, value, onChange, placeholder, disabled, h
   };
 
   return (
-    <div className="w-full h-[28px] mb-3 flex relative">
+    <div className="w-full flex relative">
       <input
         type="text"
         name={name}
@@ -44,7 +44,7 @@ const Input: FC<InputProps> = ({ name, value, onChange, placeholder, disabled, h
         onChange={onChange}
         onBlur={handleValidate}
         placeholder={placeholder}
-        className="w-full bg-slate-200 px-2 py-1 text-xs focus:outline-none border border-slate-200 focus:border-slate-700"
+        className="w-full h-9 px-3 text-[12px] bg-white border border-gray-200 rounded-md focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400 placeholder:text-gray-400 transition-colors"
       />
       {hasRemoveBtn && (
         <RemoveColumnButton
@@ -57,7 +57,7 @@ const Input: FC<InputProps> = ({ name, value, onChange, placeholder, disabled, h
         />
       )}
       {name === 'slash_naming' && error && (
-        <div className='text-[10px] text-red-500 absolute bottom-[-13px]'>
+        <div className='text-[10px] text-red-500 absolute -bottom-4'>
           {'Format a/b/c, no spaces, max 3 "/"'}
         </div>
       )}
