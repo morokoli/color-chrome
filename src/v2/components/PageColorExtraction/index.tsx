@@ -5,10 +5,7 @@ import * as Tooltip from "@radix-ui/react-tooltip"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useAddMultipleColors } from "@/v2/api/sheet.api"
 import { useToast } from "@/v2/hooks/useToast"
-import copyIcon from "@/v2/assets/images/icons/menu/copy.svg"
-import { CheckIcon } from "lucide-react"
-import { CollapsibleBoxHorizontal } from "@/v2/components/CollapsibleBoxHorizontal"
-import { UpdateRowRequest } from "@/v2/types/api"
+import { Check, ArrowLeft, Loader2, History } from "lucide-react"
 
 export type ColorType = {
   color: string
@@ -30,21 +27,14 @@ export const PageColorExtraction = ({
 }) => {
   const [colorArray, setColorArray] = useState<ColorType[][]>([])
   const [selectedColors, setSelectedColors] = useState<ColorType[]>([])
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false)
-  const { state } = useGlobalState()
+  const [isScanning, setIsScanning] = useState(true)
+  const { state, dispatch } = useGlobalState()
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle")
-  const { addMultipleColors, data: addMultipleColorsData } =
+  const { addMultipleColorsAsync, data: addMultipleColorsData } =
     useAddMultipleColors()
   const toast = useToast()
-
-  // Update right panel state based on color selection
-  useEffect(() => {
-    const shouldBeOpen = selectedColors.length > 0 && 
-      selectedColors.every((color) => color.hex === selectedColors[0].hex)
-    setIsRightPanelOpen(shouldBeOpen)
-  }, [selectedColors])
 
   useEffect(() => {
     if (addMultipleColorsData && addMultipleColorsData.done) {
@@ -53,6 +43,13 @@ export const PageColorExtraction = ({
   }, [addMultipleColorsData])
 
   useEffect(() => {
+    // Add overall timeout for scanning
+    const scanTimeout = setTimeout(() => {
+      console.warn("Scan timeout - stopping scan")
+      setIsScanning(false)
+      setColorArray([])
+    }, 15000) // 15 second timeout
+
     chrome.tabs
       .query({ active: true, currentWindow: true })
       .then((tabs) => {
@@ -64,6 +61,7 @@ export const PageColorExtraction = ({
         if (url.startsWith("chrome://") || url.startsWith("chrome-extension://") || url.startsWith("about:")) {
           console.warn("Cannot scan chrome:// or extension pages")
           setColorArray([])
+          clearTimeout(scanTimeout)
           return Promise.reject(new Error("Cannot scan this page type"))
         }
 
@@ -84,35 +82,38 @@ export const PageColorExtraction = ({
           const colorMap = new Map<string, ImportedColor[]>()
           const sumMap = new Map<string, ImportedColor>()
           const promiseArr: Promise<unknown>[] = []
-          for (const src of html.imageSrcArr) {
+
+          // Limit image processing to first 20 images with 3s timeout each
+          const limitedImages = html.imageSrcArr.slice(0, 20)
+          for (const src of limitedImages) {
             promiseArr.push(
-              new Promise(async (resolve, reject) => {
-                try {
-                  const colors = await extractColors(src.src).catch((error) => {
-                    console.log("Heh", error)
-                    return []
-                  })
-                  for (const color of colors) {
-                    if (sumMap.has(color.hex)) {
-                      const existing: ImportedColor = sumMap.get(color.hex)!
-                      sumMap.set(color.hex, {
-                        ...existing,
-                        weight: existing.weight + src.weight,
-                      })
-                    } else {
-                      sumMap.set(color.hex, {
-                        key: "image/color",
-                        value: color.hex,
-                        weight: src.weight * color.area,
-                      })
+              Promise.race([
+                new Promise(async (resolve) => {
+                  try {
+                    const colors = await extractColors(src.src).catch(() => [])
+                    for (const color of colors) {
+                      if (sumMap.has(color.hex)) {
+                        const existing: ImportedColor = sumMap.get(color.hex)!
+                        sumMap.set(color.hex, {
+                          ...existing,
+                          weight: existing.weight + src.weight,
+                        })
+                      } else {
+                        sumMap.set(color.hex, {
+                          key: "image/color",
+                          value: color.hex,
+                          weight: src.weight * color.area,
+                        })
+                      }
                     }
+                    resolve(true)
+                  } catch {
+                    resolve(false)
                   }
-                  resolve(true)
-                } catch (error) {
-                  console.log("fgdf", error)
-                  reject(error)
-                }
-              }),
+                }),
+                // 3 second timeout per image
+                new Promise((resolve) => setTimeout(() => resolve(false), 3000))
+              ])
             )
           }
 
@@ -145,8 +146,6 @@ export const PageColorExtraction = ({
           }
 
           await Promise.allSettled(promiseArr)
-
-          console.log(sumMap)
 
           const colorArr: ImportedColor[] = Array.from(sumMap.values())
 
@@ -182,67 +181,94 @@ export const PageColorExtraction = ({
             })
 
           setColorArray(colorArray)
-        } catch (error) {
-          console.log("Heh", error)
+          setIsScanning(false)
+          clearTimeout(scanTimeout)
+        } catch {
+          setIsScanning(false)
+          clearTimeout(scanTimeout)
         }
       })
-      .catch((error) => {
-        console.log("fgdf", error)
+      .catch(() => {
+        setIsScanning(false)
+        clearTimeout(scanTimeout)
       })
+
+    return () => clearTimeout(scanTimeout)
   }, [])
 
-  const handleSave = () => {
-    const { files, selectedFile } = state
+  const handleSave = async () => {
+    const { files, selectedFile, user } = state
     const selectedFileData = files.find(
       (file) => file.spreadsheetId === selectedFile,
     )
-    if (!selectedFile) {
-      toast.display("error", "Login or add sheet first")
+
+    // Always save colors to local history
+    selectedColors.forEach((color) => {
+      let hexValue = color.hex
+      if (hexValue.includes(' ')) {
+        hexValue = hexValue.split(' ')[0]
+      }
+      dispatch({ type: "ADD_COLOR_HISTORY", payload: hexValue })
+      if (selectedFile) {
+        dispatch({
+          type: "ADD_FILE_COLOR_HISTORY",
+          payload: { spreadsheetId: selectedFile, color: hexValue },
+        })
+      }
+    })
+
+    // If not logged in or no sheet selected, just save locally
+    if (!selectedFile || !user?.jwtToken) {
+      toast.display("success", "Colors saved to local history")
+      setSelectedColors([])
       return
     }
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const url = tabs[0].url
-      const rows = selectedColors.map((color) => {
-        const colorArr = colorArray.find(
-          (arr) => arr[0].hex === color.hex,
-        )
-        const comments =
-          "This color is used as: " +
-            colorArr?.map((color) => color.name).join(", ") || "No comments"
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+    const url = tabs[0].url
+    const rows = selectedColors.map((color) => {
+      const colorArr = colorArray.find(
+        (arr) => arr[0].hex === color.hex,
+      )
+      const comments =
+        "This color is used as: " +
+          colorArr?.map((color) => color.name).join(", ") || "No comments"
 
-        // Extract first hex color if multiple are present (e.g., from border-color)
-        let hexValue = color.hex
-        if (hexValue.includes(' ')) {
-          hexValue = hexValue.split(' ')[0]
-        }
+      // Extract first hex color if multiple are present (e.g., from border-color)
+      let hexValue = color.hex
+      if (hexValue.includes(' ')) {
+        hexValue = hexValue.split(' ')[0]
+      }
 
-        const colorObj = new Color(hexValue)
-        console.log("state.user", state.user)
-        return {
-          timestamp: Date.now(),
-          url,
-          hex: colorObj.hex(),
-          hsl: colorObj.hsl().round(1).toString(),
-          rgb: colorObj.rgb().round(1).toString(),
-          ranking: "0",
-          comments: comments,
-          slash_naming: color.name,
-          tags: "",
-          added_by: state.user?.email || "unknown",
-          additionalColumns: [],
-        }
-      })
-      setSaveStatus("loading")
-      addMultipleColors({
+      const colorObj = new Color(hexValue)
+      return {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        url: url || "",
+        hex: colorObj.hex(),
+        hsl: colorObj.hsl().round(1).toString(),
+        rgb: colorObj.rgb().round(1).toString(),
+        ranking: "0",
+        comments: comments,
+        slash_naming: color.name,
+        tags: "",
+        additionalColumns: [],
+      }
+    })
+    setSaveStatus("loading")
+    try {
+      await addMultipleColorsAsync({
         spreadsheetId: selectedFile!,
         sheetName: selectedFileData?.sheets?.[0]?.name || "",
-        sheetId: selectedFileData?.sheets?.[0]?.id || null!,
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        //@ts-ignore
-        rows: rows as unknown as UpdateRowRequest[],
+        sheetId: selectedFileData?.sheets?.[0]?.id ?? 0,
+        rows: rows,
       })
       setSaveStatus("success")
-    })
+      setSelectedColors([])
+    } catch (error) {
+      console.error("Error saving colors:", error)
+      setSaveStatus("error")
+      toast.display("error", "Failed to save colors")
+    }
   }
 
   useEffect(() => {
@@ -271,213 +297,124 @@ export const PageColorExtraction = ({
 
   return (
     <Tooltip.Provider>
-      <div
-        className="flex flex-col w-[800px] bg-white p-9"
-        style={{ height: toast.state.message ? "556px" : "640px" }}
-      >
-        <div className="flex flex-row justify-between items-center w-full mb-4">
-          <div className="flex-1">
-            {selectedColors.length === 0 ? (
-              <button
-                className="border-none p-2 text-xl max-w-[160px]"
-                onClick={handleSelectAllColors}
-              >
-                Select All
-              </button>
-            ) : (
-              <button
-                className="bg-gray-200 text-black p-2 text-xl max-w-[160px]"
-                onClick={handleDeselectAllColors}
-              >
-                Deselect All
-              </button>
-            )}
-          </div>
-          <div className="flex-1 flex justify-center">
-            <p className="text-lg">Selected Colors: {selectedColors.length} / {colorArray.length}</p>
-          </div>
-          <div className="flex-1"></div>
-        </div>
-
-        {/* Vertical split layout */}
-        <div className="flex flex-row gap-6 flex-1 min-h-0 max-h-[calc(100%-200px)]">
-          {/* Left section - Color swatches */}
-          <div className="flex flex-col flex-1">
-            <div className="flex flex-row flex-wrap gap-2 overflow-y-scroll">
-              {colorArray.length > 0 ? (
-                colorArray.map((colorArr, arrIndex) => {
-                  const isDark = Color(colorArr[0].hex).isDark()
-                  const isSelected = selectedColors.some(
-                    (c) => c.hex === colorArr[0].hex,
-                  )
-                  return (
-                    <Tooltip.Root key={arrIndex}>
-                      <Tooltip.Trigger asChild>
-                        <div
-                          onClick={() => handleSelectColorGroup(colorArr[0])}
-                          className={`min-w-[40px] min-h-10 border-2 cursor-pointer`}
-                          style={{
-                            transition: "all 0.2s ease-in-out",
-                            backgroundColor: colorArr[0].hex,
-                            border: isSelected
-                              ? `4px solid ${isDark ? "lightgrey" : "black"}`
-                              : `2px solid ${isDark ? "lightgrey" : "black"}`,
-                          }}
-                        >
-                            <CheckIcon
-                              strokeWidth={3}
-                              color={isDark ? "lightgrey" : "black"}
-                              className="w-8 h-8"
-                              opacity={isSelected ? 1 : 0}
-                              style={{
-                                transition: "all 0.2s ease-in-out",
-                              }}
-                            />
-                        </div>
-                      </Tooltip.Trigger>
-                      <Tooltip.Portal>
-                        <Tooltip.Content
-                          className="bg-black text-white px-2 py-1 rounded text-sm"
-                          sideOffset={5}
-                        >
-                          {colorArr[0].hex}
-                          <Tooltip.Arrow className="fill-black" />
-                        </Tooltip.Content>
-                      </Tooltip.Portal>
-                    </Tooltip.Root>
-                  )
-                })
-              ) : (
-                <div className="flex flex-col gap-2 text-lg">
-                  <p>Scanning page...</p>
-                  <p className="text-sm text-gray-500">Note: Cannot scan chrome:// or extension pages</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right section - Color information (only shown when one color is selected) */}
-          <CollapsibleBoxHorizontal
-            isOpen={isRightPanelOpen}
-            maxWidth="256px"
-            transitionDuration={300}
-          >
-            <div className="w-64 flex flex-col border-l border-gray-300 pl-6 overflow-y-scroll">
-              {(() => {
-                const colorArr =
-                  colorArray[
-                    colorArray.findIndex(
-                      (arr) => arr[0].hex === selectedColors?.[0]?.hex,
-                    )
-                  ]
-                const titleColor = new Color(colorArr?.[0]?.hex)
-                return (
-                  <>
-                    <div className="flex flex-row gap-2 text-lg mb-2 flex-wrap max-h-[200px] overflow-y-scroll">
-                      <div
-                        className="min-w-[40px] min-h-10 border-2 border-black cursor-pointer"
-                        style={{
-                          backgroundColor: selectedColors?.[0]?.hex,
-                        }}
-                      />
-                      <button
-                        className="text-sm border-2 border-black bg-gray-200 p-1 cursor-pointer flex items-center"
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            titleColor.hex().toString(),
-                          )
-                          toast.display("success", "Copied to clipboard")
-                        }}
-                      >
-                        <img
-                          src={copyIcon}
-                          alt="copy"
-                          className="w-4 h-4 mr-1"
-                        />
-                        {titleColor.hex().toString()}
-                      </button>
-                      <button
-                        className="text-sm border-2 border-black bg-gray-200 p-1 cursor-pointer flex items-center"
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            titleColor.hsl().round().toString(),
-                          )
-                          toast.display("success", "Copied to clipboard")
-                        }}
-                      >
-                        <img
-                          src={copyIcon}
-                          alt="copy"
-                          className="w-4 h-4 mr-1"
-                        />
-                        {titleColor.hsl().round().toString()}
-                      </button>
-                      <button
-                        className="text-sm border-2 border-black bg-gray-200 p-1 cursor-pointer flex items-center"
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            titleColor.rgb().round().toString(),
-                          )
-                          toast.display("success", "Copied to clipboard")
-                        }}
-                      >
-                        <img
-                          src={copyIcon}
-                          alt="copy"
-                          className="w-4 h-4 mr-1"
-                        />
-                        {titleColor.rgb().round().toString()}
-                      </button>
-                    </div>
-                    <div className="flex flex-row gap-2 flex-wrap mb-4 max-h-[200px] overflow-y-scroll">
-                      {colorArr?.map((color, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            lineHeight: "1.7rem",
-                          }}
-                          className="text-sm border-2 border-black p-1"
-                        >
-                          {color.name}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )
-              })()}
-            </div>
-          </CollapsibleBoxHorizontal>
-        </div>
-          
-        <div className="flex flex-row justify-between mt-8">
-          <div className="flex gap-4">
+      <div className="w-[360px] bg-white rounded-md shadow-sm border border-gray-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+          <div className="flex items-center gap-2">
             <button
-              className="bg-white p-4 px-8 border-2 border-black text-xl"
               onClick={() => setTab(null)}
+              className="p-1 hover:bg-gray-100 rounded transition-colors"
             >
-              Back
+              <ArrowLeft className="w-4 h-4 text-gray-600" />
             </button>
-            {addMultipleColorsData?.done && (
-              <button
-                className="bg-white p-4 px-8 border-2 border-black text-xl"
-                onClick={() => setTab("COMMENT")}
-              >
-                Edit
-              </button>
-            )}
+            <span className="text-[13px] font-medium text-gray-800">Website Colors</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500">
+              {selectedColors.length} / {colorArray.length}
+            </span>
+            <button
+              onClick={() => setTab('COMMENT')}
+              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+              title="History & Editor"
+            >
+              <History className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        {/* Select/Deselect All */}
+        <div className="px-3 py-2 border-b border-gray-200">
+          {selectedColors.length === 0 ? (
+            <button
+              onClick={handleSelectAllColors}
+              className="text-[12px] text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Select all
+            </button>
+          ) : (
+            <button
+              onClick={handleDeselectAllColors}
+              className="text-[12px] text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Deselect all
+            </button>
+          )}
+        </div>
+
+        {/* Color Grid */}
+        <div className="p-3 max-h-[300px] overflow-y-auto">
+          {isScanning ? (
+            <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+              <Loader2 className="w-6 h-6 animate-spin mb-2" />
+              <p className="text-[12px]">Scanning page colors...</p>
+            </div>
+          ) : colorArray.length > 0 ? (
+            <div className="grid grid-cols-8 gap-1.5">
+              {colorArray.map((colorArr, arrIndex) => {
+                const isDark = Color(colorArr[0].hex).isDark()
+                const isSelected = selectedColors.some(
+                  (c) => c.hex === colorArr[0].hex,
+                )
+                return (
+                  <Tooltip.Root key={arrIndex}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={() => handleSelectColorGroup(colorArr[0])}
+                        className="w-9 h-9 rounded border flex items-center justify-center transition-all hover:scale-110"
+                        style={{
+                          backgroundColor: colorArr[0].hex,
+                          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                        }}
+                      >
+                        {isSelected && (
+                          <Check
+                            strokeWidth={3}
+                            className="w-4 h-4"
+                            style={{ color: isDark ? 'white' : 'black' }}
+                          />
+                        )}
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-gray-900 text-white px-2 py-1 rounded text-[11px]"
+                        sideOffset={5}
+                      >
+                        {colorArr[0].hex}
+                        <Tooltip.Arrow className="fill-gray-900" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+              <p className="text-[12px]">No colors found</p>
+              <p className="text-[11px] text-gray-400 mt-1">Cannot scan chrome:// or extension pages</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-3 py-2 border-t border-gray-200">
           <button
             onClick={handleSave}
-            disabled={!state.selectedFile}
-            className={`${state.selectedFile ? "bg-black text-white" : "bg-gray-200 text-black"} p-4 px-8 border-2 border-black text-xl`}
+            disabled={selectedColors.length === 0 || saveStatus === "loading"}
+            className={`w-full py-2 text-[12px] rounded transition-colors ${
+              selectedColors.length > 0
+                ? 'bg-gray-900 text-white hover:bg-gray-800'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
           >
-            {state.selectedFile
-              ? saveStatus === "loading"
+            {selectedColors.length === 0
+              ? 'Select colors to save'
+              : saveStatus === "loading"
                 ? "Saving..."
                 : saveStatus === "success"
-                  ? "Saved"
-                  : "Save"
-              : "Please Select Google Sheet"}
+                  ? "Saved!"
+                  : `Save ${selectedColors.length} color${selectedColors.length > 1 ? 's' : ''}`}
           </button>
         </div>
       </div>
@@ -490,7 +427,7 @@ const scanPageHtml = () => {
   const styleArr: any[] = []
   const regexExtractor = /\d*/
   const extractUrlRegex = /url\((['"]?)([^'"]+)\1\)/
-  const fetchStyleList = ["color", "Color", "Fill", "fill"]
+  const fetchStyleList = ["color", "Color", "Fill", "fill", "stroke", "Stroke", "Shadow"]
   const borderKeywords = ["border", "Border"]
 
   let totalWeight = 0
@@ -518,9 +455,9 @@ const scanPageHtml = () => {
   }
 
   const scanPage = () => {
-    console.log("scanning page")
-    const elements = document.querySelectorAll("*, svg *")
-    console.log("elements", elements)
+    const allElements = document.querySelectorAll("*, svg *")
+    // Limit to first 2000 elements to prevent hanging on heavy pages
+    const elements = Array.from(allElements).slice(0, 2000)
     for (const element of elements) {
       const style = getComputedStyleCached(element as HTMLElement)
       const properties = {
@@ -598,7 +535,6 @@ const scanPageHtml = () => {
         totalWeight += areaWeight
       }
     }
-    console.log("styleArr", styleArr)
   }
 
   scanPage()
@@ -607,7 +543,5 @@ const scanPageHtml = () => {
     colorMap.set(key, { ...value, weight: value.weight / totalWeight })
   }
 
-  //temporarily removes imageSrcArr due to chrome extension limitations
-
-  return { totalWeight, styleArr, imageSrcArr: [] }
+  return { totalWeight, styleArr, imageSrcArr }
 }

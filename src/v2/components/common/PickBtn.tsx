@@ -43,7 +43,7 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
         .call({
           spreadsheetId: selectedFile!,
           sheetName: selectedFileData?.sheets?.[0]?.name || '',
-          sheetId: selectedFileData?.sheets?.[0]?.id || null!,
+          sheetId: selectedFileData?.sheets?.[0]?.id ?? 0,
           row: {
             timestamp: new Date().valueOf(),
             url: url!,
@@ -59,7 +59,6 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
         })
         .then(() => {
           if (onSuccess) onSuccess();
-          toast.display("success", "Color saved successfully");
         })
         .catch((err) => toast.display("error", err));
     });
@@ -85,8 +84,8 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
       const color = await open();
       dispatch({ type: "SET_COLOR", payload: color.sRGBHex });
       dispatch({ type: "ADD_COLOR_HISTORY", payload: color.sRGBHex });
-  
-      // 🎯 Додаємо колір у файл
+
+      // Add to file color history locally (even if not logged in)
       if (selectedFile) {
         dispatch({
           type: "ADD_FILE_COLOR_HISTORY",
@@ -95,13 +94,16 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onSuccess, onC
             color: color.sRGBHex,
           },
         });
-  
-        addColorToFile(color.sRGBHex);
+
+        // Only sync to Google Sheets if user is logged in
+        if (state.user?.jwtToken) {
+          addColorToFile(color.sRGBHex);
+        }
       }
-  
+
       copyToClipboard?.(color.sRGBHex, "HEX");
-    } catch (e) {
-      console.log(e);
+    } catch {
+      // User cancelled the picker
     }
   };
   
