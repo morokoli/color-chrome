@@ -89,17 +89,22 @@ const Left: FC<Props> = ({
   // };
 
   const handleClickAccept = () => {
-    if (!selectedFile) {
-      dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
-    }
-    
-    addColorToFile(colorFromPallete);
-  
+    // Always add to local color history
+    dispatch({ type: "ADD_COLOR_HISTORY", payload: colorFromPallete })
+
+    if (selectedFile) {
+      // Add to file color history locally
       dispatch({
         type: "ADD_FILE_COLOR_HISTORY",
-        payload: { spreadsheetId: selectedFile!, color: colorFromPallete },
+        payload: { spreadsheetId: selectedFile, color: colorFromPallete },
       });
-  
+
+      // Only sync to Google Sheets if user is logged in
+      if (state.user?.jwtToken) {
+        addColorToFile(colorFromPallete);
+      }
+    }
+
     setCurrentColor(colorFromPallete);
   };
   

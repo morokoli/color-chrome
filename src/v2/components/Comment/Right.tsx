@@ -63,7 +63,8 @@ const Right: FC<Props> = ({
   const [error, setError] = useState<boolean>(false)
 
   const { state, dispatch } = useGlobalState()
-  const { selectedFile, parsedData, newColumns } = state
+  const { selectedFile, parsedData, newColumns: allNewColumns } = state
+  const sheetColumns = selectedFile ? (allNewColumns[selectedFile] || []) : []
   const isDisable = !selectedFile || selectedColor === null
 
   const openFileHandler = () => {
@@ -110,16 +111,11 @@ const Right: FC<Props> = ({
   }
 
   const handleSuccessRemoveColumn = (colName: string) => {
-    const newColumnsArr = state?.newColumns?.filter(
-      (column) => column.name !== colName,
-    )
-    dispatch({ type: "CLEAR_NEW_COLUMNS" })
-
-    if (newColumnsArr.length > 0) {
-      newColumnsArr.forEach((column) =>
-        dispatch({ type: "ADD_NEW_COLUMN", payload: column }),
-      )
-    }
+    if (!selectedFile) return
+    dispatch({
+      type: "REMOVE_NEW_COLUMN",
+      payload: { spreadsheetId: selectedFile, columnName: colName }
+    })
   }
 
   const handleErrorRemoveColumn = () => {
@@ -127,14 +123,14 @@ const Right: FC<Props> = ({
   }
 
   useEffect(() => {
-    const colNamesArr = [...colData, ...additionalColumns, ...newColumns]
+    const colNamesArr = [...colData, ...additionalColumns, ...sheetColumns]
 
     if (selectedColor !== null && parsedData.length !== 0) {
       colNamesArr.forEach((data) => getInputValue(data.name))
     } else {
       setFormData(initialState)
     }
-  }, [selectedColor, parsedData])
+  }, [selectedColor, parsedData, sheetColumns])
 
   useEffect(() => {
     if (!selectedFile) {
@@ -206,7 +202,7 @@ const Right: FC<Props> = ({
         value={formData["comments"]}
         className="w-full h-[24px] mb-3 min-h-[25px] bg-slate-200 px-2 py-1 text-xs focus:outline-none border border-slate-200 focus:border-slate-700"
       />
-      {state?.newColumns?.map((data, index) => (
+      {sheetColumns.map((data, index) => (
         <Input
           name={data.name}
           hasRemoveBtn
