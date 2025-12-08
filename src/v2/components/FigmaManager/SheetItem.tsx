@@ -8,6 +8,7 @@ interface SheetItemProps {
     spreadsheetId: string
     sheetId: string
     sheetName: string
+    fileName?: string
     colorHistory: any[]
   }
   hueFilter: [number, number]
@@ -45,7 +46,7 @@ const SheetItem: React.FC<SheetItemProps> = ({
           />
         </button>
         <div className="flex-grow p-2 flex items-center justify-between">
-          <span>{sheet.sheetName}</span>
+          <span className="text-[12px] truncate">{sheet.fileName || sheet.sheetName}</span>
         </div>
         <button className="p-2" onClick={() => onRemove(sheet.spreadsheetId)}>
           <X size={16} />
@@ -53,7 +54,7 @@ const SheetItem: React.FC<SheetItemProps> = ({
       </div>
 
       <div
-        className="w-[355px] relative"
+        className="w-full relative"
         style={{
           maxHeight: isCollapsed ? 0 : (sheet.colorHistory.length * 21) / 17 + 20,
           overflow: "hidden",

@@ -90,7 +90,7 @@ export const useFigmaGetProjects = (
   const { state } = useGlobalState()
   return useQuery<FigmaGetProjectsResponse, Error>({
     queryKey: ["figma-get-projects", teamId, email],
-    enabled: !!teamId,
+    enabled: !!teamId && !!email && !!state.user?.jwtToken,
     queryFn: () => {
       return axiosInstance.get(config.api.endpoints.figmaGetProjects, {
         headers: {
@@ -135,7 +135,7 @@ export const useFigmaGetFiles = (
   const { state } = useGlobalState()
   return useQuery<FigmaGetFilesResponse, Error>({
     queryKey: ["figma-get-files", projectId, email],
-    enabled: !!projectId,
+    enabled: !!projectId && !!email && !!state.user?.jwtToken,
     queryFn: () => {
       return axiosInstance.get(config.api.endpoints.figmaGetFiles, {
         headers: {
@@ -158,6 +158,7 @@ export const useFigmaMultipleProjectsFiles = (
   return useQueries<FigmaGetFilesResponse[]>({
     queries: projectIds.map((projectId) => ({
       queryKey: ["figma-get-files", projectId, email],
+      enabled: !!projectId && !!email && !!state.user?.jwtToken,
       queryFn: async () => {
         const response = await axiosInstance.get(
           config.api.endpoints.figmaGetFiles,

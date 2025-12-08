@@ -32,6 +32,35 @@ interface FigmaFile {
   key: string
 }
 
+// Helper to get saved Figma state from localStorage
+const getSavedFigmaState = () => {
+  try {
+    const savedAccount = localStorage.getItem('figma_last_account') || ''
+    const savedTeamId = savedAccount ? localStorage.getItem(`figma_last_team_id_${savedAccount}`) || '' : ''
+    const savedTeamName = savedAccount ? localStorage.getItem(`figma_last_team_name_${savedAccount}`) || '' : ''
+
+    let savedProjects: string[] = []
+    let savedFiles: FigmaFile[] = []
+
+    if (savedAccount && savedTeamId) {
+      const projectsKey = `figma_selected_projects_${savedAccount}_${savedTeamId}`
+      const filesKey = `figma_selected_files_${savedAccount}_${savedTeamId}`
+
+      const projectsStr = localStorage.getItem(projectsKey)
+      const filesStr = localStorage.getItem(filesKey)
+
+      if (projectsStr) savedProjects = JSON.parse(projectsStr)
+      if (filesStr) savedFiles = JSON.parse(filesStr)
+    }
+
+    return { savedAccount, savedTeamId, savedTeamName, savedProjects, savedFiles }
+  } catch (e) {
+    return { savedAccount: '', savedTeamId: '', savedTeamName: '', savedProjects: [], savedFiles: [] }
+  }
+}
+
+const initialState = getSavedFigmaState()
+
 const Right = ({
   setIsLeftOpen,
 }: {
@@ -57,13 +86,13 @@ const Right = ({
     useFigmaGetAccounts()
   const { mutateAsync: addTeamMutation } = useFigmaAddTeam()
 
-  const [accounts, setAccounts] = useState<string[]>([])
-  const [selectedAccount, setSelectedAccount] = useState<string>("")
+  const [accounts, setAccounts] = useState<string[]>(initialState.savedAccount ? [initialState.savedAccount] : [])
+  const [selectedAccount, setSelectedAccount] = useState<string>(initialState.savedAccount)
 
   const [teamsModalOpen, setTeamsModalOpen] = useState(false)
   const [openFigmaModalOpen, setFigmaModalOpen] = useState(false)
 
-  const [selectedFiles, setSelectedFiles] = useState<FigmaFile[]>([])
+  const [selectedFiles, setSelectedFiles] = useState<FigmaFile[]>(initialState.savedFiles)
 
   const [projects, setProjects] = useState<
     {
@@ -79,14 +108,15 @@ const Right = ({
 
   const { data: teamsData } = useFigmaGetTeams(selectedAccount)
 
-  const [selectedTeam, setSelectedTeam] = useState("Figma Team")
-  const [teams, setTeams] = useState([
-    { name: "Figma Team 1", id: "" },
-    { name: "Figma Team 2", id: "" },
-  ])
+  const [selectedTeam, setSelectedTeam] = useState(initialState.savedTeamName || "Figma Team")
+  const [teams, setTeams] = useState(
+    initialState.savedTeamId && initialState.savedTeamName
+      ? [{ name: initialState.savedTeamName, id: initialState.savedTeamId }]
+      : []
+  )
 
-  const [selectedProjects, setSelectedProjects] = useState<string[]>([])
-  const [files, setFiles] = useState<FigmaFile[]>([])
+  const [selectedProjects, setSelectedProjects] = useState<string[]>(initialState.savedProjects)
+  const [files, setFiles] = useState<FigmaFile[]>(initialState.savedFiles)
 
   useEffect(() => {
     setIsLeftOpen(selectedFiles.length > 0)
@@ -119,13 +149,99 @@ const Right = ({
         .map((project) => project?.data?.files)
         .flat()
       setFiles(allFiles as any)
+
+      // Check if current selection is still valid
+      if (selectedFiles.length > 0 && allFiles.length > 0) {
+        const currentValid = selectedFiles.filter(sf =>
+          allFiles.some((f: any) => f?.key === sf.key)
+        )
+        if (currentValid.length > 0) {
+          // Keep current valid selection
+          if (currentValid.length !== selectedFiles.length) {
+            setSelectedFiles(currentValid)
+          }
+          return
+        }
+      }
+
+      // Try to restore saved files for these projects
+      const teamId = teams.find((team) => team.name === selectedTeam)?.id
+      const savedKey = `figma_selected_files_${selectedAccount}_${teamId}`
+      const savedFiles = localStorage.getItem(savedKey)
+      if (savedFiles && allFiles.length > 0) {
+        try {
+          const parsed = JSON.parse(savedFiles) as FigmaFile[]
+          // Only restore files that still exist
+          const validFiles = parsed.filter((saved: FigmaFile) =>
+            allFiles.some((f: any) => f?.key === saved.key)
+          )
+          if (validFiles.length > 0) {
+            setSelectedFiles(validFiles)
+          }
+        } catch (e) {
+          console.error('Failed to parse saved files', e)
+        }
+      }
     }
   }, [isLoading, selectedProjects])
+
+  // Save selected projects to localStorage when they change
+  useEffect(() => {
+    if (selectedProjects.length > 0 && selectedAccount && selectedTeam) {
+      const teamId = teams.find((team) => team.name === selectedTeam)?.id
+      if (teamId) {
+        const savedKey = `figma_selected_projects_${selectedAccount}_${teamId}`
+        localStorage.setItem(savedKey, JSON.stringify(selectedProjects))
+      }
+    }
+  }, [selectedProjects, selectedAccount, selectedTeam, teams])
+
+  // Save selected files to localStorage when they change
+  useEffect(() => {
+    if (selectedFiles.length > 0 && selectedAccount && selectedTeam) {
+      const teamId = teams.find((team) => team.name === selectedTeam)?.id
+      if (teamId) {
+        const savedKey = `figma_selected_files_${selectedAccount}_${teamId}`
+        localStorage.setItem(savedKey, JSON.stringify(selectedFiles))
+      }
+    }
+  }, [selectedFiles, selectedAccount, selectedTeam, teams])
 
   useEffect(() => {
     if (projectsData?.data?.projects) {
       setProjects(projectsData.data.projects)
       if (projectsData.data.projects.length > 0) {
+        // Check if current selection is still valid
+        const currentValid = selectedProjects.filter(p =>
+          projectsData.data.projects.some((proj: { name: string }) => proj.name === p)
+        )
+        if (currentValid.length > 0) {
+          // Keep current valid selection
+          if (currentValid.length !== selectedProjects.length) {
+            setSelectedProjects(currentValid)
+          }
+          return
+        }
+
+        // Try to restore saved projects for this team
+        const teamId = teams.find((team) => team.name === selectedTeam)?.id
+        const savedKey = `figma_selected_projects_${selectedAccount}_${teamId}`
+        const savedProjects = localStorage.getItem(savedKey)
+        if (savedProjects) {
+          try {
+            const parsed = JSON.parse(savedProjects)
+            // Only restore if the saved projects still exist
+            const validProjects = parsed.filter((p: string) =>
+              projectsData.data.projects.some((proj: { name: string }) => proj.name === p)
+            )
+            if (validProjects.length > 0) {
+              setSelectedProjects(validProjects)
+              return
+            }
+          } catch (e) {
+            console.error('Failed to parse saved projects', e)
+          }
+        }
         setSelectedProjects([projectsData.data.projects[0].name])
       }
     } else {
@@ -139,7 +255,21 @@ const Right = ({
     if (teamsData?.data?.teams) {
       setTeams(teamsData.data.teams)
       if (teamsData.data.teams.length > 0) {
-        setSelectedTeam(teamsData.data.teams[0].name)
+        // Use saved team if it's still valid
+        const savedTeamId = localStorage.getItem(`figma_last_team_id_${selectedAccount}`)
+        const savedTeam = savedTeamId
+          ? teamsData.data.teams.find((t: { id: string }) => t.id === savedTeamId)
+          : null
+
+        if (savedTeam) {
+          setSelectedTeam(savedTeam.name)
+        } else {
+          const firstTeam = teamsData.data.teams[0]
+          setSelectedTeam(firstTeam.name)
+          // Save the new team
+          localStorage.setItem(`figma_last_team_id_${selectedAccount}`, firstTeam.id)
+          localStorage.setItem(`figma_last_team_name_${selectedAccount}`, firstTeam.name)
+        }
       }
     } else {
       setTeams([])
@@ -150,6 +280,17 @@ const Right = ({
       setSelectedTeam("")
     }
   }, [teamsData])
+
+  // Save team when it changes
+  useEffect(() => {
+    if (selectedAccount && selectedTeam) {
+      const team = teams.find(t => t.name === selectedTeam)
+      if (team?.id) {
+        localStorage.setItem(`figma_last_team_id_${selectedAccount}`, team.id)
+        localStorage.setItem(`figma_last_team_name_${selectedAccount}`, team.name)
+      }
+    }
+  }, [selectedTeam, selectedAccount, teams])
 
   const handleSelectTeam = (team: string) => {
     setSelectedTeam(team)
@@ -227,9 +368,24 @@ const Right = ({
   useEffect(() => {
     if (!isAccountsLoading && accountsData?.data?.accounts) {
       setAccounts(accountsData.data.accounts)
-      setSelectedAccount(accountsData.data.accounts[0] ?? "")
+      // Use saved account if it's still valid, otherwise use first account
+      const savedAccount = localStorage.getItem('figma_last_account')
+      if (savedAccount && accountsData.data.accounts.includes(savedAccount)) {
+        setSelectedAccount(savedAccount)
+      } else {
+        const firstAccount = accountsData.data.accounts[0] ?? ""
+        setSelectedAccount(firstAccount)
+        if (firstAccount) localStorage.setItem('figma_last_account', firstAccount)
+      }
     }
   }, [isAccountsLoading, accountsData])
+
+  // Save account when it changes
+  useEffect(() => {
+    if (selectedAccount) {
+      localStorage.setItem('figma_last_account', selectedAccount)
+    }
+  }, [selectedAccount])
 
   const getTeams = async () => {
     const figmaTabs = await chrome.tabs.query({ active: true })
@@ -457,11 +613,11 @@ const Right = ({
   }
 
   return (
-    <div className="relative min-h-[100vh] overflow-y-auto p-4">
+    <div className="relative overflow-visible p-3">
       <div
-        className="flex mb-4 gap-4 grid"
+        className="flex mb-3 gap-2 grid"
         style={{
-          gridTemplateColumns: selectedFiles.length > 0 ? "47.5% 47.5%" : "1fr",
+          gridTemplateColumns: selectedFiles.length > 0 ? "1fr 1fr" : "1fr",
         }}
       >
         <AccountDropdown
@@ -515,7 +671,7 @@ const Right = ({
         maxHeight="100px"
         transitionDuration={300}
       >
-        <div className="bg-[#F6FF03] p-2 mb-4 border text-sm">
+        <div className="bg-amber-50 text-amber-800 border border-amber-200 rounded px-3 py-2 mb-3 text-[11px]">
           {warning || "All done!"}
         </div>
       </CollapsibleBox>
@@ -530,10 +686,8 @@ const Right = ({
           onChangeslash_naming={handleChangeslash_naming}
         />
 
-        <div className="bg-[#F6FF03] p-2 mb-4 border text-sm">
-          Slash Name changes are applied for Figma Export only. If you want to
-          save them to the spreadsheet, you need to click the "Save Changes"
-          button.
+        <div className="bg-blue-50 text-blue-800 border border-blue-200 rounded px-3 py-2 mb-3 text-[11px]">
+          Slash Name changes are applied for Figma only. Click "Save Changes" to save to spreadsheet.
         </div>
 
         <ColorList
@@ -550,18 +704,20 @@ const Right = ({
           handleManualslash_namingChange={handleManualslash_namingChange}
         />
 
-        <div
-          style={{ width: "360px" }}
-          className="fixed bottom-4 width flex justify-between mt-2"
-        >
-          <button onClick={handleSaveChanges} className="border bg-white p-2">
+        <div className="flex gap-2 mt-3 mb-2">
+          <button
+            onClick={handleSaveChanges}
+            className="flex-1 py-2 text-[12px] border border-gray-200 rounded bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+          >
             Save Changes
           </button>
-          <button onClick={handleAddColors} className="bg-black text-white p-2">
-            Export
+          <button
+            onClick={handleAddColors}
+            className="flex-1 py-2 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
+          >
+            Export to Figma
           </button>
         </div>
-        <div style={{ height: "50px" }}/>
       </CollapsibleBox>
 
       <TeamsModal

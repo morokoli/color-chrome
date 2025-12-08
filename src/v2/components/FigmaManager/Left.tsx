@@ -15,7 +15,7 @@ interface Props {
   setTab: (tab: string | null) => void
 }
 
-const Left: React.FC<Props> = ({ setTab }) => {
+const Left: React.FC<Props> = ({ setTab: _setTab }) => {
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
   const { files, selectedColorsFromFile } = state
@@ -45,6 +45,7 @@ const Left: React.FC<Props> = ({ setTab }) => {
         spreadsheetId: files[index].spreadsheetId,
         sheetId: files[index].sheets?.[0]?.id,
         sheetName: files[index].sheets?.[0]?.name,
+        fileName: files[index].fileName,
         colorHistory: result.sheetData.parsed.map((elem) => {
           const splitHSL = elem?.hsl?.match(/\d*/g)
           const filteredSplitHSL = splitHSL?.filter((item) => item !== "")
@@ -67,7 +68,6 @@ const Left: React.FC<Props> = ({ setTab }) => {
   const { getSheet, data: getSheetData } = useGetSheet(fileURL)
 
   const [confirmFileId, setConfirmFileId] = useState<string | null>(null)
-  console.log("visible", visibleSheets)
   const checkSheetValid = useAPI<
     CheckSheetValidRequest,
     CheckSheetValidResponse
@@ -101,7 +101,6 @@ const Left: React.FC<Props> = ({ setTab }) => {
         sheetData: sheetData,
         rowIndex: rowIndex,
       }
-console.log(fullColor)
       dispatch({
         type: "ADD_SELECTED_COLOR_FROM_FILE",
         payload: { color: fullColor, slash_naming },
@@ -151,6 +150,7 @@ console.log(fullColor)
             spreadsheetId: getSheetData.spreadsheet.spreadsheetId,
             sheetId: getSheetData.spreadsheet.sheets?.[0].id,
             sheetName: `${getSheetData.spreadsheet.sheets?.[0].name}`,
+            fileName: getSheetData.spreadsheet.fileName,
             colorHistory: sheetData.sheetData.parsed.map((elem) => {
               const splitHSL = elem?.hsl?.match(/\d*/g)
               return {
@@ -177,44 +177,40 @@ console.log(fullColor)
     fetchSheetData()
   }, [getSheetData])
 
-  const handleBack = () => {
-    setTab(null)
-  }
-
   return (
     <>
-      <div className="relative h-full overflow-y-auto p-4">
-        <div className="flex mb-4">
+      <div className="relative h-full overflow-y-auto overflow-x-hidden p-3 w-[340px]">
+        <div className="flex mb-3 gap-2">
           <input
             type="text"
             onChange={(e) => setFileURL(e.target.value)}
             placeholder="Sheet URL"
-            className="border p-2 flex-grow"
+            className="flex-grow px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
           />
-          <button onClick={handleAddFile} className="ml-2 border p-2">
+          <button onClick={handleAddFile} className="px-3 py-2 text-[12px] border border-gray-200 rounded hover:bg-gray-50 transition-colors">
             Add
           </button>
         </div>
 
         {/* Search Input */}
-        <div className="mb-4">
+        <div className="mb-3">
           <input
             type="text"
-            placeholder="Search"
-            className="border p-2 w-full"
+            placeholder="Search colors..."
+            className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
         {/* Sheet Selection Dropdown */}
-        <div className="mb-4">
+        <div className="mb-3">
           <MultiSelectDropdown
             isSearchable
             placeholder="Select Sheets"
             selected={visibleSheets}
             items={sheets}
-            renderItem={(sheet) => sheet.sheetName}
+            renderItem={(sheet) => sheet.fileName || sheet.sheetName}
             renderSelected={(selected) =>
               selected.length === sheets.length
                 ? "All Sheets"
@@ -226,7 +222,7 @@ console.log(fullColor)
         </div>
 
         {/* Sliders */}
-        <div className="flex justify-around mb-4 gap-4">
+        <div className="flex justify-around mb-3 gap-2">
           <DualThumbSlider
             value={hueFilter}
             onValueChange={(value) => setHueFilter(value as [number, number])}
@@ -276,9 +272,7 @@ console.log(fullColor)
         </div>
 
         {/* Sheets List */}
-        {visibleSheets.map((sheet) => {
-          console.log(sheet)
-          return (
+        {visibleSheets.map((sheet) => (
           <SheetItem
             key={sheet.spreadsheetId}
             sheet={sheet}
@@ -290,7 +284,7 @@ console.log(fullColor)
             onColorClick={handleColorClick}
             onRemove={onRemoveFileRequest}
           />
-        )})}
+        ))}
 
         {/* Confirmation Dialog */}
         {confirmFileId && (
@@ -335,12 +329,7 @@ console.log(fullColor)
             </div>
           </div>
         )}
-        <button onClick={handleBack} style={{zIndex: 1000}} className="fixed bottom-4 border p-2">
-          Go Back
-        </button>
       </div>
-      <div style={{ width: "1px", marginTop: "10px", height: "545px", marginLeft: "7px", backgroundColor: "#E0E0E0" }}></div>
-      <div style={{ height: "50px" }}/>
     </>
   )
 }

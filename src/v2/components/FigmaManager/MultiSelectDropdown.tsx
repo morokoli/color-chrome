@@ -63,22 +63,22 @@ export const MultiSelectDropdown = <T,>({
 
   return (
     <div
-      className={`relative text-sm grow`}
+      className={`relative text-[12px] grow`}
       style={{ width }}
       ref={dropdownRef}
     >
       <CollapsibleBox isOpen={isVisible} maxHeight="100px">
         {isOpen ? (
-          <div className="flex items-center border">
+          <div className="flex items-center border border-gray-200 rounded bg-white">
             {isSearchable && (
               <div className="flex items-center gap-2 px-3 py-2 flex-grow">
-                <Search size={16} className="text-gray-500" />
+                <Search size={14} className="text-gray-400" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search..."
-                  className="w-full outline-none text-sm"
+                  className="w-full outline-none text-[12px]"
                   autoFocus
                 />
               </div>
@@ -86,9 +86,9 @@ export const MultiSelectDropdown = <T,>({
             {!isSearchable && (
               <div className="flex items-center gap-2 px-3 py-2 flex-grow text-ellipsis whitespace-nowrap overflow-hidden w-full">
                 {selected.length > 0 ? (
-                  renderSelected(selected)
+                  <span className="text-gray-800">{renderSelected(selected)}</span>
                 ) : (
-                  <span className="text-gray-500 text-ellipsis overflow-hidden">
+                  <span className="text-gray-400 text-ellipsis overflow-hidden">
                     {placeholder}
                   </span>
                 )}
@@ -96,46 +96,46 @@ export const MultiSelectDropdown = <T,>({
             )}
             <button
               onClick={() => setIsOpen(false)}
-              className={`px-3 py-2 ${isSearchable ? "border-l" : ""} flex items-center`}
+              className={`px-2 py-2 flex items-center`}
             >
-              <ChevronDown size={18} />
+              <ChevronDown size={16} className="text-gray-400 rotate-180 transition-transform" />
             </button>
           </div>
         ) : (
           <button
             onClick={() => setIsOpen(true)}
-            className="w-full flex justify-between items-center border px-3 py-2 text-ellipsis overflow-hidden"
+            className="w-full flex justify-between items-center border border-gray-200 rounded px-3 py-2 text-ellipsis overflow-hidden bg-white hover:border-gray-300 transition-colors"
           >
             {selected.length > 0 ? (
-              renderSelected(selected)
+              <span className="text-gray-800 truncate">{renderSelected(selected)}</span>
             ) : (
-              <span className="text-gray-500">{placeholder}</span>
+              <span className="text-gray-400">{placeholder}</span>
             )}
-            <ChevronDown size={18} />
+            <ChevronDown size={16} className="text-gray-400" />
           </button>
         )}
       </CollapsibleBox>
 
       {isOpen && (
-        <div className="absolute w-full border shadow-lg shadow-gray-300 mt-1 bg-white z-10 max-h-60 overflow-y-auto">
+        <div className="absolute w-full border border-gray-200 mt-1 bg-white z-50 max-h-48 overflow-y-auto rounded shadow-lg">
           {filteredItems.map((item, i) => (
             <div
               key={i}
               onClick={() => handleItemClick(item)}
-              className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b text-ellipsis overflow-hidden flex items-center gap-2"
+              className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-ellipsis overflow-hidden flex items-center gap-2 text-gray-700 transition-colors"
             >
               <div className="w-4 h-4 flex items-center justify-center">
-                {selected.includes(item) && <Check size={14} />}
+                {selected.includes(item) && <Check size={14} className="text-emerald-600" />}
               </div>
               {renderItem(item)}
             </div>
           ))}
           {filteredItems.length === 0 && (
-            <div className="px-3 py-2 text-gray-500 text-sm text-center">
+            <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
               No items found
             </div>
           )}
-          {renderFooter && <div className="border-t">{renderFooter()}</div>}
+          {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
         </div>
       )}
     </div>

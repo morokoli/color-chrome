@@ -42,7 +42,6 @@ export const TeamsDropdown = ({
               className="w-4 h-4 opacity-0 group-hover:opacity-100 cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
-                console.log("team", team)
                 if (team) onDeleteTeam(team.id);
               }}
             />
