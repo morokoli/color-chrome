@@ -8,6 +8,8 @@ import {
   DriveFileCreateResponse,
   DriveFileGetByURLRequest,
   DriveFileGetByURLResponse,
+  CheckSheetValidRequest,
+  CheckSheetValidResponse,
 } from "@/v2/types/api"
 import { Sheet } from "@/v2/types/general"
 import {
@@ -18,6 +20,7 @@ import {
   CheckCircle,
   Check,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react"
 
 import Input from '@/v2/components/Input';
@@ -70,6 +73,19 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
     method: "POST",
     jwtToken: user?.jwtToken,
   })
+
+  const { call: callCheckSheetValid } = useAPI<
+    CheckSheetValidRequest,
+    CheckSheetValidResponse
+  >({
+    url: config.api.endpoints.checkSheetValid,
+    method: "POST",
+    jwtToken: user?.jwtToken,
+  })
+
+  // State for sheet validation warning
+  const [sheetHasContent, setSheetHasContent] = useState(false)
+  const [isValidating, setIsValidating] = useState(false)
 
   const handleChangeUrl = (event: ChangeEvent<HTMLInputElement>) => {
     setSheetUrl(event.target.value);
@@ -124,8 +140,58 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
     setSelectedSheetId(null)
   };
 
-  const confirmTabSelection = () => {
+  // Validate if selected sheet is empty
+  const validateSelectedSheet = async (sheetId: number) => {
+    if (!fetchedSpreadsheet) return
+
+    const selectedSheet = fetchedSpreadsheet.sheets.find(s => s.id === sheetId)
+    if (!selectedSheet) return
+
+    setIsValidating(true)
+    setSheetHasContent(false)
+
+    try {
+      const result = await callCheckSheetValid({
+        spreadsheetId: fetchedSpreadsheet.spreadsheetId,
+        sheetId: sheetId,
+        sheetName: selectedSheet.name,
+      })
+
+      console.log('Sheet validation result:', result)
+
+      // Only warn if there's actual DATA in the sheet (not just headers)
+      // valid=true just means the sheet has our headers - that's OK
+      // We only care if parsed.length > 0 (actual color data exists)
+      const hasParsedData = result.sheetData?.parsed && result.sheetData.parsed.length > 0
+
+      setSheetHasContent(hasParsedData)
+    } catch (error: any) {
+      console.error('Sheet validation error:', error)
+      // If we get ANY error (especially 400 Bad Request), it likely means
+      // the sheet has content that doesn't match our expected format.
+      // Be conservative and assume sheet has content - better to warn than overwrite data.
+      const statusCode = error?.response?.status
+      if (statusCode === 400 || statusCode === 422) {
+        // 400/422 errors typically mean the sheet has content but wrong format
+        setSheetHasContent(true)
+      } else {
+        // For other errors (network, 500, etc.), still warn to be safe
+        setSheetHasContent(true)
+      }
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  // Validate when tab selection changes
+  useEffect(() => {
     if (fetchedSpreadsheet && selectedSheetId !== null) {
+      validateSelectedSheet(selectedSheetId)
+    }
+  }, [selectedSheetId, fetchedSpreadsheet])
+
+  const confirmTabSelection = () => {
+    if (fetchedSpreadsheet && selectedSheetId !== null && !sheetHasContent) {
       addSpreadsheetToState(fetchedSpreadsheet, selectedSheetId)
     }
   };
@@ -133,6 +199,7 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
   const cancelTabSelection = () => {
     setFetchedSpreadsheet(null)
     setSelectedSheetId(null)
+    setSheetHasContent(false)
   };
 
   const createSheetFile = () => {
@@ -303,6 +370,23 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
                     <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
                 </div>
+
+                {/* Warning if sheet has content */}
+                {isValidating && (
+                  <div className="text-[11px] text-gray-500 text-center py-2">
+                    Checking sheet...
+                  </div>
+                )}
+                {!isValidating && sheetHasContent && (
+                  <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-amber-700">
+                      <p className="font-medium">This tab already has content</p>
+                      <p className="mt-0.5">Please select an empty tab or create a new sheet to avoid overwriting existing data.</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     onClick={cancelTabSelection}
@@ -312,9 +396,14 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
                   </button>
                   <button
                     onClick={confirmTabSelection}
-                    className="flex-1 py-2 text-[12px] text-white bg-gray-900 rounded hover:bg-gray-800 transition-colors"
+                    disabled={isValidating || sheetHasContent}
+                    className={`flex-1 py-2 text-[12px] rounded transition-colors ${
+                      isValidating || sheetHasContent
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-gray-900 text-white hover:bg-gray-800'
+                    }`}
                   >
-                    Add Sheet
+                    {isValidating ? 'Checking...' : 'Add Sheet'}
                   </button>
                 </div>
               </>

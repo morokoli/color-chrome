@@ -3,7 +3,7 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
-import { ArrowLeft, Sparkles, Copy, Loader2, History, Link } from "lucide-react"
+import { ArrowLeft, Sparkles, Loader2, History, Link, Copy } from "lucide-react"
 import axios from "axios"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 
@@ -155,9 +155,9 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
         </button>
       </div>
 
-      {/* Color palette preview */}
-      <div className="p-3">
-        <div className="flex h-16 rounded overflow-hidden border border-gray-200">
+      {/* Output section */}
+      <div className="p-3 bg-gray-50 border-b border-gray-200">
+        <div className="flex h-16 rounded-lg overflow-hidden border border-gray-200 bg-white">
           {colorList.length > 0 ? (
             colorList.map((hex, index) => (
               <div
@@ -173,15 +173,16 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
               />
             ))
           ) : (
-            <div className="w-full h-full bg-gray-50 flex items-center justify-center">
-              <span className="text-[11px] text-gray-400">Generated colors will appear here</span>
+            <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-gray-400 mr-2" />
+              <span className="text-[11px] text-white">Generated colors will appear here</span>
             </div>
           )}
         </div>
 
         {/* Hex color chips */}
         {colorList.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="grid grid-cols-3 gap-1 mt-2">
             {colorList.map((hex, index) => (
               <button
                 key={index}
@@ -190,14 +191,14 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
                   copyToClipboard(hex, "HEX")
                   toast.display("success", `Copied ${hex}`)
                 }}
-                className="flex items-center gap-1 text-[11px] text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                className="flex items-center justify-center gap-1 text-[10px] text-gray-600 bg-white border border-gray-200 py-1 px-1 rounded hover:bg-gray-100 transition-colors"
               >
                 <div
-                  className="w-3 h-3 rounded-sm border border-gray-300"
+                  className="w-2.5 h-2.5 rounded-sm border border-gray-300 flex-shrink-0"
                   style={{ backgroundColor: hex }}
                 />
                 {hex}
-                <Copy className="w-3 h-3 text-gray-400" />
+                <Copy className="w-2.5 h-2.5 text-gray-400" />
               </button>
             ))}
           </div>
@@ -205,7 +206,7 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
       </div>
 
       {/* Input section */}
-      <div className="px-3 pb-3">
+      <div className="p-3">
         <textarea
           name="description"
           value={colorDescription}

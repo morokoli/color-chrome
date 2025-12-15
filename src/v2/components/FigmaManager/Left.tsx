@@ -210,6 +210,7 @@ const Left: React.FC<Props> = ({ setTab: _setTab }) => {
             placeholder="Select Sheets"
             selected={visibleSheets}
             items={sheets}
+            keyExtractor={(sheet) => sheet.spreadsheetId}
             renderItem={(sheet) => sheet.fileName || sheet.sheetName}
             renderSelected={(selected) =>
               selected.length === sheets.length

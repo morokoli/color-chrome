@@ -8,6 +8,7 @@ interface MultiSelectDropdownProps<T> {
   renderItem: (item: T) => React.ReactNode
   renderSelected: (selected: T[]) => React.ReactNode
   onSelect: (items: T[]) => void
+  keyExtractor?: (item: T) => string | number
   width?: string
   renderFooter?: () => React.ReactNode
   isSearchable?: boolean
@@ -21,6 +22,7 @@ export const MultiSelectDropdown = <T,>({
   renderItem,
   renderSelected,
   onSelect,
+  keyExtractor,
   width = "100%",
   renderFooter,
   isSearchable = false,
@@ -30,6 +32,13 @@ export const MultiSelectDropdown = <T,>({
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const isItemSelected = (item: T) => {
+    if (keyExtractor) {
+      return selected.some(s => keyExtractor(s) === keyExtractor(item))
+    }
+    return selected.includes(item)
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -48,9 +57,9 @@ export const MultiSelectDropdown = <T,>({
   }, [])
 
   const handleItemClick = (item: T) => {
-    const isSelected = selected.includes(item)
+    const isSelected = isItemSelected(item)
     const newSelected = isSelected
-      ? selected.filter((i) => i !== item)
+      ? selected.filter((i) => keyExtractor ? keyExtractor(i) !== keyExtractor(item) : i !== item)
       : [...selected, item]
     onSelect(newSelected)
   }
@@ -120,12 +129,12 @@ export const MultiSelectDropdown = <T,>({
         <div className="absolute w-full border border-gray-200 mt-1 bg-white z-50 max-h-48 overflow-y-auto rounded shadow-lg">
           {filteredItems.map((item, i) => (
             <div
-              key={i}
+              key={keyExtractor ? String(keyExtractor(item)) : i}
               onClick={() => handleItemClick(item)}
               className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-ellipsis overflow-hidden flex items-center gap-2 text-gray-700 transition-colors"
             >
               <div className="w-4 h-4 flex items-center justify-center">
-                {selected.includes(item) && <Check size={14} className="text-emerald-600" />}
+                {isItemSelected(item) && <Check size={14} className="text-emerald-600" />}
               </div>
               {renderItem(item)}
             </div>

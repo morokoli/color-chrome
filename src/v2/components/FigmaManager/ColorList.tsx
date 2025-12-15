@@ -1,5 +1,5 @@
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { X } from "lucide-react"
+import { X, Check, Trash2 } from "lucide-react"
 
 interface ColorListProps {
   colors: ColorItem[]
@@ -35,92 +35,114 @@ export const ColorList = ({
   onRemoveColor,
   handleManualslash_namingChange,
 }: ColorListProps) => {
+  const allSelected = activeColors.length === colors.length && colors.length > 0
+
   return (
-    <>
+    <div className="space-y-2">
       {colors.length > 0 && (
-        <div className={`flex p-1 justify-between items-center`}>
-          <input
-            type="checkbox"
-            checked={activeColors.length > 0}
-            className="mr-2"
-            onChange={() => {
-              onCheckboxClick(colors.length)
-            }}
-          />
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
           <button
-            className="border p-2 ml-2"
+            onClick={() => onCheckboxClick(colors.length)}
+            className={`flex items-center gap-2 px-2 py-1 text-[11px] rounded transition-colors ${
+              allSelected
+                ? 'bg-gray-900 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <Check size={12} />
+            {allSelected ? 'Deselect All' : 'Select All'}
+          </button>
+          <button
+            className="flex items-center gap-1 px-2 py-1 text-[11px] text-red-600 hover:bg-red-50 rounded transition-colors"
             onClick={() => clearColors()}
           >
-            <X size={16} />
+            <Trash2 size={12} />
+            Clear
           </button>
         </div>
       )}
-      {Array.isArray(colors) &&
-        colors.map((item, i) => {
-          const isDuplicate = !!item.animated && item.animated >= 1
-          return (
-            <div
-              key={item.color.hex + i}
-              className={`flex items-center p-1 animate-highlight`}
-              style={{
-                animation: isDuplicate
-                  ? "highlight 2s ease-in-out infinite"
-                  : "none",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={activeColors.includes(i)}
-                className="mr-2"
-                onChange={() => onCheckboxClick(i)}
-              />
-              <Tooltip.Provider>
-                <Tooltip.Root>
-                  <Tooltip.Trigger asChild>
-                    <div
-                      className="w-8 h-8 border mr-2"
-                      style={{ backgroundColor: item.color.hex }}
-                    />
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className="bg-white rounded-md shadow-lg p-2 text-sm"
-                      sideOffset={5}
-                    >
-                      <div className="flex flex-col gap-1">
-                        <div className="font-medium">Color Information</div>
-                        <div>Hex: {item.color.hex}</div>
-                        {item.color.rgb && <div>RGB: {item.color.rgb}</div>}
-                        {item.color.hsl && <div>HSL: {item.color.hsl}</div>}
-                        {item.color.additionalColumns &&
-                          item.color.additionalColumns.map((column) => (
-                            <div key={column.name}>
-                              {column.name}: {column.value}
-                            </div>
-                          ))}
-                      </div>
-                      <Tooltip.Arrow className="fill-white" />
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-              <input
-                type="text"
-                className="border p-2 flex-grow bg-gray-100 rounded"
-                value={item.slash_naming || "No slash_naming"}
-                onChange={(e) =>
-                  handleManualslash_namingChange(i, e.target.value)
-                }
-              />
-              <button
-                className="border p-2 ml-2"
-                onClick={() => onRemoveColor(item.color.hex)}
+
+      <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+        {Array.isArray(colors) &&
+          colors.map((item, i) => {
+            const isDuplicate = !!item.animated && item.animated >= 1
+            const isSelected = activeColors.includes(i)
+            return (
+              <div
+                key={item.color.hex + i}
+                className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${
+                  isSelected
+                    ? 'border-gray-300 bg-gray-50'
+                    : 'border-gray-100 hover:border-gray-200'
+                }`}
+                style={{
+                  animation: isDuplicate
+                    ? "highlight 2s ease-in-out infinite"
+                    : "none",
+                }}
               >
-                <X size={16} />
-              </button>
-            </div>
-          )
-        })}
-    </>
+                <button
+                  onClick={() => onCheckboxClick(i)}
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    isSelected
+                      ? 'bg-gray-900 border-gray-900'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {isSelected && <Check size={12} className="text-white" />}
+                </button>
+
+                <Tooltip.Provider>
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <div
+                        className="w-9 h-9 rounded-md border border-gray-200 flex-shrink-0 cursor-pointer shadow-sm"
+                        style={{ backgroundColor: item.color.hex }}
+                      />
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-white rounded-lg shadow-lg p-3 text-[11px] border border-gray-100"
+                        sideOffset={5}
+                      >
+                        <div className="flex flex-col gap-1">
+                          <div className="font-medium text-gray-900 mb-1">Color Info</div>
+                          <div className="text-gray-600">Hex: <span className="font-mono">{item.color.hex}</span></div>
+                          {item.color.rgb && <div className="text-gray-600">RGB: <span className="font-mono">{item.color.rgb}</span></div>}
+                          {item.color.hsl && <div className="text-gray-600">HSL: <span className="font-mono">{item.color.hsl}</span></div>}
+                          {item.color.additionalColumns &&
+                            item.color.additionalColumns.map((column) => (
+                              <div key={column.name} className="text-gray-600">
+                                {column.name}: {column.value}
+                              </div>
+                            ))}
+                        </div>
+                        <Tooltip.Arrow className="fill-white" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+
+                <input
+                  type="text"
+                  className="flex-grow px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white focus:outline-none focus:border-gray-400 transition-colors"
+                  placeholder="Color name..."
+                  value={item.slash_naming || ""}
+                  onChange={(e) =>
+                    handleManualslash_namingChange(i, e.target.value)
+                  }
+                />
+
+                <button
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                  onClick={() => onRemoveColor(item.color.hex)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )
+          })}
+      </div>
+    </div>
   )
 }

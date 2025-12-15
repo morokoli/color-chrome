@@ -7,7 +7,6 @@ import { ToastContext } from "@/v2/context/toastContext"
 import { getAuthCookie } from "@/v2/helpers/cookie"
 import { Auth } from "@/v2/helpers/auth"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import useEyeDropper from "use-eye-dropper"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
@@ -28,7 +27,6 @@ const App = () => {
   const [toastState, toastDispatch] = useReducer(toastReducer, initToastState)
   const [tab, setTab] = useState<string | null>(null)
   const [selected, setSelected] = useState<null | string>(null)
-  const { open: openEyeDropper } = useEyeDropper()
 
   // Helper to save color to Google Sheets
   const saveColorToSheet = useCallback(async (hexColor: string, source: string) => {
@@ -69,40 +67,73 @@ const App = () => {
     }
   }, [state])
 
-  const handlePickColor = async () => {
-    // Hide the menu while picking
-    setTab("PICKING")
+  // Handle picked color from custom magnifier
+  const handlePickedColor = useCallback((pickedColor: string) => {
+    dispatch({ type: "SET_COLOR", payload: pickedColor })
+    dispatch({ type: "ADD_COLOR_HISTORY", payload: pickedColor })
 
-    try {
-      // Get current tab URL before picking
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
-      const currentUrl = tabs[0]?.url || "Picked Color"
+    // Add to file color history if a file is selected
+    if (state.selectedFile) {
+      dispatch({
+        type: "ADD_FILE_COLOR_HISTORY",
+        payload: {
+          spreadsheetId: state.selectedFile,
+          color: pickedColor,
+        },
+      })
 
-      const result = await openEyeDropper()
-      const pickedColor = result.sRGBHex
-      dispatch({ type: "SET_COLOR", payload: pickedColor })
-      dispatch({ type: "ADD_COLOR_HISTORY", payload: pickedColor })
-
-      // Add to file color history if a file is selected
-      if (state.selectedFile) {
-        dispatch({
-          type: "ADD_FILE_COLOR_HISTORY",
-          payload: {
-            spreadsheetId: state.selectedFile,
-            color: pickedColor,
-          },
-        })
-
-        // Save to Google Sheets in background (fire-and-forget)
+      // Get current tab URL and save to sheet
+      chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
+        const currentUrl = tabs[0]?.url || "Picked Color"
         saveColorToSheet(pickedColor, currentUrl)
-      }
-
-      // Navigate to Pick Color panel after picking
-      setTab("PICK_PANEL")
-    } catch {
-      // User cancelled the picker - go back to menu
-      setTab(null)
+      })
     }
+
+    // Don't navigate - the on-page panel shows the results
+  }, [state.selectedFile, saveColorToSheet])
+
+  // Listen for picked color from magnifier
+  useEffect(() => {
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes.pickedColor?.newValue) {
+        handlePickedColor(changes.pickedColor.newValue)
+        chrome.storage.local.remove(['pickedColor', 'pickedAt'])
+      }
+      if (changes.pickerCancelled?.newValue) {
+        setTab(null)
+        chrome.storage.local.remove(['pickerCancelled', 'cancelledAt'])
+      }
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChange)
+
+    // Check for pending color on mount (30 second window)
+    chrome.storage.local.get(['pickedColor', 'pickedAt', 'openTab'], (result) => {
+      if (result.pickedColor && result.pickedAt && Date.now() - result.pickedAt < 30000) {
+        handlePickedColor(result.pickedColor)
+        chrome.storage.local.remove(['pickedColor', 'pickedAt'])
+      }
+      // Check if we should open a specific tab
+      if (result.openTab) {
+        setTab(result.openTab)
+        chrome.storage.local.remove(['openTab'])
+      }
+    })
+
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange)
+  }, [handlePickedColor])
+
+  const handlePickColor = async () => {
+    // Start the custom magnifier picker
+    chrome.runtime.sendMessage({ type: 'START_COLOR_PICKER' }, (response) => {
+      if (response?.error) {
+        console.error('Picker error:', response.error)
+        setTab(null)
+      } else {
+        // Close popup so it doesn't appear in screenshot
+        window.close()
+      }
+    })
   }
 
   const copyToClipboard = (text: string, selection: null | string) => {
@@ -143,6 +174,25 @@ const App = () => {
       })
     }, 1000)
   }, [])
+
+  // Sync state to chrome.storage.local for background script access
+  useEffect(() => {
+    const { user, selectedFile, files } = state
+    const selectedFileData = files.find(file => file.spreadsheetId === selectedFile)
+
+    const colorPickerState = {
+      jwtToken: user?.jwtToken || null,
+      selectedFile: selectedFile || null,
+      selectedFileData: selectedFileData ? {
+        spreadsheetId: selectedFileData.spreadsheetId,
+        sheetName: selectedFileData.sheets?.[0]?.name || '',
+        sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
+      } : null,
+      apiUrl: config.api.baseURL,
+    }
+
+    chrome.storage.local.set({ colorPickerState })
+  }, [state.user, state.selectedFile, state.files])
 
   return (
     <QueryClientProvider client={queryClient}>

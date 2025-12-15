@@ -76,4 +76,14 @@ export const colors = {
     const lightness = c.getBrightness()
     return lightness < 128
   },
+
+  rgbToHex(rgb: string): string {
+    const c = tinycolor(rgb)
+    return c.isValid() ? c.toHexString() : '#000000'
+  },
+
+  hslToHex(hsl: string): string {
+    const c = tinycolor(hsl)
+    return c.isValid() ? c.toHexString() : '#000000'
+  },
 }

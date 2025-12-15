@@ -614,12 +614,7 @@ const Right = ({
 
   return (
     <div className="relative overflow-visible p-3">
-      <div
-        className="flex mb-3 gap-2 grid"
-        style={{
-          gridTemplateColumns: selectedFiles.length > 0 ? "1fr 1fr" : "1fr",
-        }}
-      >
+      <div className="flex flex-col mb-3 gap-2">
         <AccountDropdown
           selectedAccount={selectedAccount}
           accounts={accounts}
@@ -650,6 +645,7 @@ const Right = ({
           selected={selectedFiles}
           items={files}
           onSelect={(newSelected) => setSelectedFiles(newSelected)}
+          keyExtractor={(file: FigmaFile) => file?.key}
           renderItem={(file: FigmaFile) => file?.name}
           renderSelected={(selected: FigmaFile[]) => {
             if (selected.length === 0) return "Select Files"

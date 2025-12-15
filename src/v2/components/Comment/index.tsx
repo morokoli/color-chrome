@@ -6,7 +6,7 @@ import { colors } from '@/v2/helpers/colors'
 import { config } from '@/v2/others/config'
 import { useAPI } from '@/v2/hooks/useAPI'
 import { useUpsertColors } from '@/v2/api/sheet.api'
-import { ArrowLeft, Trash2, Copy, Check, Plus, X, Link } from 'lucide-react'
+import { ArrowLeft, Trash2, Copy, Check, Plus, X, Link, ExternalLink } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { HexColorPicker } from 'react-colorful'
 
@@ -430,9 +430,17 @@ const Comment: FC<Props> = ({ setTab }) => {
             {/* RGB */}
             <div className="flex items-center gap-1">
               <span className="w-7 text-[9px] text-gray-400">RGB</span>
-              <div className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded bg-gray-50">
-                {colors.hexToRGB(editingColor)}
-              </div>
+              <input
+                type="text"
+                value={colors.hexToRGB(editingColor)}
+                onChange={(e) => {
+                  const hex = colors.rgbToHex(e.target.value)
+                  if (hex !== '#000000' || e.target.value.includes('0, 0, 0')) {
+                    handleColorChange(hex)
+                  }
+                }}
+                className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+              />
               <button
                 onClick={() => handleCopy(colors.hexToRGB(editingColor), 'rgb')}
                 className="p-0.5 hover:bg-gray-100 rounded transition-colors"
@@ -448,9 +456,17 @@ const Comment: FC<Props> = ({ setTab }) => {
             {/* HSL */}
             <div className="flex items-center gap-1">
               <span className="w-7 text-[9px] text-gray-400">HSL</span>
-              <div className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded bg-gray-50">
-                {colors.hexToHSL(editingColor)}
-              </div>
+              <input
+                type="text"
+                value={colors.hexToHSL(editingColor)}
+                onChange={(e) => {
+                  const hex = colors.hslToHex(e.target.value)
+                  if (hex !== '#000000' || e.target.value.includes('0, 0%, 0%')) {
+                    handleColorChange(hex)
+                  }
+                }}
+                className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+              />
               <button
                 onClick={() => handleCopy(colors.hexToHSL(editingColor), 'hsl')}
                 className="p-0.5 hover:bg-gray-100 rounded transition-colors"
@@ -486,27 +502,26 @@ const Comment: FC<Props> = ({ setTab }) => {
           {/* Local Color Grid */}
           <div className="mt-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] text-gray-500">Colors</span>
-              <div className="flex items-center gap-2">
-                {colorHistory.length > 0 && (
-                  selectedColorIndices.length === colorHistory.length ? (
-                    <button
-                      onClick={handleDeselectAll}
-                      className="text-[10px] text-gray-500 hover:text-gray-700"
-                    >
-                      Deselect all
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleSelectAll}
-                      className="text-[10px] text-gray-500 hover:text-gray-700"
-                    >
-                      Select all
-                    </button>
-                  )
-                )}
-                <span className="text-[10px] text-gray-400">{selectedColorIndices.length}/{colorHistory.length}</span>
-              </div>
+              {colorHistory.length > 0 ? (
+                selectedColorIndices.length === colorHistory.length ? (
+                  <button
+                    onClick={handleDeselectAll}
+                    className="text-[12px] text-gray-600 hover:text-gray-800"
+                  >
+                    Deselect all
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-[12px] text-gray-600 hover:text-gray-800"
+                  >
+                    Select all
+                  </button>
+                )
+              ) : (
+                <span />
+              )}
+              <span className="text-[12px] text-gray-500">{selectedColorIndices.length}/{colorHistory.length}</span>
             </div>
             <div className="grid gap-[3px] p-[5px] border border-gray-200 rounded min-h-[70px] max-h-[110px] overflow-y-auto overflow-x-hidden" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(24px, 1fr))' }}>
               {colorHistory.length === 0 ? (
@@ -551,7 +566,18 @@ const Comment: FC<Props> = ({ setTab }) => {
         <div className="flex-1 p-3">
           {/* Sheet Selector */}
           <div className="mb-3">
-            <div className="text-[11px] text-gray-500 mb-2">Save to Sheet</div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] text-gray-500">Save to</span>
+              {selectedFile && (
+                <button
+                  onClick={() => window.open(`${config.spreadsheet.baseURL}${selectedFile}`, '_blank')}
+                  className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  title="Open sheet in new tab"
+                >
+                  <ExternalLink size={12} />
+                </button>
+              )}
+            </div>
             <Select
               isComment
               setTab={setTab}
@@ -578,14 +604,19 @@ const Comment: FC<Props> = ({ setTab }) => {
                 <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
                   <div className="flex flex-wrap gap-1 items-center">
                     {slashParts.map((part, idx) => (
-                      <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 text-[11px] rounded">
-                        {part}
-                        <button
-                          onClick={() => setSlashParts(slashParts.filter((_, i) => i !== idx))}
-                          className="ml-0.5 text-gray-400 hover:text-gray-600"
-                        >
-                          <X size={10} />
-                        </button>
+                      <span key={idx} className="inline-flex items-center">
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 text-[11px] rounded">
+                          {part}
+                          <button
+                            onClick={() => setSlashParts(slashParts.filter((_, i) => i !== idx))}
+                            className="ml-0.5 text-gray-400 hover:text-gray-600"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                        {idx < slashParts.length - 1 && (
+                          <span className="mx-1 text-gray-400 text-[11px]">/</span>
+                        )}
                       </span>
                     ))}
                     {slashParts.length < 4 && (
@@ -650,7 +681,7 @@ const Comment: FC<Props> = ({ setTab }) => {
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="Comment"
                   rows={2}
-                  className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-none"
+                  className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-y min-h-[60px]"
                 />
 
                 {/* Priority Slider */}

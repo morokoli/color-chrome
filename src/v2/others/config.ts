@@ -1,4 +1,7 @@
 export const config = {
+  spreadsheet: {
+    baseURL: import.meta.env.VITE_SPREADSHEET_URL || "https://docs.google.com/spreadsheets/d/",
+  },
   cookie: {
     cookieNameAuth: "auth.user",
     cookieNameSheetFileData: "sheet.file.data",
