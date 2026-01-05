@@ -24,6 +24,4 @@ dist/
 *.sw?
 
 # environment
-.env.development
-.env.production
-.env
+config.bat
