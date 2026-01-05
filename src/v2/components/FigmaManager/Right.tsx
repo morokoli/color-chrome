@@ -459,33 +459,23 @@ const Right = ({
   }
 
   const connectFigmaAccount = async () => {
-    const figmaLoginWindow = await window.open(
-      `${config.api.baseURL}${config.api.endpoints.figmaAuth}`,
-      "Figma Sign-in",
-      "width=1000,height=700",
-    )
+    const url = `${config.api.baseURL}${config.api.endpoints.figmaAuth}`
+    const tab = await chrome.tabs.create({ url })
 
-    const loginPromise = new Promise((resolve) => {
-      const interval = setInterval(() => {
-        if (figmaLoginWindow?.closed) {
-          clearInterval(interval)
-          chrome.cookies
-            .get({
-              name: config.cookie.cookieNameFigmaJwt,
-              url: config.api.baseURL,
-            })
-            .then((res) => {
-              resolve(res?.value)
-            })
+    const onTabRemoved = async (tabId: number) => {
+      if (tabId === tab.id) {
+        chrome.tabs.onRemoved.removeListener(onTabRemoved)
+        const cookie = await chrome.cookies.get({
+          name: config.cookie.cookieNameFigmaJwt,
+          url: config.api.baseURL,
+        })
+        if (cookie?.value) {
+          await bindAccount()
         }
-      }, 1000)
-    })
-
-    loginPromise.then(async (res) => {
-      if (res) {
-        await bindAccount()
       }
-    })
+    }
+
+    chrome.tabs.onRemoved.addListener(onTabRemoved)
   }
 
   useEffect(() => {
