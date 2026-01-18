@@ -64,9 +64,9 @@ export type RemoveAdditionalColumnResponse = {
 }
 
 export type AddColorRequest = {
-  spreadsheetId: string
-  sheetName: string
-  sheetId: number
+  spreadsheetId?: string
+  sheetName?: string
+  sheetId?: number
   row: {
     timestamp: number
     url: string
