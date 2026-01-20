@@ -12,6 +12,8 @@ import {
   ExternalLink,
   Figma,
   PanelTop,
+  Palette,
+  Edit3,
 } from "lucide-react"
 
 interface Props {
@@ -31,8 +33,10 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
     { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
     { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
     { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
+    { title: "Generator", icon: Palette, menuName: "GENERATOR" },
     { title: "History & Editor", icon: History, menuName: "COMMENT" },
     { title: "Figma", icon: Figma, menuName: "FIGMA_MANAGER" },
+    { title: "Bulk Editor", icon: Edit3, menuName: "BULK_EDITOR" },
     { title: "Copy", icon: Copy, menuName: "COPY" },
     { title: "Sheet Manager", icon: FileSpreadsheet, menuName: "ADD_SHEET" },
   ]

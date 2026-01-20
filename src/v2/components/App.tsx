@@ -19,6 +19,8 @@ import { Show } from "./common/Show"
 import AiGenerator from "./AIGenerator"
 import FigmaManager from "./FigmaManager"
 import { PageColorExtraction } from "./PageColorExtraction"
+import Generator from "./Generator"
+import BulkEditor from "./BulkEditor"
 
 const queryClient = new QueryClient()
 
@@ -240,6 +242,12 @@ const App = () => {
           </Show>
           <Show if={tab === "COLOR_EXTRACTION"}>
             <PageColorExtraction setTab={setTab} />
+          </Show>
+          <Show if={tab === "GENERATOR"}>
+            <Generator setTab={setTab} />
+          </Show>
+          <Show if={tab === "BULK_EDITOR"}>
+            <BulkEditor setTab={setTab} />
           </Show>
         </ExtensionContainer>
         </ToastContext.Provider>
