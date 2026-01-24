@@ -7,14 +7,13 @@ import {
   History,
   Copy,
   FileSpreadsheet,
-  LogOut,
   LogIn,
-  ExternalLink,
   Figma,
   PanelTop,
   Palette,
   Edit3,
 } from "lucide-react"
+import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
 
 interface Props {
   setTab: (tab: string | null) => void
@@ -29,85 +28,106 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
     dispatch({ type: "RESET_STATE" })
   }
 
-  const menuItems = [
-    { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
-    { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
-    { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
-    { title: "Generator", icon: Palette, menuName: "GENERATOR" },
-    { title: "History & Editor", icon: History, menuName: "COMMENT" },
-    { title: "Figma", icon: Figma, menuName: "FIGMA_MANAGER" },
-    { title: "Bulk Editor", icon: Edit3, menuName: "BULK_EDITOR" },
-    { title: "Copy", icon: Copy, menuName: "COPY" },
-    { title: "Sheet Manager", icon: FileSpreadsheet, menuName: "ADD_SHEET" },
+  // Organized menu sections
+  const menuSections = [
+    {
+      title: "Color Actions",
+      items: [
+        { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
+        { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
+        { title: "Generate Palette", icon: Palette, menuName: "GENERATOR" },
+        { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
+      ],
+    },
+    {
+      title: null, // No header for general actions
+      items: [
+        { title: "Copy", icon: Copy, menuName: "COPY" },
+        { title: "History & Editor", icon: History, menuName: "COMMENT" },
+        { title: "Bulk Editor", icon: Edit3, menuName: "BULK_EDITOR" },
+      ],
+    },
+    {
+      title: "Integration",
+      items: [
+        { title: "Figma", icon: Figma, menuName: "FIGMA_MANAGER" },
+      ],
+    },
+    {
+      title: "Export to",
+      items: [
+        { title: "Sheet", icon: FileSpreadsheet, menuName: "ADD_SHEET" },
+      ],
+    },
   ]
 
   const logInHandler = () => {
     setTab("ADD_SHEET")
   }
 
-  const openFileHandler = () => {
-    const fileUrl =
-      "https://docs.google.com/spreadsheets/d/" + state.selectedFile
-    window.open(fileUrl, "_blank")
-  }
-
-  // Get selected file name
-  const selectedFileName = state.files.find(
-    (f) => f.spreadsheetId === state.selectedFile
-  )?.fileName
-
   return (
-    <div className="w-[200px] bg-white rounded-md shadow-sm border border-gray-200">
-      {/* Menu Items */}
-      <div className="py-1">
-        {menuItems.map((item) => {
-          const Icon = item.icon
-          return (
-            <button
-              key={item.title}
-              onClick={() => item.action ? item.action() : setTab(item.menuName!)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-100 transition-colors cursor-pointer"
-            >
-              {Icon && <Icon className="w-4 h-4 text-gray-600" />}
-              <span className="text-[13px] text-gray-800">{item.title}</span>
-            </button>
-          )
-        })}
+    <div className="w-[300px] p-4 bg-white rounded-md shadow-sm border border-gray-200">
+      {/* Menu Sections */}
+      <div className="py-1 mb-2">
+        {menuSections.map((section, sectionIndex) => (
+          <div key={sectionIndex}>
+            {section.title && (
+              <div className="mb-[4px] px-4">
+                <p className="text-[15px] text-[#7D7D7D]">
+                  {section.title}
+                </p>
+              </div>
+            )}
+            <div className="flex flex-col">
+              {section.items.map((item) => {
+                const Icon = item.icon
+                return (
+                  <button
+                    key={item.title}
+                    onClick={() => item.action ? item.action() : setTab(item.menuName!)}
+                    className="w-full flex items-center px-4 gap-2.5 py-1.5 text-left hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    {Icon && <Icon className="w-4 h-4 text-gray-600" />}
+                    <span className="text-[13px] text-gray-800">{item.title}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {sectionIndex < menuSections.length - 1 && (
+              <div className="h-px bg-[#9B9B9B] my-2 mx-4" />
+            )}
+          </div>
+        ))}
       </div>
 
-      {/* Selected Sheet Display */}
-      {state.selectedFile && (
-        <>
-          <div className="h-px bg-gray-200" />
-          <div className="px-3 py-2">
-            <p className="text-[10px] text-gray-400 mb-1">Saving to</p>
-            <button
-              onClick={openFileHandler}
-              className="w-full flex items-center justify-between text-left group"
-            >
-              <span className="text-[12px] text-gray-700 truncate max-w-[150px]">
-                {selectedFileName || "Sheet"}
-              </span>
-              <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-gray-600" />
-            </button>
-          </div>
-        </>
+      {/* Folder/Sheet Selector */}
+      {state.user && (
+        <FolderSheetSelector
+          selectedFolders={state.selectedFolders || []}
+          selectedSheets={state.selectedSheets || []}
+          files={state.files}
+          onFoldersChange={(folderIds) => {
+            dispatch({ type: "SET_SELECTED_FOLDERS", payload: folderIds })
+          }}
+          onSheetsChange={(sheetIds) => {
+            dispatch({ type: "SET_SELECTED_SHEETS", payload: sheetIds })
+          }}
+          userToken={state.user?.jwtToken}
+        />
       )}
 
       {/* Auth Button */}
-      <div className="h-px bg-gray-200" />
       {state.user ? (
         <button
           onClick={logOutHandler}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[16px] text-[#CC0000] transition-colors"
         >
-          <LogOut className="w-3 h-3" />
           Log Out
         </button>
       ) : (
         <button
           onClick={logInHandler}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[16px] text-gray-700 hover:bg-gray-50 transition-colors"
         >
           <LogIn className="w-3 h-3" />
           Log In

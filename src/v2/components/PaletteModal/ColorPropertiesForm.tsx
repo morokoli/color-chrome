@@ -1,17 +1,26 @@
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
 import { Plus, X } from "lucide-react"
+import { MultiSelectDropdown } from "@/v2/components/FigmaManager/MultiSelectDropdown"
+import { useGetFolders } from "@/v2/api/folders.api"
+import { useGlobalState } from "@/v2/hooks/useGlobalState"
 
 interface ColorPropertiesFormProps {
   selectedColor: any
   onColorChange: (color: any) => void
   colorPickerIndex: number | null
+  selectedFolderIds: string[]
+  onFolderChange: (folderIds: string[]) => void
 }
 
 const ColorPropertiesForm = ({
   selectedColor,
   onColorChange,
   colorPickerIndex,
+  selectedFolderIds,
+  onFolderChange,
 }: ColorPropertiesFormProps) => {
+  const { state } = useGlobalState()
+  const { data: foldersData } = useGetFolders(false)
   if (colorPickerIndex === null) {
     return (
       <div className="text-center py-5 text-gray-500">
@@ -31,6 +40,27 @@ const ColorPropertiesForm = ({
       [property]: value,
     }
     onColorChange(updatedColor)
+  }
+
+  const handleNameChange = (value: string) => {
+    // If name contains slashes, extract first part as name and full string as slash_naming
+    if (value.includes("/")) {
+      const firstPart = value.split("/")[0].trim()
+      const updatedColor = {
+        ...colorObject,
+        name: firstPart || value, // Use first part as name, fallback to full value if empty
+        slash_naming: value, // Full string with slashes as slash_naming
+      }
+      onColorChange(updatedColor)
+    } else {
+      // No slashes, just update name and clear slash_naming
+      const updatedColor = {
+        ...colorObject,
+        name: value,
+        slash_naming: value, // Use the name itself as slash_naming when no slashes
+      }
+      onColorChange(updatedColor)
+    }
   }
 
   const handleTagChange = (tags: string[]) => {
@@ -91,30 +121,66 @@ const ColorPropertiesForm = ({
 
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ marginBottom: "24px" }}>
+      {/* Saving to Dropdown */}
+      {state.user?.jwtToken && (
+        <div style={{ marginBottom: "12px" }}>
+          <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
+            Saving to
+          </label>
+          {foldersData?.folders && foldersData.folders.length > 0 ? (
+            <MultiSelectDropdown<string>
+              selected={selectedFolderIds}
+              items={foldersData.folders.map(f => f._id)}
+              keyExtractor={(folderId) => folderId}
+              renderItem={(folderId) => {
+                const folder = foldersData.folders.find(f => f._id === folderId)
+                return folder?.name || folderId
+              }}
+              renderSelected={(selected) => {
+                if (selected.length === 0) return "Select folders"
+                if (selected.length === 1) {
+                  const folder = foldersData.folders.find(f => f._id === selected[0])
+                  return folder?.name || selected[0]
+                }
+                return `${selected.length} folders selected`
+              }}
+              onSelect={(folderIds) => onFolderChange(folderIds)}
+              placeholder="Select folders"
+              width="100%"
+              isSearchable
+              checkboxAtEnd={true}
+            />
+          ) : (
+            <div style={{ fontSize: "12px", color: "#999", padding: "8px 0" }}>
+              No folders available. Create a folder first.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Name
         </label>
         <input
           type="text"
-          value={colorObject.name || ""}
-          onChange={(e) => handlePropertyChange("name", e.target.value)}
-          placeholder="Enter color name"
+          value={colorObject.slash_naming || colorObject.name || ""}
+          onChange={(e) => handleNameChange(e.target.value)}
+          placeholder="e,g., Brand Color/Primary/Blue 01"
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
+        <p style={{ fontSize: "12px", color: "#9B9B9B", marginTop: "4px" }}>
+        Use / to create nested groups (e.g., Colors/Brand/Primary)
+        </p>
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           URL
         </label>
@@ -125,19 +191,15 @@ const ColorPropertiesForm = ({
           placeholder="Enter color URL"
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Ranking
         </label>
@@ -151,19 +213,15 @@ const ColorPropertiesForm = ({
           }
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Google Sheet URL
         </label>
@@ -174,19 +232,15 @@ const ColorPropertiesForm = ({
           placeholder="https://docs.google.com/spreadsheets/d/..."
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Comments
         </label>
@@ -197,45 +251,16 @@ const ColorPropertiesForm = ({
           placeholder="Enter comments about this color"
           style={{
             width: "100%",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
             resize: "vertical",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
-        <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
-          Slash Naming
-        </label>
-        <input
-          type="text"
-          value={colorObject.slash_naming || ""}
-          onChange={(e) => handlePropertyChange("slash_naming", e.target.value)}
-          placeholder="Enter slash naming (e.g. a/b/c)"
-          style={{
-            width: "100%",
-            height: "32px",
-            padding: "4px 11px",
-            fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
-            outline: "none",
-          }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
-        />
-        <p style={{ fontSize: "12px", color: "#999", marginTop: "4px" }}>
-          Format: a/b/c, no spaces, max 3 "/"
-        </p>
-      </div>
-
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Tags
         </label>
@@ -252,15 +277,11 @@ const ColorPropertiesForm = ({
           placeholder="Enter tags (comma separated, max 3)"
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
         {colorObject?.tags && colorObject.tags.length > 0 && (
           <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
@@ -316,15 +337,11 @@ const ColorPropertiesForm = ({
               }
               style={{
                 width: "120px",
-                height: "32px",
-                padding: "4px 11px",
+                padding: "12px 16px",
                 fontSize: "14px",
-                border: "1px solid #d9d9d9",
-                borderRadius: "6px",
+                backgroundColor: "#F5F5F5",
                 outline: "none",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-              onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
             />
             <input
               type="text"
@@ -335,15 +352,11 @@ const ColorPropertiesForm = ({
               }
               style={{
                 flex: 1,
-                height: "32px",
-                padding: "4px 11px",
+                padding: "12px 16px",
                 fontSize: "14px",
-                border: "1px solid #d9d9d9",
-                borderRadius: "6px",
+                backgroundColor: "#F5F5F5",
                 outline: "none",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-              onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
             />
             <button
               onClick={() => removeAdditionalColumn(index)}

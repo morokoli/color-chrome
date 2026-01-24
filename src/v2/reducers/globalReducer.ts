@@ -11,6 +11,8 @@ const initState: GlobalState = {
   parsedData: [],
   colorHistory: [],
   selectedFile: null,
+  selectedFolders: [],
+  selectedSheets: [],
   selectedColorsFromFile: [],
 } as const
 
@@ -79,6 +81,8 @@ export type Action =
       type: "UPDATE_SELECTED_COLOR_slash_naming"
       payload: { colors: number[]; slash_naming: string }
     }
+  | { type: "SET_SELECTED_FOLDERS"; payload: string[] }
+  | { type: "SET_SELECTED_SHEETS"; payload: string[] }
 
 export function globalReducer(state: GlobalState, action: Action): GlobalState {
   switch (action.type) {
@@ -280,6 +284,16 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
             row.slash_naming = action.payload.slash_naming
           }
         }
+      })
+
+    case "SET_SELECTED_FOLDERS":
+      return produce(state, (draft) => {
+        draft.selectedFolders = action.payload
+      })
+
+    case "SET_SELECTED_SHEETS":
+      return produce(state, (draft) => {
+        draft.selectedSheets = action.payload
       })
 
     default:

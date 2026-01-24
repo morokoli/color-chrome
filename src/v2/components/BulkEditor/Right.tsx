@@ -4,10 +4,11 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
+import { colors } from "@/v2/helpers/colors"
 import { ColorList } from "./ColorList"
 import { SlashNameInputs } from "../FigmaManager/SlashNameInputs"
 import { SelectedColor } from "@/v2/api/folders.api"
-import { FolderSelectionModal } from "./FolderSelectionModal"
+import { SheetSelectionModal } from "./SheetSelectionModal"
 
 const Right = () => {
   const { state } = useGlobalState()
@@ -23,9 +24,47 @@ const Right = () => {
     "",
   ])
   const [tagsInput, setTagsInput] = useState<string>("")
-  const [folderModalOpen, setFolderModalOpen] = useState(false)
-  const [folderActionType, setFolderActionType] = useState<"copy" | "move" | null>(null)
-  const [isLoading, setIsLoading] = useState<"save" | "copy" | "move" | null>(null)
+  const [sheetModalOpen, setSheetModalOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState<"save" | "export" | null>(null)
+
+  // Helper function to merge colors, preserving existing values
+  const mergeColors = (prev: SelectedColor[], newColors: SelectedColor[]): SelectedColor[] => {
+    // If no previous colors, just set the new ones
+    if (prev.length === 0) {
+      return newColors
+    }
+    
+    // Merge new colors with existing, preserving current values
+    return newColors.map(newColor => {
+      // Find matching color in previous state by color ID
+      const existingColor = prev.find(p => p.color._id === newColor.color._id)
+      if (existingColor) {
+        // Merge: keep existing values if new ones are empty/null, otherwise use new values
+        return {
+          ...newColor,
+          color: {
+            ...existingColor.color, // Keep existing
+            ...newColor.color,      // Override with new
+            // Preserve non-empty values - prefer new if it has content, otherwise keep existing
+            slash_naming: (newColor.color.slash_naming && newColor.color.slash_naming.trim()) 
+              ? newColor.color.slash_naming 
+              : (existingColor.color.slash_naming || ""),
+            comments: (newColor.color.comments && newColor.color.comments.trim())
+              ? newColor.color.comments
+              : (existingColor.color.comments || ""),
+            ranking: newColor.color.ranking ?? existingColor.color.ranking ?? 0,
+            tags: (newColor.color.tags && newColor.color.tags.length > 0) 
+              ? newColor.color.tags 
+              : (existingColor.color.tags || []),
+            additionalColumns: (newColor.color.additionalColumns && newColor.color.additionalColumns.length > 0)
+              ? newColor.color.additionalColumns
+              : (existingColor.color.additionalColumns || []),
+          }
+        }
+      }
+      return newColor
+    })
+  }
 
   // Load selected colors from localStorage (set by Left component)
   useEffect(() => {
@@ -44,13 +83,34 @@ const Right = () => {
     loadColors()
 
     // Listen for changes from Left component
+    // Merge new colors with existing to preserve current values
     const handleColorsChanged = (event: CustomEvent) => {
-      setSelectedColors(event.detail.colors)
+      const newColors = event.detail.colors as SelectedColor[]
+      setSelectedColors(prev => mergeColors(prev, newColors))
+    }
+
+    // Listen for folder refresh to update colors with latest data
+    const handleFoldersRefreshed = async () => {
+      // Wait a bit for folders to be refetched
+      setTimeout(() => {
+        const saved = localStorage.getItem('bulk_editor_selected_colors')
+        if (saved) {
+          try {
+            const colors = JSON.parse(saved) as SelectedColor[]
+            // Merge with existing colors to preserve current values
+            setSelectedColors(prev => mergeColors(prev, colors))
+          } catch (e) {
+            console.error('Error updating colors after refresh:', e)
+          }
+        }
+      }, 300)
     }
 
     window.addEventListener('bulk-editor-colors-changed', handleColorsChanged as EventListener)
+    window.addEventListener('bulk-editor-folders-refresh', handleFoldersRefreshed as EventListener)
     return () => {
       window.removeEventListener('bulk-editor-colors-changed', handleColorsChanged as EventListener)
+      window.removeEventListener('bulk-editor-folders-refresh', handleFoldersRefreshed as EventListener)
     }
   }, [])
 
@@ -243,7 +303,7 @@ const Right = () => {
 
     setIsLoading("save")
     try {
-      const promises = selectedColors.map(async (item) => {
+      const promises = selectedColors.map(async (item, index) => {
         const color = item.color
         
         // Handle rgb conversion
@@ -288,23 +348,64 @@ const Right = () => {
             },
           }
         )
-        return response.data
+        return { index, response: response.data, originalItem: item }
       })
 
-      await Promise.all(promises)
+      const results = await Promise.all(promises)
       toast.display("success", `Successfully updated ${selectedColors.length} color(s)`)
       
-      // Invalidate and refetch folders to update the left panel
+      // Update colors immediately with server response data to prevent flickering
+      // The server response contains the updated color data
+      setSelectedColors(prev => {
+        const updated = prev.map((item, index) => {
+          const result = results.find(r => r.index === index)
+          // Handle both response.data.data.color (wrapped) and response.data.color (direct)
+          const serverColor = result?.response?.data?.data?.color || result?.response?.data?.color
+          if (result && serverColor) {
+            // Merge server response with existing to preserve all fields
+            return {
+              ...item,
+              color: {
+                ...item.color, // Keep existing local data
+                ...serverColor, // Override with server data
+                // Ensure critical fields are preserved (prefer server if present and non-empty, otherwise keep existing)
+                slash_naming: (serverColor.slash_naming && serverColor.slash_naming.trim()) 
+                  ? serverColor.slash_naming 
+                  : (item.color.slash_naming || ""),
+                comments: (serverColor.comments && serverColor.comments.trim())
+                  ? serverColor.comments
+                  : (item.color.comments || ""),
+                ranking: serverColor.ranking ?? item.color.ranking ?? 0,
+                tags: (serverColor.tags && serverColor.tags.length > 0)
+                  ? serverColor.tags
+                  : (item.color.tags || []),
+                additionalColumns: (serverColor.additionalColumns && serverColor.additionalColumns.length > 0)
+                  ? serverColor.additionalColumns
+                  : (item.color.additionalColumns || []),
+                // Preserve RGB/HSL structure
+                rgb: serverColor.rgb || item.color.rgb,
+                hsl: serverColor.hsl || item.color.hsl,
+              }
+            }
+          }
+          return item
+        })
+        
+        // Update localStorage with updated state
+        localStorage.setItem('bulk_editor_selected_colors', JSON.stringify(updated))
+        window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
+          detail: { colors: updated }
+        }))
+        
+        return updated
+      })
+      
+      // Invalidate and refetch folders to update the left panel with latest data
       await queryClient.invalidateQueries({ queryKey: ["folders"] })
       
       // Dispatch event to trigger refresh in Left component
+      // The Left component will update the selected colors with the latest data from server
       window.dispatchEvent(new CustomEvent('bulk-editor-folders-refresh'))
-      
-      // Dispatch event to clear selection in Left component
-      window.dispatchEvent(new CustomEvent('bulk-editor-clear-selection'))
-      
-      // Clear selection after save
-      clearColors()
     } catch (error: any) {
       console.error("Error saving colors:", error)
       toast.display("error", error.response?.data?.message || "Failed to save colors")
@@ -313,84 +414,81 @@ const Right = () => {
     }
   }
 
-  const handleCopyToFolder = () => {
+  const handleExportToSheet = () => {
     if (selectedColors.length === 0) {
       toast.display("error", "No colors selected")
       return
     }
-    setFolderActionType("copy")
-    setFolderModalOpen(true)
+    setSheetModalOpen(true)
   }
 
-  const handleMoveToFolder = () => {
-    if (selectedColors.length === 0) {
-      toast.display("error", "No colors selected")
-      return
-    }
-    setFolderActionType("move")
-    setFolderModalOpen(true)
-  }
+  const handleSheetConfirm = async (spreadsheetId: string, sheetId: number, sheetName: string) => {
+    if (selectedColors.length === 0) return
 
-  const handleFolderConfirm = async (folderId: string) => {
-    if (!folderActionType || selectedColors.length === 0) return
-
-    setIsLoading(folderActionType)
+    setIsLoading("export")
     try {
-      if (folderActionType === "copy") {
-        // Copy each color to the folder
-        const promises = selectedColors.map(async (item) => {
-          const response = await axiosInstance.post(
-            `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-            {
-              colorId: item.color._id,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
-              },
-            }
-          )
-          return response.data
-        })
+      // Convert selected colors to the format expected by addMultipleColors
+      const rows = selectedColors.map((item) => {
+        const color = item.color
+        
+        // Handle rgb conversion
+        let rgbValue: string = ''
+        if (typeof color.rgb === 'string') {
+          rgbValue = color.rgb
+        } else if (color.rgb && typeof color.rgb === 'object' && 'r' in color.rgb && 'g' in color.rgb && 'b' in color.rgb) {
+          rgbValue = `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`
+        } else {
+          rgbValue = colors.hexToRGB(color.hex)
+        }
+        
+        // Handle hsl conversion
+        let hslValue: string = ''
+        if (typeof color.hsl === 'string') {
+          hslValue = color.hsl
+        } else if (color.hsl && typeof color.hsl === 'object' && 'h' in color.hsl && 's' in color.hsl && 'l' in color.hsl) {
+          hslValue = `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`
+        } else {
+          hslValue = colors.hexToHSL(color.hex)
+        }
 
-        await Promise.all(promises)
-        toast.display("success", `Successfully copied ${selectedColors.length} color(s) to folder`)
-      } else if (folderActionType === "move") {
-        // Move all colors to the folder (bulk operation)
-        const colorIds = selectedColors.map(item => item.color._id)
-        await axiosInstance.post(
-          `${config.api.endpoints.moveColorsToFolder}/${folderId}/move-colors`,
-          {
-            colorIds,
-            isNotFoldered: false,
+        return {
+          timestamp: Date.now(),
+          url: (color as any).url || "Bulk Editor Export",
+          hex: color.hex,
+          hsl: hslValue,
+          rgb: rgbValue,
+          ranking: (color.ranking || 0).toString(),
+          comments: color.comments || "",
+          slash_naming: color.slash_naming || "",
+          tags: (color.tags || []).join(", "),
+          additionalColumns: (color.additionalColumns || []).map(col => ({
+            name: col.name,
+            value: col.value,
+          })),
+        }
+      })
+
+      await axiosInstance.post(
+        config.api.endpoints.addMultipleColors,
+        {
+          spreadsheetId,
+          sheetName,
+          sheetId,
+          rows,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${state.user?.jwtToken}`,
           },
-          {
-            headers: {
-              Authorization: `Bearer ${state.user?.jwtToken}`,
-            },
-          }
-        )
+        }
+      )
 
-        toast.display("success", `Successfully moved ${selectedColors.length} color(s) to folder`)
-      }
-
-      // Invalidate and refetch folders to update the left panel
-      await queryClient.invalidateQueries({ queryKey: ["folders"] })
+      toast.display("success", `Successfully exported ${selectedColors.length} color(s) to Google Sheet`)
       
-      // Dispatch event to trigger refresh in Left component
-      window.dispatchEvent(new CustomEvent('bulk-editor-folders-refresh'))
-      
-      // Dispatch event to clear selection in Left component
-      window.dispatchEvent(new CustomEvent('bulk-editor-clear-selection'))
-      
-      // Clear right panel selection after copy/move
-      clearColors()
-
-      setFolderModalOpen(false)
-      setFolderActionType(null)
+      setSheetModalOpen(false)
     } catch (error: any) {
-      console.error(`Error ${folderActionType === "copy" ? "copying" : "moving"} colors:`, error)
-      toast.display("error", error.response?.data?.err || error.response?.data?.message || `Failed to ${folderActionType} colors`)
+      console.error("Error exporting colors to sheet:", error)
+      toast.display("error", error.response?.data?.message || "Failed to export colors to sheet")
     } finally {
       setIsLoading(null)
     }
@@ -459,26 +557,15 @@ const Right = () => {
             <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0">
               <div className="flex gap-2">
                 <button
-                  onClick={handleCopyToFolder}
+                  onClick={handleExportToSheet}
                   disabled={isLoading !== null}
                   className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
-                    isLoading === "copy"
+                    isLoading === "export"
                       ? "bg-gray-100 text-gray-400 cursor-wait"
                       : "bg-white hover:bg-gray-50 text-gray-700"
                   }`}
                 >
-                  {isLoading === "copy" ? "Copying..." : "Copy to"}
-                </button>
-                <button
-                  onClick={handleMoveToFolder}
-                  disabled={isLoading !== null}
-                  className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
-                    isLoading === "move"
-                      ? "bg-gray-100 text-gray-400 cursor-wait"
-                      : "bg-white hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  {isLoading === "move" ? "Moving..." : "Move to"}
+                  {isLoading === "export" ? "Exporting..." : "Export to Google Sheet"}
                 </button>
                 <button
                   onClick={handleSaveChanges}
@@ -497,17 +584,14 @@ const Right = () => {
         </>
       )}
 
-      {/* Folder Selection Modal */}
-      <FolderSelectionModal
-        isOpen={folderModalOpen}
+      {/* Sheet Selection Modal */}
+      <SheetSelectionModal
+        isOpen={sheetModalOpen}
         onClose={() => {
-          setFolderModalOpen(false)
-          setFolderActionType(null)
+          setSheetModalOpen(false)
         }}
-        onConfirm={handleFolderConfirm}
-        title={folderActionType === "copy" ? "Copy to Folder" : "Move to Folder"}
-        actionType={folderActionType || "copy"}
-        isLoading={isLoading === "copy" || isLoading === "move"}
+        onConfirm={handleSheetConfirm}
+        isLoading={isLoading === "export"}
       />
     </div>
   )

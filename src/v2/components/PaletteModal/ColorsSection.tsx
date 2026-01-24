@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { CollapsibleBox } from "@/v2/components/CollapsibleBox"
-import { useDrop, useDragLayer } from "react-dnd"
+import { useDrop } from "react-dnd"
 import DraggableColorItem from "./DraggableColorItem"
 
 const MAX_COLORS = 10
-const ITEM_TYPE = "IMPORT_COLOR"
+const IMPORT_COLOR_TYPE = "IMPORT_COLOR"
+const COLOR_TYPE = "COLOR"
 
 interface ColorsSectionProps {
   colors: any[]
@@ -14,6 +15,7 @@ interface ColorsSectionProps {
   onAddColor: (idx: number) => void
   onMoveColor: (dragIndex: number, hoverIndex: number) => void
   onAddColorToPalette: (colorData: any, index: number | null) => void
+  onReplaceColor: (colorData: any, index: number) => void
 }
 
 const ColorsSection = ({
@@ -24,23 +26,118 @@ const ColorsSection = ({
   onAddColor,
   onMoveColor,
   onAddColorToPalette,
+  onReplaceColor,
 }: ColorsSectionProps) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const dropRef = useRef<HTMLDivElement | null>(null)
 
-  const { isImportDragging } = useDragLayer((monitor) => ({
-    isImportDragging: monitor.isDragging() && monitor.getItemType() === ITEM_TYPE,
-  }))
+  // Main drop zone that accepts both COLOR (for reordering) and IMPORT_COLOR (for adding)
+  const [{ isOver }, drop] = useDrop({
+    accept: [IMPORT_COLOR_TYPE, COLOR_TYPE],
+    drop: (item: any, monitor) => {
+      // If nested target already handled drop (e.g., replace on DraggableColorItem) - exit
+      if (monitor.didDrop()) {
+        setIsDragging(false)
+        setHoveredIndex(null)
+        setDragIndex(null)
+        setHoverIndex(null)
+        setIsImporting(false)
+        return
+      }
+
+      setIsDragging(false)
+      setHoveredIndex(null)
+      setDragIndex(null)
+      setHoverIndex(null)
+      setIsImporting(false)
+
+      if (item.type === IMPORT_COLOR_TYPE && onAddColorToPalette && item.colorData) {
+        const insertIndex = hoveredIndex !== null ? hoveredIndex : colors.length
+        onAddColorToPalette(item.colorData, insertIndex)
+      } else if (
+        item.type === COLOR_TYPE &&
+        dragIndex !== null &&
+        hoverIndex !== null &&
+        dragIndex !== hoverIndex
+      ) {
+        onMoveColor(dragIndex, hoverIndex)
+      }
+    },
+    hover: (item: any, monitor) => {
+      setIsDragging(true)
+
+      if (item.type === COLOR_TYPE) {
+        setDragIndex(item.index)
+        setIsImporting(false)
+      } else if (item.type === IMPORT_COLOR_TYPE) {
+        setIsImporting(true)
+      }
+
+      const clientOffset = monitor.getClientOffset()
+      if (!clientOffset) return
+
+      const containerRect = dropRef.current?.getBoundingClientRect()
+      if (!containerRect) return
+
+      const relativeX = clientOffset.x - containerRect.left
+      const containerWidth = containerRect.width
+
+      if (item.type === IMPORT_COLOR_TYPE) {
+        const sectionWidth = containerWidth / colors.length
+        const colorIndex = Math.floor(relativeX / sectionWidth)
+
+        const colorStart = colorIndex * sectionWidth
+        const colorCenter = colorStart + sectionWidth / 2
+        const distanceFromCenter = Math.abs(relativeX - colorCenter)
+
+        // If close to center of a color, don't show drop zone (will trigger replace instead)
+        if (distanceFromCenter < sectionWidth * 0.2) {
+          setHoveredIndex(null)
+          setHoverIndex(null)
+          return
+        }
+      }
+
+      // Normal logic for insertion zones
+      const sectionWidth = containerWidth / colors.length
+      let nextHoverIndex = Math.floor(relativeX / sectionWidth)
+
+      nextHoverIndex = Math.min(Math.max(0, nextHoverIndex), colors.length)
+
+      setHoveredIndex(nextHoverIndex)
+      setHoverIndex(nextHoverIndex)
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver({ shallow: false }),
+    }),
+  })
+
+  // Clean up dragging state when not hovering
+  useEffect(() => {
+    if (!isOver && isDragging) {
+      const timer = setTimeout(() => {
+        setIsDragging(false)
+        setHoveredIndex(null)
+        setDragIndex(null)
+        setHoverIndex(null)
+        setIsImporting(false)
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [isOver, isDragging])
 
   const DropZone = ({ index }: { index: number }) => {
-    const [{ isOver }, drop] = useDrop({
-      accept: [ITEM_TYPE],
+    const [{ isOver: isZoneOver }, zoneDrop] = useDrop({
+      accept: [IMPORT_COLOR_TYPE],
       collect: (monitor) => ({
         isOver: monitor.isOver(),
       }),
       drop: (item: any) => {
-        if (item?.type === ITEM_TYPE && item?.colorData) {
+        if (item?.type === IMPORT_COLOR_TYPE && item?.colorData) {
           onAddColorToPalette(item.colorData, index)
           return { action: "insert", index }
         }
@@ -50,18 +147,18 @@ const ColorsSection = ({
 
     return (
       <div
-        ref={drop}
+        ref={zoneDrop}
         style={{
           width: "20px",
           height: "90px",
-          border: isOver ? "2px dashed #1890ff" : "1px dashed #e0e0e0",
+          border: isZoneOver ? "2px dashed #1890ff" : "1px dashed #e0e0e0",
           borderRadius: "4px",
           margin: "0 2px",
-          display: isImportDragging && colors.length < MAX_COLORS ? "flex" : "none",
+          display: isDragging && colors.length < MAX_COLORS && isImporting ? "flex" : "none",
           alignItems: "center",
           justifyContent: "center",
           transition: "all 0.2s ease",
-          backgroundColor: isOver
+          backgroundColor: isZoneOver
             ? "rgba(24, 144, 255, 0.1)"
             : "rgba(240, 240, 240, 0.3)",
           cursor: "pointer",
@@ -70,7 +167,7 @@ const ColorsSection = ({
         }}
         title={`Drop color here to insert at position ${index + 1}`}
       >
-        {isOver ? (
+        {isZoneOver ? (
           <div
             style={{
               width: "4px",
@@ -102,23 +199,16 @@ const ColorsSection = ({
         </div>
       </CollapsibleBox>
       <div
+        ref={(node) => {
+          drop(node)
+          ;(dropRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+        }}
         style={{
-          border: isDragging ? "2px dashed #1890ff" : "2px dashed transparent",
+          border: isDragging && isOver ? "2px dashed #1890ff" : "2px dashed transparent",
           borderRadius: "8px",
           padding: "8px",
           transition: "border-color 0.2s ease",
-          backgroundColor: isDragging ? "rgba(24, 144, 255, 0.05)" : "transparent",
-        }}
-        onDragOver={(e) => {
-          e.preventDefault()
-          setIsDragging(true)
-        }}
-        onDragLeave={() => {
-          setIsDragging(false)
-        }}
-        onDrop={(e) => {
-          e.preventDefault()
-          setIsDragging(false)
+          backgroundColor: isDragging && isOver ? "rgba(24, 144, 255, 0.05)" : "transparent",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
@@ -147,12 +237,15 @@ const ColorsSection = ({
                 hoverIndex={hoverIndex}
                 isDragging={isDragging}
                 onAddColorToPalette={onAddColorToPalette}
-                setDragIndex={setDragIndex}
-                setHoverIndex={setHoverIndex}
+                onReplaceColor={onReplaceColor}
               />
               <DropZone index={idx + 1} />
             </div>
           ))}
+          {/* Drop zone after the last color */}
+          {colors.length < MAX_COLORS && (
+            <DropZone index={colors.length} />
+          )}
         </div>
       </div>
     </div>

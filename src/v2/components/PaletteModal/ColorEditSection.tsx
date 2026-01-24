@@ -2,6 +2,7 @@ import { ColorPicker } from "primereact/colorpicker"
 import tinycolor from "tinycolor2"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
 import SingleThumbSlider from "./SingleThumbSlider"
+import { useEffect, useRef } from "react"
 
 const getColorHex = (color: any) => {
     if (typeof color === "string") return color
@@ -19,6 +20,36 @@ const ColorEditSection = ({
     onColorChange,
     colorPickerIndex,
 }: ColorEditSectionProps) => {
+    const colorPickerRef = useRef<HTMLDivElement>(null)
+
+    // Handle click outside to close any PrimeReact ColorPicker popups
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            // Find and close any PrimeReact ColorPicker popups
+            const target = event.target as HTMLElement
+            const pickerPopups = document.querySelectorAll('.p-colorpicker-panel, .p-colorpicker-overlay')
+            
+            pickerPopups.forEach((popup) => {
+                // Check if click is outside the popup
+                if (!popup.contains(target) && !colorPickerRef.current?.contains(target)) {
+                    // Close the popup by removing it or triggering close event
+                    const closeButton = popup.querySelector('.p-colorpicker-close, [data-pc-section="close"]')
+                    if (closeButton) {
+                        (closeButton as HTMLElement).click()
+                    } else {
+                        // Fallback: remove the popup directly
+                        popup.remove()
+                    }
+                }
+            })
+        }
+
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [])
+
     if (colorPickerIndex === null) {
         return (
             <div style={{ textAlign: "center", padding: "20px", color: "#999" }}>
@@ -99,11 +130,12 @@ const ColorEditSection = ({
             }}
         >
             {/* Color Picker Section */}
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", position: "relative" }}>
                 <div
+                    ref={colorPickerRef}
                     style={{
                         padding: "6px 0px",
-                        width: 200,
+                        width: 180,
                         transform: "scale(0.9)",
                         transformOrigin: "top left",
                     }}
@@ -119,9 +151,12 @@ const ColorEditSection = ({
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
+                        position: "absolute",
+                        left: "52%",
+                        transform: "translateX(-50%)",
                     }}
                 >
-                    <span style={{ fontSize: "14px", marginBottom: "6px" }}>Selected Color</span>
+                    <span style={{ fontSize: "12px", marginBottom: "6px" }}>Selected Color</span>
                     <div
                         style={{
                             width: 56,
@@ -146,7 +181,7 @@ const ColorEditSection = ({
                             top: 68,
                             left: -32,
                             transform: "rotate(-90deg)",
-                            fontSize: "14px",
+                            fontSize: "13px",
                         }}
                     >
                         Lightness
@@ -183,9 +218,9 @@ const ColorEditSection = ({
                         )}
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: "14px" }}>0</span>
-                        <span style={{ fontSize: "14px" }}>Saturation</span>
-                        <span style={{ fontSize: "14px" }}>100</span>
+                        <span style={{ fontSize: "13px" }}>0</span>
+                        <span style={{ fontSize: "13px" }}>Saturation</span>
+                        <span style={{ fontSize: "13px" }}>100</span>
                     </div>
                 </div>
             </div>

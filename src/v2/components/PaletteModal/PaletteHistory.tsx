@@ -217,9 +217,9 @@ const PaletteHistory = ({
 
   if (snapshots.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "20px", color: "#999" }}>
-        <div style={{ fontSize: "14px" }}>No history yet</div>
-        <div style={{ fontSize: "12px", marginTop: "4px" }}>
+      <div style={{ textAlign: "center", padding: "10px", color: "#999" }}>
+        <div style={{ fontSize: "11px" }}>No history yet</div>
+        <div style={{ fontSize: "9px", marginTop: "3px" }}>
           Changes will be saved automatically
         </div>
       </div>
@@ -235,10 +235,10 @@ const PaletteHistory = ({
               key={group.dateKey}
               header={
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "14px", fontWeight: "500" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "500" }}>
                     {group.date.toLocaleDateString(undefined, {
                       year: "numeric",
-                      month: "long",
+                      month: "short",
                       day: "numeric",
                     })}
                   </span>
@@ -247,16 +247,16 @@ const PaletteHistory = ({
             >
               <List
                 dataSource={group.snapshots}
-                style={{ padding: "0px 4px" }}
+                style={{ padding: "0px 1px" }}
                 renderItem={(snapshot: any) => (
                   <List.Item
                     style={{
                       border: "none",
                       cursor: "pointer",
-                      borderRadius: "4px",
+                      borderRadius: "2px",
                       transition: "background-color 0.2s",
-                      marginBottom: "4px",
-                      padding: "0px 4px",
+                      marginBottom: "2px",
+                      padding: "0px 1px",
                     }}
                     onMouseEnter={(e) => {
                       ;(e.currentTarget as HTMLDivElement).style.backgroundColor = "#f5f5f5"
@@ -267,12 +267,12 @@ const PaletteHistory = ({
                     onClick={() => handleApplySnapshot(snapshot)}
                   >
                     <div style={{ width: "100%" }}>
-                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
-                        <span style={{ fontSize: "10px", color: "#999" }}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: "2px" }}>
+                        <span style={{ fontSize: "8px", color: "#999" }}>
                           {new Date(snapshot.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
-                      <SimplePaletteBox colors={snapshot.colors} style={{ height: "140px" }} />
+                      <SimplePaletteBox colors={snapshot.colors} style={{ height: "95px" }} />
                     </div>
                   </List.Item>
                 )}
@@ -287,16 +287,17 @@ const PaletteHistory = ({
         <div
           style={{
             borderTop: "1px solid #f0f0f0",
-            fontSize: "12px",
+            fontSize: "9px",
             color: "#666",
             textAlign: "center",
+            padding: "6px 3px",
           }}
         >
           <div>
             {snapshots.length} of {MAX_SNAPSHOTS} snapshots across {groupedSnapshots.length} day
             {groupedSnapshots.length !== 1 ? "s" : ""}
           </div>
-          <div style={{ marginTop: "4px", fontSize: "10px", color: "#999" }}>
+          <div style={{ marginTop: "2px", fontSize: "8px", color: "#999" }}>
             {currentIndex < snapshots.length - 1 ? "Ctrl+Z to undo" : ""}
             {currentIndex < snapshots.length - 1 && currentIndex > 0 ? " • " : ""}
             {currentIndex > 0 ? "Ctrl+Shift+Z to redo" : ""}
