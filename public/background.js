@@ -31,12 +31,13 @@ function hexToHSL(hex) {
   return `hsl(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
 }
 
-async function saveColorToSheet(hexColor, sourceUrl) {
+async function saveColorToDatabase(hexColor, sourceUrl) {
   try {
     const result = await chrome.storage.local.get(['colorPickerState']);
     const state = result.colorPickerState;
 
-    if (!state || !state.jwtToken || !state.selectedFileData) return;
+    // Only require JWT token, not selectedFileData
+    if (!state || !state.jwtToken) return;
 
     const { jwtToken, selectedFileData, apiUrl } = state;
 
@@ -47,9 +48,10 @@ async function saveColorToSheet(hexColor, sourceUrl) {
         'Authorization': `Bearer ${jwtToken}`,
       },
       body: JSON.stringify({
-        spreadsheetId: selectedFileData.spreadsheetId,
-        sheetName: selectedFileData.sheetName,
-        sheetId: selectedFileData.sheetId,
+        // If no file selected, use null to save to "No sheet"
+        spreadsheetId: selectedFileData?.spreadsheetId || null,
+        sheetName: selectedFileData?.sheetName || null,
+        sheetId: selectedFileData?.sheetId ?? null,
         row: {
           timestamp: Date.now(),
           url: sourceUrl,
@@ -106,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (e) {}
     }
 
-    saveColorToSheet(message.color, sender.tab?.url || 'Picked Color');
+    saveColorToDatabase(message.color, sender.tab?.url || 'Picked Color');
     sendResponse({ success: true });
     return true;
   }

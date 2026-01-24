@@ -1,3 +1,7 @@
+import { MultiSelectDropdown } from "@/v2/components/FigmaManager/MultiSelectDropdown"
+import { useGetFolders } from "@/v2/api/folders.api"
+import { useGlobalState } from "@/v2/hooks/useGlobalState"
+
 interface FormInputsProps {
   formData: {
     name: string
@@ -8,9 +12,14 @@ interface FormInputsProps {
   setFormData: (data: any) => void
   tags: string[]
   setTags: (tags: string[]) => void
+  selectedFolderIds: string[]
+  onFolderChange: (folderIds: string[]) => void
 }
 
-const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) => {
+const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, onFolderChange }: FormInputsProps) => {
+  const { state } = useGlobalState()
+  const { data: foldersData } = useGetFolders(false)
+  
   const handleTagChange = (value: string) => {
     const newTags = value
       .split(",")
@@ -23,7 +32,44 @@ const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) =
 
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ marginBottom: "24px" }}>
+      {/* Saving to Dropdown */}
+      {state.user?.jwtToken && (
+        <div style={{ marginBottom: "12px" }}>
+          <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
+            Saving to
+          </label>
+          {foldersData?.folders && foldersData.folders.length > 0 ? (
+            <MultiSelectDropdown<string>
+              selected={selectedFolderIds}
+              items={foldersData.folders.map(f => f._id)}
+              keyExtractor={(folderId) => folderId}
+              renderItem={(folderId) => {
+                const folder = foldersData.folders.find(f => f._id === folderId)
+                return folder?.name || folderId
+              }}
+              renderSelected={(selected) => {
+                if (selected.length === 0) return "Select folders"
+                if (selected.length === 1) {
+                  const folder = foldersData.folders.find(f => f._id === selected[0])
+                  return folder?.name || selected[0]
+                }
+                return `${selected.length} folders selected`
+              }}
+              onSelect={(folderIds) => onFolderChange(folderIds)}
+              placeholder="Select folders"
+              width="100%"
+              isSearchable
+              checkboxAtEnd={true}
+            />
+          ) : (
+            <div style={{ fontSize: "12px", color: "#999", padding: "8px 0" }}>
+              No folders available. Create a folder first.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Palette Name *
         </label>
@@ -34,19 +80,15 @@ const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) =
           placeholder="Enter palette name"
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Ranking
         </label>
@@ -58,19 +100,15 @@ const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) =
           onChange={(e) => setFormData({ ...formData, ranking: parseInt(e.target.value) || 0 })}
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           URL
         </label>
@@ -81,19 +119,15 @@ const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) =
           placeholder="www.domain.com/url"
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Description
         </label>
@@ -104,19 +138,16 @@ const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) =
           rows={3}
           style={{
             width: "100%",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
             resize: "vertical",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Tags
         </label>
@@ -127,15 +158,11 @@ const FormInputs = ({ formData, setFormData, tags, setTags }: FormInputsProps) =
           placeholder="Enter tags (comma separated, max 3)"
           style={{
             width: "100%",
-            height: "32px",
-            padding: "4px 11px",
+            padding: "12px 16px",
             fontSize: "14px",
-            border: "1px solid #d9d9d9",
-            borderRadius: "6px",
+            backgroundColor: "#F5F5F5",
             outline: "none",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "#4096ff")}
-          onBlur={(e) => (e.target.style.borderColor = "#d9d9d9")}
         />
         {tags.length > 0 && (
           <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>

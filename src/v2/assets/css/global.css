@@ -260,3 +260,26 @@ input[type="checkbox"]:checked::before {
 .generator-container .react-colorful__last-control {
   border-radius: 0px !important;
 }
+
+/* Custom thin scrollbar for Import colors sidebar */
+.import-colors-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.import-colors-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.import-colors-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.import-colors-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.import-colors-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}

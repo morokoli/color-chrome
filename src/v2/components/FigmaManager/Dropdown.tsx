@@ -1,5 +1,6 @@
 import { ChevronDown, Search } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { CollapsibleBox } from "../CollapsibleBox"
 
 interface DropdownProps<T> {
@@ -13,6 +14,7 @@ interface DropdownProps<T> {
   isSearchable?: boolean
   placeholder?: string
   isVisible?: boolean
+  usePortal?: boolean
 }
 
 export const Dropdown = <T,>({
@@ -26,26 +28,56 @@ export const Dropdown = <T,>({
   isSearchable = false,
   placeholder = "Select an option",
   isVisible = true,
+  usePortal = false,
 }: DropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false)
+      if (usePortal) {
+        if (
+          dropdownRef.current &&
+          !dropdownRef.current.contains(event.target as Node) &&
+          menuRef.current &&
+          !menuRef.current.contains(event.target as Node)
+        ) {
+          setIsOpen(false)
+          setMenuPosition(null)
+        }
+      } else {
+        if (
+          dropdownRef.current &&
+          !dropdownRef.current.contains(event.target as Node)
+        ) {
+          setIsOpen(false)
+        }
       }
     }
 
-    document.addEventListener("mousedown", handleClickOutside)
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [])
+  }, [isOpen, usePortal])
+
+  useEffect(() => {
+    if (isOpen && dropdownRef.current && usePortal) {
+      const rect = dropdownRef.current.getBoundingClientRect()
+      setMenuPosition({
+        top: rect.bottom + 4, // Fixed positioning is relative to viewport
+        left: rect.left,
+        width: rect.width,
+      })
+    } else {
+      setMenuPosition(null)
+    }
+  }, [isOpen, usePortal])
 
   const filteredItems = items.filter((item) => {
     if (!isSearchable) return true
@@ -109,26 +141,61 @@ export const Dropdown = <T,>({
       </CollapsibleBox>
 
       {isOpen && (
-        <div className="absolute w-full border border-gray-200 mt-1 bg-white z-10 max-h-48 overflow-y-auto rounded shadow-lg">
-          {filteredItems.map((item, i) => (
+        usePortal && menuPosition ? (
+          createPortal(
             <div
-              key={i}
-              onClick={() => {
-                onSelect(item)
-                setIsOpen(false)
+              ref={menuRef}
+              className="fixed border border-gray-200 bg-white z-[100] max-h-48 overflow-y-auto rounded shadow-lg"
+              style={{
+                top: `${menuPosition.top}px`,
+                left: `${menuPosition.left}px`,
+                width: `${menuPosition.width}px`,
               }}
-              className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-700 text-ellipsis overflow-hidden transition-colors"
             >
-              {renderItem(item)}
-            </div>
-          ))}
-          {filteredItems.length === 0 && (
-            <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
-              No items found
-            </div>
-          )}
-          {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
-        </div>
+              {filteredItems.map((item, i) => (
+                <div
+                  key={i}
+                  onClick={() => {
+                    onSelect(item)
+                    setIsOpen(false)
+                    setMenuPosition(null)
+                  }}
+                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-700 text-ellipsis overflow-hidden transition-colors"
+                >
+                  {renderItem(item)}
+                </div>
+              ))}
+              {filteredItems.length === 0 && (
+                <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
+                  No items found
+                </div>
+              )}
+              {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
+            </div>,
+            document.body
+          )
+        ) : (
+          <div className="absolute w-full border border-gray-200 mt-1 bg-white z-[60] max-h-48 overflow-y-auto rounded shadow-lg">
+            {filteredItems.map((item, i) => (
+              <div
+                key={i}
+                onClick={() => {
+                  onSelect(item)
+                  setIsOpen(false)
+                }}
+                className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-700 text-ellipsis overflow-hidden transition-colors"
+              >
+                {renderItem(item)}
+              </div>
+            ))}
+            {filteredItems.length === 0 && (
+              <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
+                No items found
+              </div>
+            )}
+            {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
+          </div>
+        )
       )}
     </div>
   )

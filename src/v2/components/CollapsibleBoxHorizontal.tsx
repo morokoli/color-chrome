@@ -6,6 +6,7 @@ interface CollapsibleBoxProps {
   maxWidth: string
   transitionDuration?: number
   renderHidden?: boolean
+  className?: string
 }
 
 export const CollapsibleBoxHorizontal: FC<CollapsibleBoxProps> = ({
@@ -14,6 +15,7 @@ export const CollapsibleBoxHorizontal: FC<CollapsibleBoxProps> = ({
   children,
   transitionDuration = 300,
   renderHidden = false,
+  className,
 }) => {
   const [shouldRenderChildren, setShouldRenderChildren] = useState(
     isOpen || renderHidden,
@@ -49,6 +51,7 @@ export const CollapsibleBoxHorizontal: FC<CollapsibleBoxProps> = ({
         overflowX: "hidden",
         transition: `max-width ${transitionDuration / 1000}s ease-in-out`,
       }}
+      className={className}
     >
       {shouldRenderChildren && children}
     </div>

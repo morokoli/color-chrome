@@ -14,6 +14,8 @@ interface MultiSelectDropdownProps<T> {
   isSearchable?: boolean
   placeholder?: string
   isVisible?: boolean
+  checkboxAtEnd?: boolean // If true, shows checkbox at end instead of check icon at beginning
+  openUpward?: boolean // If true, opens dropdown upward instead of downward
 }
 
 export const MultiSelectDropdown = <T,>({
@@ -28,6 +30,8 @@ export const MultiSelectDropdown = <T,>({
   isSearchable = false,
   placeholder = "Select options",
   isVisible = true,
+  checkboxAtEnd = false,
+  openUpward = false,
 }: MultiSelectDropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -126,19 +130,102 @@ export const MultiSelectDropdown = <T,>({
       </CollapsibleBox>
 
       {isOpen && (
-        <div className="absolute w-full border border-gray-200 mt-1 bg-white z-50 max-h-48 overflow-y-auto rounded shadow-lg">
-          {filteredItems.map((item, i) => (
-            <div
-              key={keyExtractor ? String(keyExtractor(item)) : i}
-              onClick={() => handleItemClick(item)}
-              className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-ellipsis overflow-hidden flex items-center gap-2 text-gray-700 transition-colors"
-            >
-              <div className="w-4 h-4 flex items-center justify-center">
-                {isItemSelected(item) && <Check size={14} className="text-emerald-600" />}
+        <div className={`absolute w-full border border-gray-200 bg-white z-50 max-h-48 overflow-y-auto rounded shadow-lg ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+          {filteredItems.map((item, i) => {
+            const isSelected = isItemSelected(item)
+            return (
+              <div
+                key={keyExtractor ? String(keyExtractor(item)) : i}
+                onClick={() => handleItemClick(item)}
+                className={`px-3 py-2 hover:bg-gray-50 cursor-pointer text-ellipsis overflow-hidden flex items-center gap-2 text-gray-700 transition-colors ${checkboxAtEnd ? 'justify-between' : ''}`}
+              >
+                {!checkboxAtEnd && (
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    {isSelected && <Check size={14} className="text-emerald-600" />}
+                  </div>
+                )}
+                <div className={checkboxAtEnd ? "flex-1 min-w-0" : ""}>
+                  {renderItem(item)}
+                </div>
+                {checkboxAtEnd && (
+                  <div className="relative flex-shrink-0" style={{ width: '16px', height: '16px' }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleItemClick(item)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="cursor-pointer"
+                      style={{
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        width: '16px',
+                        height: '16px',
+                        minWidth: '16px',
+                        minHeight: '16px',
+                        border: isSelected ? '1.5px solid #000000' : '1.5px solid #d1d5db',
+                        borderRadius: '3px',
+                        backgroundColor: isSelected ? '#000000' : '#ffffff',
+                        transition: 'all 0.15s ease-in-out',
+                        outline: 'none',
+                        position: 'relative',
+                        flexShrink: 0,
+                        margin: 0,
+                        padding: 0,
+                        boxSizing: 'border-box',
+                        imageRendering: 'crisp-edges',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = '#9ca3af'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = '#d1d5db'
+                        }
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 0, 0, 0.1)'
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    />
+                    {isSelected && (
+                      <svg
+                        className="absolute pointer-events-none"
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          left: '50%',
+                          top: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          strokeWidth: '2.5',
+                          imageRendering: 'crisp-edges',
+                          shapeRendering: 'geometricPrecision',
+                        }}
+                        viewBox="0 0 10 10"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M8 2.5L4 6.5L2.5 5"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                )}
               </div>
-              {renderItem(item)}
-            </div>
-          ))}
+            )
+          })}
           {filteredItems.length === 0 && (
             <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
               No items found

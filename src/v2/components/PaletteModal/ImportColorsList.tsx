@@ -20,7 +20,7 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
   const b = parseInt(hex.replace("#", "").slice(4, 6), 16)
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
   const isDark = luminance < 0.5
-  const textColor = isDark ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 0, 0, 0.6)"
+  const textColor = isDark ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 0, 0, 0.8)"
 
   return (
     <div
@@ -28,38 +28,37 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-end",
-        gap: "4px",
-        width: "120px",
+        gap: "3.6px",
+        width: "108px",
       }}
     >
       <div
         style={{
-          minWidth: "120px",
-          height: "120px",
-          border: "2px solid rgba(0, 0, 0)",
-          borderWidth: "2px",
+          minWidth: "108px",
+          height: "108px",
           position: "relative",
           overflow: "hidden",
           boxSizing: "border-box",
           transition: "border-width 0.3s ease-in-out",
           cursor: "pointer",
           backgroundColor: colorData.hex,
+          borderRadius: "6px"
         }}
       >
         <div
           style={{
             position: "absolute",
-            top: "4px",
-            left: "4px",
-            right: "4px",
-            bottom: "4px",
+            top: "3.6px",
+            left: "3.6px",
+            right: "3.6px",
+            bottom: "3.6px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
             color: textColor,
-            fontSize: "12px",
-            fontWeight: "500",
+            fontSize: "13px",
+            fontWeight: "600",
             textShadow: isDark
               ? "0 1px 2px rgba(0,0,0,0.5)"
               : "0 1px 2px rgba(255,255,255,0.5)",
@@ -69,7 +68,7 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
           <br />
           <span
             style={{
-              fontSize: "10px",
+              fontSize: "11px",
               color: "inherit",
               maxWidth: "100%",
               overflow: "hidden",
@@ -151,7 +150,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         style={{
           opacity: isDragging ? 0.5 : 1,
           cursor: "grab",
-          marginBottom: "8px",
+          marginBottom: "7.2px",
           transform: isDragging ? "rotate(5deg)" : "none",
           transition: "opacity 0.2s, transform 0.2s",
         }}
@@ -217,7 +216,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         placeholder="Search colors"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full h-9 px-3 mb-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+        className="w-full h-9 px-3 mb-2 text-[12px]border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
       />
       <div
         className="flex-1 overflow-y-auto pr-2 space-y-2"

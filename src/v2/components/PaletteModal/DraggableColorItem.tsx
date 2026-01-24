@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { X, Plus } from "lucide-react"
-import { useDrop } from "react-dnd"
+import { useDrag, useDrop } from "react-dnd"
 
 const getColorHex = (color: any) => {
     if (typeof color === "string") return color
@@ -21,11 +21,11 @@ interface DraggableColorItemProps {
     hoverIndex: number | null
     isDragging: boolean
     onAddColorToPalette: (colorData: any, index: number | null) => void
-    setDragIndex: (idx: number | null) => void
-    setHoverIndex: (idx: number | null) => void
+    onReplaceColor: (colorData: any, index: number) => void
 }
 
-const ITEM_TYPE = "IMPORT_COLOR"
+const COLOR_ITEM_TYPE = "COLOR"
+const IMPORT_COLOR_TYPE = "IMPORT_COLOR"
 
 const DraggableColorItem = ({
     color,
@@ -35,70 +35,65 @@ const DraggableColorItem = ({
     onAddColor,
     canAddColor,
     isSelected,
-    onMoveColor,
     colorCount,
     dragIndex,
     hoverIndex,
-    isDragging,
-  onAddColorToPalette,
-    setDragIndex,
-    setHoverIndex,
+    isDragging: parentIsDragging,
+    onReplaceColor,
 }: DraggableColorItemProps) => {
+    const innerRef = useRef<HTMLDivElement>(null)
     const [isReplacing, setIsReplacing] = useState(false)
 
     const colorHex = getColorHex(color)
 
-  // Accept drop from Import list to REPLACE this color (same behavior as webapp)
-  const [{ isOver }, drop] = useDrop({
-    accept: [ITEM_TYPE],
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
-    hover: (item: any) => {
-      if (item?.type === ITEM_TYPE) setIsReplacing(true)
-    },
-    drop: (item: any) => {
-      setIsReplacing(false)
-      if (item?.type === ITEM_TYPE && item?.colorData) {
-        onAddColorToPalette(item.colorData, index)
-        return { action: "replace", index }
-      }
-      return undefined
-    },
-  })
+    // Use react-dnd's useDrag for reordering colors (same as web app)
+    const [{ isDragging }, drag] = useDrag({
+        type: COLOR_ITEM_TYPE,
+        item: { index, type: COLOR_ITEM_TYPE },
+        collect: (monitor) => ({
+            isDragging: monitor.isDragging(),
+        }),
+    })
 
-    const handleDragStart = (e: React.DragEvent) => {
-        setDragIndex(index)
-        e.dataTransfer.effectAllowed = "move"
-    }
+    // Accept drop from Import list to REPLACE this color (same behavior as webapp)
+    // Only accepts IMPORT_COLOR to not interfere with parent's COLOR reordering
+    const [{ isOver }, drop] = useDrop({
+        accept: [IMPORT_COLOR_TYPE],
+        collect: (monitor) => ({
+            isOver: monitor.isOver(),
+        }),
+        hover: (item: any) => {
+            // Highlight "replace" only for imported color
+            if (item?.type === IMPORT_COLOR_TYPE) {
+                setIsReplacing(true)
+            }
+        },
+        drop: (item: any) => {
+            setIsReplacing(false)
+            if (item?.type === IMPORT_COLOR_TYPE && item?.colorData && onReplaceColor) {
+                onReplaceColor(item.colorData, index) // Replace current color
+                // Return dropResult so parent knows drop was handled
+                return { action: "replace", index }
+            }
+            return undefined
+        },
+    })
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault()
-        if (dragIndex !== null && dragIndex !== index) {
-            setHoverIndex(index)
+    // Combine drag and drop refs
+    drag(drop(innerRef))
+
+    useEffect(() => {
+        if (!isDragging && isReplacing) {
+            setIsReplacing(false)
         }
-    }
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault()
-        if (dragIndex !== null && hoverIndex !== null && dragIndex !== hoverIndex) {
-            onMoveColor(dragIndex, hoverIndex)
-        }
-        setDragIndex(null)
-        setHoverIndex(null)
-    }
-
-    const handleDragEnd = () => {
-        setDragIndex(null)
-        setHoverIndex(null)
-    }
+    }, [isDragging, isReplacing])
 
     const getTransformStyle = () => {
         if (
             dragIndex === null ||
             hoverIndex === null ||
             dragIndex === hoverIndex ||
-            !isDragging
+            !parentIsDragging
         ) {
             return {}
         }
@@ -130,24 +125,18 @@ const DraggableColorItem = ({
 
     return (
         <div
-      ref={drop}
-            draggable
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
+            ref={innerRef}
             style={{
                 minWidth: "48px",
                 width: "100%",
                 maxWidth: "unset",
                 flex: 1,
-                transition: isDragging && dragIndex === index ? "none" : "transform 0.2s ease, opacity 0.2s ease",
+                transition: isDragging ? "none" : "transform 0.2s ease, opacity 0.2s ease",
                 willChange: "transform",
                 position: "relative",
                 overflow: "visible",
-                opacity: isDragging && dragIndex === index ? 0.5 : 1,
-                transform: isDragging && dragIndex === index ? "rotate(5deg) scale(1.05)" : "none",
-                zIndex: isDragging && dragIndex === index ? 1000 : 10 - index,
+                opacity: isDragging ? 0.5 : 1,
+                zIndex: 10 - index,
                 ...getTransformStyle(),
             }}
         >
@@ -169,20 +158,11 @@ const DraggableColorItem = ({
             : "2px solid black",
                     backgroundColor: colorHex,
                     overflow: "visible",
-                    transition: isReplacing ? "all 0.2s ease" : "none",
-                    transform: isReplacing ? "scale(1.05)" : "none",
+                    transition: (isOver || isReplacing) ? "all 0.2s ease" : "none",
+                    transform: (isOver || isReplacing) ? "scale(1.1)" : "none",
           boxShadow: (isOver || isReplacing) ? "0 4px 12px rgba(24, 144, 255, 0.3)" : "none",
                 }}
                 onClick={() => onColorClick(index)}
-                onDragOver={(e) => {
-                    e.preventDefault()
-                    setIsReplacing(true)
-                }}
-                onDragLeave={() => setIsReplacing(false)}
-                onDrop={(e) => {
-                    e.preventDefault()
-                    setIsReplacing(false)
-                }}
             >
                 {colorCount > 1 && (
                     <button

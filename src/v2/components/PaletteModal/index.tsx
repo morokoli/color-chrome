@@ -11,7 +11,6 @@ import FormInputs from "./FormInputs"
 import ColorPropertiesForm from "./ColorPropertiesForm"
 import ImportColorsList from "./ImportColorsList"
 import PaletteHistory from "./PaletteHistory"
-import { History, RotateCcw, X } from "lucide-react"
 
 interface PaletteModalProps {
   open: boolean
@@ -24,10 +23,16 @@ interface PaletteModalProps {
   onSuccess?: (colors: any[]) => void
   hidePrimaryActionButton?: boolean
   onPrimaryActionMetaChange?: (meta: { label: string; disabled: boolean }) => void
+  onStateChange?: (state: { colorsCount: number; canUndo: boolean; canRedo: boolean }) => void
 }
 
 export type PaletteModalHandle = {
   submit: () => void
+  getColorsCount: () => number
+  canUndo: boolean
+  canRedo: boolean
+  handleUndo: () => void
+  handleRedo: () => void
 }
 
 const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, ref) => {
@@ -40,13 +45,13 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     initialPaletteData = null,
     initialTags = null,
     onSuccess,
-    hidePrimaryActionButton = false,
     onPrimaryActionMetaChange,
+    onStateChange,
   } = props
   const { state } = useGlobalState()
   const toast = useToast()
-  const [colors, setColors] = useState(initialColors ? initialColors : [createDefaultColorObject()])
-  const [originalColors, setOriginalColors] = useState(initialColors ? initialColors : [createDefaultColorObject()])
+  const [colors, setColors] = useState(initialColors ? initialColors : [createDefaultColorObject(), createDefaultColorObject()])
+  const [originalColors, setOriginalColors] = useState(initialColors ? initialColors : [createDefaultColorObject(), createDefaultColorObject()])
   const [colorPickerIndex, setColorPickerIndex] = useState(0)
   const [tags, setTags] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -54,7 +59,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const [activeInfoSubtab, setActiveInfoSubtab] = useState<"palette" | "color">("palette")
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
   const [formData, setFormData] = useState({
     name: "",
     url: "",
@@ -78,8 +83,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       setActiveTab("create")
       setActiveInfoSubtab("palette")
     } else {
-      setColors([createDefaultColorObject()])
-      setOriginalColors([createDefaultColorObject()])
+      setColors([createDefaultColorObject(), createDefaultColorObject()])
+      setOriginalColors([createDefaultColorObject(), createDefaultColorObject()])
       setColorPickerIndex(0)
       setActiveTab("create")
       setActiveInfoSubtab("palette")
@@ -87,7 +92,6 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       setFormData({ name: "", url: "", description: "", ranking: 0 })
       setCanUndo(false)
       setCanRedo(false)
-      setIsHistoryOpen(false)
     }
   }, [initialColors, paletteId])
 
@@ -179,6 +183,17 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     }
   }
 
+  const handleReplaceColor = (colorData: any, index: number) => {
+    const colorObject =
+      typeof colorData === "string"
+        ? createDefaultColorObject(colorData)
+        : colorData
+
+    const newColors = [...colors]
+    newColors[index] = colorObject
+    setColors(newColors)
+  }
+
   const handleApplySnapshot = (snapshotColors: any[]) => {
     const colorObjects = snapshotColors.map((color) =>
       typeof color === "string" ? createDefaultColorObject(color) : color
@@ -197,7 +212,18 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const handleUndoStateChange = (canUndo: boolean, canRedo: boolean) => {
     setCanUndo(canUndo)
     setCanRedo(canRedo)
+    // Notify parent of state changes
+    if (onStateChange) {
+      onStateChange({ colorsCount: colors.length, canUndo, canRedo })
+    }
   }
+
+  // Notify parent when colors change
+  useEffect(() => {
+    if (onStateChange) {
+      onStateChange({ colorsCount: colors.length, canUndo, canRedo })
+    }
+  }, [colors.length, canUndo, canRedo, onStateChange])
 
   const primaryActionLabel = loading
     ? "Saving..."
@@ -215,6 +241,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     submit: () => {
       if (!loading) handleFinish()
     },
+    getColorsCount: () => colors.length,
+    canUndo,
+    canRedo,
+    handleUndo,
+    handleRedo,
   }))
 
   useEffect(() => {
@@ -256,35 +287,68 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   }
 
   const handleFinish = async () => {
-    if (!formData.name.trim() && isPalette) {
+    // Check if this is a single color (either explicitly set or has only 1 color)
+    // Recalculate based on current colors state to ensure accuracy
+    const currentIsSingleColor = colors.length === 1
+    const isActuallySingleColor = isSingleColorEdit || currentIsSingleColor
+    
+    if (!formData.name.trim() && colors.length > 1 && !isActuallySingleColor) {
       toast.display("error", "Please enter a palette name")
       return
     }
 
     setLoading(true)
     try {
-      if (isSingleColorEdit) {
+      if (isActuallySingleColor) {
         const colorData = colors[0]
-        const { r, g, b } = colorData.rgb
+        
+        // Handle RGB - can be object or string
+        let r = 0, g = 0, b = 0
+        if (typeof colorData.rgb === 'string') {
+          const rgbMatch = colorData.rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
+          if (rgbMatch) {
+            r = parseInt(rgbMatch[1])
+            g = parseInt(rgbMatch[2])
+            b = parseInt(rgbMatch[3])
+          }
+        } else if (colorData.rgb && typeof colorData.rgb === 'object' && 'r' in colorData.rgb) {
+          r = colorData.rgb.r
+          g = colorData.rgb.g
+          b = colorData.rgb.b
+        }
+        
         const timestamp = Math.floor(Date.now() / 1000)
 
         if (isEditing) {
           const sheetInfo = parseSheetUrl(colorData.sheetUrl || "")
+          
+          // Format HSL properly
+          let hslValue: string
+          if (typeof colorData.hsl === 'string') {
+            hslValue = colorData.hsl
+          } else if (colorData.hsl && typeof colorData.hsl === 'object' && 'h' in colorData.hsl) {
+            hslValue = `hsl(${colorData.hsl.h}, ${colorData.hsl.s}%, ${colorData.hsl.l}%)`
+          } else {
+            hslValue = colorData.hsl || ""
+          }
+          
           await axiosInstance.put(
-            `${config.api.endpoints.updateRow}/${paletteId}`,
+            config.api.endpoints.updateColor,
             {
-              sheetId: sheetInfo?.sheetId || colorData?.sheetId,
+              colorId: paletteId,
+              sheetId: sheetInfo?.sheetId || colorData?.sheetId || null,
               isUpdateSheet: false,
               row: {
-                hex: colorData.hex,
-                rgb: colorData.rgb,
-                hsl: colorData.hsl,
-                url: colorData.url,
-                ranking: colorData.ranking,
-                comments: colorData.comments,
-                slash_naming: colorData.slash_naming,
-                tags: parseTags(colorData.tags),
-                additionalColumns: colorData.additionalColumns,
+                hex: colorData.hex || "",
+                rgb: `rgb(${r}, ${g}, ${b})`,
+                hsl: hslValue,
+                url: colorData.url || "",
+                ranking: colorData.ranking || 0,
+                comments: colorData.comments || "",
+                slash_naming: colorData.slash_naming || "",
+                tags: parseTags(colorData.tags || []),
+                additionalColumns: colorData.additionalColumns || [],
+                timestamp: timestamp * 1000, // Convert to milliseconds
               },
             },
             {
@@ -296,7 +360,18 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           toast.display("success", "Color updated!")
         } else {
           const sheetInfo = parseSheetUrl(colorData.sheetUrl || "")
-          await axiosInstance.post(
+          
+          // Format HSL properly - handle both string and object formats
+          let hslValue: string
+          if (typeof colorData.hsl === 'string') {
+            hslValue = colorData.hsl
+          } else if (colorData.hsl && typeof colorData.hsl === 'object' && 'h' in colorData.hsl && 's' in colorData.hsl && 'l' in colorData.hsl) {
+            hslValue = `hsl(${colorData.hsl.h}, ${colorData.hsl.s}%, ${colorData.hsl.l}%)`
+          } else {
+            hslValue = colorData.hsl || ""
+          }
+          
+          const response = await axiosInstance.post(
             config.api.endpoints.addColor,
             {
               spreadsheetId: sheetInfo?.spreadsheetId || null,
@@ -304,16 +379,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               sheetId: sheetInfo?.sheetId || null,
               row: {
                 timestamp,
-                hex: colorData.hex,
+                hex: colorData.hex || "",
                 name: colorData.name || "",
                 rgb: `rgb(${r}, ${g}, ${b})`,
-                hsl: colorData.hsl,
-                url: colorData.url,
-                ranking: colorData.ranking.toString(),
-                comments: colorData.comments,
-                slash_naming: colorData.slash_naming,
-                tags: parseTags(colorData.tags),
-                additionalColumns: colorData.additionalColumns,
+                hsl: hslValue,
+                url: colorData.url || "",
+                ranking: colorData.ranking?.toString() || "0",
+                comments: colorData.comments || "",
+                slash_naming: colorData.slash_naming || "",
+                tags: parseTags(colorData.tags || []),
+                additionalColumns: colorData.additionalColumns || [],
               },
             },
             {
@@ -323,6 +398,42 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             }
           )
           toast.display("success", "Color created!")
+          
+          // Copy color to selected folders if folders are selected
+          if (selectedFolderIds && selectedFolderIds.length > 0) {
+            try {
+              // Handle different response structures
+              const colorId = response?.data?.data?.createdColor?._id 
+                || response?.data?.createdColor?._id
+                || response?.data?.data?.colorId
+                || response?.data?.colorId
+              
+              if (colorId) {
+                await Promise.all(
+                  selectedFolderIds.map((folderId) =>
+                    axiosInstance.post(
+                      `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
+                      { colorId },
+                      {
+                        headers: {
+                          Authorization: `Bearer ${state.user?.jwtToken}`,
+                        },
+                      }
+                    ).catch(err => {
+                      console.error(`Error copying color to folder ${folderId}:`, err)
+                      return null
+                    })
+                  )
+                )
+                toast.display("success", `Color added to ${selectedFolderIds.length} folder${selectedFolderIds.length > 1 ? 's' : ''}`)
+              } else {
+                console.warn("Color ID not found in response, cannot copy to folders", response?.data)
+              }
+            } catch (folderErr) {
+              console.error("Error copying color to folders:", folderErr)
+              toast.display("error", "Color created but failed to add to folders")
+            }
+          }
         }
         onSuccess && onSuccess(colors)
       } else {
@@ -406,7 +517,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             newColors: newColors,
             updatedColors: updatedColors,
           }
-          await axiosInstance.post(
+          const response = await axiosInstance.post(
             config.api.endpoints.paletteCreate,
             createData,
             {
@@ -416,10 +527,45 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             }
           )
           toast.display("success", isSingleColor ? "Color created!" : "Palette created!")
+          
+          // Copy palette colors to selected folders if folders are selected
+          if (selectedFolderIds && selectedFolderIds.length > 0 && !isEditing) {
+            try {
+              // Get all color IDs from the created palette
+              const allColorIds = [
+                ...existingColorIds,
+                ...(response?.data?.data?.createdColors?.map((c: any) => c._id) || []),
+              ]
+              
+              // Copy all colors to all selected folders
+              if (allColorIds.length > 0) {
+                await Promise.all(
+                  selectedFolderIds.flatMap((folderId) =>
+                    allColorIds.map((colorId: string) =>
+                      axiosInstance.post(
+                        `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
+                        { colorId },
+                        {
+                          headers: {
+                            Authorization: `Bearer ${state.user?.jwtToken}`,
+                          },
+                        }
+                      ).catch(err => {
+                        console.error(`Error copying color ${colorId} to folder ${folderId}:`, err)
+                        return null
+                      })
+                    )
+                  )
+                )
+              }
+            } catch (folderErr) {
+              console.error("Error copying palette colors to folders:", folderErr)
+            }
+          }
         }
 
         if (!isEditing) {
-          setColors([createDefaultColorObject()])
+          setColors([createDefaultColorObject(), createDefaultColorObject()])
           setTags([])
           setFormData({ name: "", url: "", description: "", ranking: 0 })
         }
@@ -509,7 +655,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         {/* Left Side Section - Import */}
         <CollapsibleBoxHorizontal
           isOpen={activeTab === "create"}
-          maxWidth="170px"
+          maxWidth="154px"
+          className="import-colors-scrollbar"
         >
           <div
             style={{
@@ -533,10 +680,10 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            padding: "0 16px",
+            padding: activeTab === "create" ? "0 6px" : "0 16px",
           }}
         >
-          <div
+          {/* <div
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -566,53 +713,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   {primaryActionLabel}
                 </button>
               )}
-              <button
-                onClick={handleUndo}
-                title="Undo (Ctrl+Z)"
-                style={{
-                  padding: "2px 6px",
-                  minWidth: "auto",
-                  opacity: canUndo ? 1 : 0.5,
-                  border: "none",
-                  background: "transparent",
-                  cursor: canUndo ? "pointer" : "not-allowed",
-                }}
-                disabled={!canUndo}
-              >
-                <RotateCcw style={{ width: "14px", height: "14px" }} />
-              </button>
-              <button
-                onClick={handleRedo}
-                title="Redo (Ctrl+Shift+Z)"
-                style={{
-                  padding: "2px 6px",
-                  minWidth: "auto",
-                  opacity: canRedo ? 1 : 0.5,
-                  border: "none",
-                  background: "transparent",
-                  cursor: canRedo ? "pointer" : "not-allowed",
-                }}
-                disabled={!canRedo}
-              >
-                <RotateCcw style={{ width: "14px", height: "14px", transform: "scaleX(-1)" }} />
-              </button>
-              <button
-                onClick={() => setIsHistoryOpen((v) => !v)}
-                title="History"
-                style={{
-                  padding: "2px 6px",
-                  minWidth: "auto",
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  opacity: activeTab === "create" ? 1 : 0.4,
-                }}
-                disabled={activeTab !== "create"}
-              >
-                <History style={{ width: "14px", height: "14px" }} />
-              </button>
             </div>
-          </div>
+          </div> */}
 
             <ColorsSection
               colors={colors}
@@ -622,10 +724,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               onAddColor={handleAddColor}
               onMoveColor={moveColor}
               onAddColorToPalette={handleAddColorToPalette}
+              onReplaceColor={handleReplaceColor}
             />
 
           {/* Tabs */}
-          <div style={{ display: "flex", borderBottom: "1px solid #f0f0f0", marginBottom: "16px" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #f0f0f0", marginBottom: "8px" }}>
             <button
               onClick={() => setActiveTab("create")}
               style={{
@@ -658,7 +761,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             </button>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ flex: 1, overflowY: "auto" }} className="import-colors-scrollbar">
             {activeTab === "create" ? (
               <ColorEditSection
                 selectedColor={
@@ -711,12 +814,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                         setFormData={setFormData}
                         tags={tags}
                         setTags={setTags}
+                        selectedFolderIds={selectedFolderIds}
+                        onFolderChange={setSelectedFolderIds}
                       />
                     ) : (
                       <ColorPropertiesForm
                         selectedColor={colors[colorPickerIndex]}
                         onColorChange={handleColorChange}
                         colorPickerIndex={colorPickerIndex}
+                        selectedFolderIds={selectedFolderIds}
+                        onFolderChange={setSelectedFolderIds}
                       />
                     )}
                   </div>
@@ -725,6 +832,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                     selectedColor={colors[colorPickerIndex]}
                     onColorChange={handleColorChange}
                     colorPickerIndex={colorPickerIndex}
+                    selectedFolderIds={selectedFolderIds}
+                    onFolderChange={setSelectedFolderIds}
                   />
                 )}
               </div>
@@ -732,73 +841,27 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           </div>
         </div>
 
-        {/* Right side history is shown as an OVERLAY (slide-in) */}
-      </div>
-
-      {/* History overlay: keep it MOUNTED so it can capture changes continuously (like webapp). */}
-      {activeTab === "create" && (
-        <>
-          {/* Backdrop (only when open) */}
-          {isHistoryOpen && (
-            <div
-              onClick={() => setIsHistoryOpen(false)}
-              style={{
-                position: "absolute",
-                inset: 0,
-                background: "rgba(0,0,0,0.08)",
-                zIndex: 50,
-              }}
-            />
-          )}
-
-          {/* Panel (always mounted; slides in/out) */}
+        {/* Right Side Section - History (always visible) */}
+        <CollapsibleBoxHorizontal
+          isOpen={activeTab === "create"}
+          maxWidth="170px"
+        >
           <div
             style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              height: "100%",
-              width: "200px",
-              backgroundColor: "#fafafa",
+              padding: "10px",
               borderLeft: "1px solid #f0f0f0",
-              zIndex: 60,
+              height: "100%",
+              backgroundColor: "#fafafa",
               display: "flex",
               flexDirection: "column",
-              transform: isHistoryOpen ? "translateX(0)" : "translateX(100%)",
-              transition: "transform 0.25s ease",
-              pointerEvents: isHistoryOpen ? "auto" : "none",
             }}
           >
-            <div
-              style={{
-                padding: "16px",
-                borderBottom: "1px solid #f0f0f0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "8px",
-              }}
-            >
-              <div>
-                <div style={{ margin: 0, fontSize: "16px", fontWeight: 500 }}>History</div>
-                <div style={{ fontSize: "12px", color: "#666" }}>
-                  Previous iterations of your {isPalette ? "palette" : "color"}
-                </div>
-              </div>
-              <button
-                onClick={() => setIsHistoryOpen(false)}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-                title="Close"
-              >
-                <X style={{ width: "16px", height: "16px" }} />
-              </button>
+            <h3 style={{ margin: "0 0 0px 0", fontSize: "12px", fontWeight: 500 }}>History</h3>
+            <div style={{ fontSize: "10px", color: "#666", marginBottom: "8px", marginTop: "3px" }}>
+              <p style={{ margin: 0 }}>
+                Previous iterations of your {isPalette ? "palette" : "color"}
+              </p>
             </div>
-
             <div style={{ flex: 1, overflow: "hidden" }}>
               <PaletteHistory
                 currentColors={colors}
@@ -810,8 +873,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               />
             </div>
           </div>
-        </>
-      )}
+        </CollapsibleBoxHorizontal>
+      </div>
 
       {/* Footer */}
       <div
