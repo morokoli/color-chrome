@@ -290,18 +290,18 @@ const App = () => {
     // Clear storage immediately to prevent reprocessing on mount
     // Do this before saving to database to ensure it's cleared even if save fails
     chrome.storage.local.remove(['pickedColor', 'pickedAt'], () => {
-      // Storage cleared, now save to database
-      // Always save to database (will use "No sheet" if no file selected)
-      // Try to get URL, but use fallback if popup is closed
-      chrome.tabs.query({ active: true, currentWindow: true })
-        .then((tabs) => {
-          const currentUrl = tabs[0]?.url || "Picked Color"
-          saveColorToDatabase(pickedColor, currentUrl)
-        })
-        .catch(() => {
-          // If query fails (popup closed), still try to save with fallback URL
-          saveColorToDatabase(pickedColor, "Picked Color")
-        })
+      // Storage cleared
+      // Note: Database saving is handled by background.js when COLOR_PICKED message is received
+      // No need to save here to avoid duplicate saves
+      // chrome.tabs.query({ active: true, currentWindow: true })
+      //   .then((tabs) => {
+      //     const currentUrl = tabs[0]?.url || "Picked Color"
+      //     saveColorToDatabase(pickedColor, currentUrl)
+      //   })
+      //   .catch(() => {
+      //     // If query fails (popup closed), still try to save with fallback URL
+      //     saveColorToDatabase(pickedColor, "Picked Color")
+      //   })
     })
 
     // Don't navigate - the on-page panel shows the results

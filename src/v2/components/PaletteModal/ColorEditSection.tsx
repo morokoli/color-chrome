@@ -2,7 +2,6 @@ import { ColorPicker } from "primereact/colorpicker"
 import tinycolor from "tinycolor2"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
 import SingleThumbSlider from "./SingleThumbSlider"
-import { useEffect, useRef } from "react"
 
 const getColorHex = (color: any) => {
     if (typeof color === "string") return color
@@ -20,35 +19,6 @@ const ColorEditSection = ({
     onColorChange,
     colorPickerIndex,
 }: ColorEditSectionProps) => {
-    const colorPickerRef = useRef<HTMLDivElement>(null)
-
-    // Handle click outside to close any PrimeReact ColorPicker popups
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            // Find and close any PrimeReact ColorPicker popups
-            const target = event.target as HTMLElement
-            const pickerPopups = document.querySelectorAll('.p-colorpicker-panel, .p-colorpicker-overlay')
-            
-            pickerPopups.forEach((popup) => {
-                // Check if click is outside the popup
-                if (!popup.contains(target) && !colorPickerRef.current?.contains(target)) {
-                    // Close the popup by removing it or triggering close event
-                    const closeButton = popup.querySelector('.p-colorpicker-close, [data-pc-section="close"]')
-                    if (closeButton) {
-                        (closeButton as HTMLElement).click()
-                    } else {
-                        // Fallback: remove the popup directly
-                        popup.remove()
-                    }
-                }
-            })
-        }
-
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside)
-        }
-    }, [])
 
     if (colorPickerIndex === null) {
         return (
@@ -132,7 +102,6 @@ const ColorEditSection = ({
             {/* Color Picker Section */}
             <div style={{ display: "flex", justifyContent: "space-between", position: "relative" }}>
                 <div
-                    ref={colorPickerRef}
                     style={{
                         padding: "6px 0px",
                         width: 180,

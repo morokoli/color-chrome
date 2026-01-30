@@ -223,25 +223,6 @@ const ColorPropertiesForm = ({
 
       <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
-          Google Sheet URL
-        </label>
-        <input
-          type="text"
-          value={colorObject.sheetUrl || ""}
-          onChange={(e) => handlePropertyChange("sheetUrl", e.target.value)}
-          placeholder="https://docs.google.com/spreadsheets/d/..."
-          style={{
-            width: "100%",
-            padding: "12px 16px",
-            fontSize: "14px",
-            backgroundColor: "#F5F5F5",
-            outline: "none",
-          }}
-        />
-      </div>
-
-      <div style={{ marginBottom: "12px" }}>
-        <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           Comments
         </label>
         <textarea

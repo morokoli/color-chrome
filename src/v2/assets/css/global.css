@@ -283,3 +283,18 @@ input[type="checkbox"]:checked::before {
 .import-colors-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(0, 0, 0, 0.3);
 }
+
+/* ColorPicker handle visibility - make the round circle visible */
+.p-colorpicker-color-handle {
+  background-color: #fff !important;
+  border: 2px solid #000 !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+  z-index: 10 !important;
+}
+
+.p-colorpicker-hue-handle {
+  background-color: #fff !important;
+  border: 2px solid #000 !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+  z-index: 10 !important;
+}

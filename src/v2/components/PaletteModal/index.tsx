@@ -359,8 +359,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           )
           toast.display("success", "Color updated!")
         } else {
-          const sheetInfo = parseSheetUrl(colorData.sheetUrl || "")
-          
+          // Don't use sheetUrl when generating - always set to null
           // Format HSL properly - handle both string and object formats
           let hslValue: string
           if (typeof colorData.hsl === 'string') {
@@ -374,9 +373,9 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           const response = await axiosInstance.post(
             config.api.endpoints.addColor,
             {
-              spreadsheetId: sheetInfo?.spreadsheetId || null,
+              spreadsheetId: null,
               sheetName: null,
-              sheetId: sheetInfo?.sheetId || null,
+              sheetId: null,
               row: {
                 timestamp,
                 hex: colorData.hex || "",
@@ -593,14 +592,14 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       const colorData = colors[colorPickerIndex]
       const { r, g, b } = colorData.rgb
       const timestamp = Math.floor(Date.now() / 1000)
-      const sheetInfo = parseSheetUrl(colorData.sheetUrl || "")
+      // Don't use sheetUrl when generating - always set to null
 
       await axiosInstance.post(
         config.api.endpoints.addColor,
         {
-          spreadsheetId: sheetInfo?.spreadsheetId || null,
+          spreadsheetId: null,
           sheetName: null,
-          sheetId: sheetInfo?.sheetId || null,
+          sheetId: null,
           row: {
             timestamp,
             hex: colorData.hex,

@@ -190,30 +190,33 @@ const Left: React.FC<Props> = ({ setIsLeftOpen }) => {
     const handleRefresh = async () => {
       const result = await refetch()
       // After refetch, update selectedFolders to use the new data
-      if (selectedFolders.length > 0 && result.data?.folders) {
+      if ((selectedFolders.length > 0 || includeNonFoldered) && result.data?.folders) {
         const currentFolderIds = selectedFolders.map(sf => sf._id)
         const updatedFolders = result.data.folders.filter(f => 
           currentFolderIds.includes(f._id)
         )
-        if (updatedFolders.length > 0) {
+        if (updatedFolders.length > 0 || includeNonFoldered) {
           setSelectedFolders(updatedFolders)
           
           // Update selected colors with latest data from refreshed folders
-          // Also handle colors that were moved to different folders
+          // Also handle colors that were moved to different folders or from non-foldered
           setSelectedColors(prev => {
             const updated = new Map(prev)
             const colorsToUpdate: Array<{ oldKey: string; newKey: string; color: Color; folder: Folder }> = []
             
-            // First, find colors that were moved to different folders
+            // First, find colors that were moved to different folders or from non-foldered
             prev.forEach((selectedColor, oldKey) => {
-              // Check if this color exists in any of the updated folders
-              for (const folder of updatedFolders) {
+              // Check if this color exists in any folder (to catch moves from non-foldered)
+              for (const folder of result.data.folders) {
                 const colorExists = folder.colors?.some(c => c._id === selectedColor.color._id)
                 if (colorExists) {
                   const newKey = `${folder._id}_${selectedColor.color._id}`
                   const color = folder.colors?.find(c => c._id === selectedColor.color._id)
-                  if (color && newKey !== oldKey) {
-                    // Color was moved to a different folder
+                  // Only update if the destination folder is in selectedFolders
+                  // or if moving from non-foldered to a selected folder
+                  const isDestinationSelected = updatedFolders.some(f => f._id === folder._id)
+                  if (color && newKey !== oldKey && isDestinationSelected) {
+                    // Color was moved to a different folder (including from non-foldered)
                     colorsToUpdate.push({
                       oldKey,
                       newKey,
@@ -221,6 +224,28 @@ const Left: React.FC<Props> = ({ setIsLeftOpen }) => {
                       folder: folder
                     })
                     break // Found the folder, no need to continue searching
+                  }
+                }
+              }
+            })
+            
+            // Remove colors that were moved from non-foldered to a folder that's not selected
+            // Skip colors that are already being updated by the first loop
+            const keysBeingUpdated = new Set(colorsToUpdate.map(c => c.oldKey))
+            prev.forEach((selectedColor, oldKey) => {
+              if (oldKey.startsWith('non-foldered_') && !keysBeingUpdated.has(oldKey)) {
+                // Check if this color now exists in any folder (meaning it was moved)
+                const wasMoved = result.data.folders.some(folder => 
+                  folder.colors?.some(c => c._id === selectedColor.color._id)
+                )
+                // If moved but destination folder is not selected, remove it
+                if (wasMoved) {
+                  const destinationFolder = result.data.folders.find(folder => 
+                    folder.colors?.some(c => c._id === selectedColor.color._id)
+                  )
+                  const isDestinationSelected = destinationFolder && updatedFolders.some(f => f._id === destinationFolder._id)
+                  if (!isDestinationSelected) {
+                    updated.delete(oldKey)
                   }
                 }
               }
@@ -364,6 +389,12 @@ const Left: React.FC<Props> = ({ setIsLeftOpen }) => {
 
       // Invalidate and refetch folders to update the left panel
       await queryClient.invalidateQueries({ queryKey: ["folders"] })
+      
+      // Also invalidate non-foldered colors query if it's enabled
+      // This ensures colors moved from non-foldered to folder are removed from the list
+      if (includeNonFoldered) {
+        await queryClient.invalidateQueries({ queryKey: ["all-color-data"] })
+      }
       
       // Dispatch event to trigger refresh
       window.dispatchEvent(new CustomEvent('bulk-editor-folders-refresh'))
