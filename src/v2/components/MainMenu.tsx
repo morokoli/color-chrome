@@ -12,15 +12,17 @@ import {
   PanelTop,
   Palette,
   Edit3,
+  Monitor,
 } from "lucide-react"
 import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
 
 interface Props {
   setTab: (tab: string | null) => void
   onPickColor: () => void
+  onPickColorFromBrowser: () => void
 }
 
-const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
+const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const { state, dispatch } = useGlobalState()
 
   const logOutHandler = async () => {
@@ -34,6 +36,7 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
       title: "Color Actions",
       items: [
         { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
+        { title: "Pick color from browser", icon: Monitor, menuName: null, action: onPickColorFromBrowser },
         { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
         { title: "Generate Palette", icon: Palette, menuName: "GENERATOR" },
         { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },

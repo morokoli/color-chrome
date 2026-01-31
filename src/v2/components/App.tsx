@@ -11,6 +11,7 @@ import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { AddColorResponse } from "@/v2/types/api"
+import { openEyeDropper } from "@/v2/helpers/colorPicker"
 import Copy from "./Copy"
 import Comment from "./Comment"
 import MainMenu from "./MainMenu"
@@ -30,6 +31,7 @@ const App = () => {
   const [toastState, toastDispatch] = useReducer(toastReducer, initToastState)
   const [tab, setTab] = useState<string | null>(null)
   const [selected, setSelected] = useState<null | string>(null)
+  const [lastPickSource, setLastPickSource] = useState<"eyedropper" | "magnifier" | null>(null)
   const processedColorsRef = useRef<Set<string>>(new Set()) // Track processed colors to prevent duplicates
 
   // Helper to save color to Google Sheets
@@ -311,11 +313,15 @@ const App = () => {
   useEffect(() => {
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.pickedColor?.newValue) {
-        // Get the pickedAt timestamp from storage to ensure proper deduplication
-        chrome.storage.local.get(['pickedAt'], (storageResult) => {
+        chrome.storage.local.get(['pickedAt', 'eyedropperPick', 'generatorPickingState', 'generatorPickingActive'], (storageResult) => {
+          if (storageResult.generatorPickingState || storageResult.generatorPickingActive) return
           const pickedAt = storageResult.pickedAt || Date.now()
-          // handlePickedColor will clear storage itself, so we don't need to do it here
           handlePickedColor(changes.pickedColor.newValue, pickedAt)
+          if (storageResult.eyedropperPick) {
+            setLastPickSource("eyedropper")
+            setTab("PICK_PANEL")
+            chrome.storage.local.remove(['eyedropperPick'])
+          }
         })
       }
       if (changes.pickerCancelled?.newValue) {
@@ -327,18 +333,18 @@ const App = () => {
     chrome.storage.onChanged.addListener(handleStorageChange)
 
     // Check for pending color on mount (30 second window)
-    // Only process if it hasn't been processed yet (using timestamp for deduplication)
-    chrome.storage.local.get(['pickedColor', 'pickedAt', 'openTab'], (result) => {
+    chrome.storage.local.get(['pickedColor', 'pickedAt', 'openTab', 'eyedropperPick'], (result) => {
       if (result.pickedColor && result.pickedAt) {
-        // Only process if picked within last 30 seconds
         if (Date.now() - result.pickedAt < 30000) {
-          // Use the stored pickedAt timestamp for proper deduplication
           handlePickedColor(result.pickedColor, result.pickedAt)
+          if (result.eyedropperPick) {
+            setLastPickSource("eyedropper")
+            setTab("PICK_PANEL")
+            chrome.storage.local.remove(['eyedropperPick'])
+          }
         }
-        // Always clear storage after checking to prevent reprocessing
         chrome.storage.local.remove(['pickedColor', 'pickedAt'])
       }
-      // Check if we should open a specific tab
       if (result.openTab) {
         setTab(result.openTab)
         chrome.storage.local.remove(['openTab'])
@@ -348,16 +354,36 @@ const App = () => {
     return () => chrome.storage.onChanged.removeListener(handleStorageChange)
   }, [handlePickedColor])
 
-  const handlePickColor = async () => {
-    // Start the custom magnifier picker
-    chrome.runtime.sendMessage({ type: 'START_COLOR_PICKER' }, (response) => {
+  const handlePickColor = () => {
+    // Magnifier: inject script, capture page, show magnifier on page; close extension so it's not in screenshot
+    chrome.runtime.sendMessage({ type: "START_COLOR_PICKER" }, (response) => {
       if (response?.error) {
-        console.error('Picker error:', response.error)
+        console.error("Picker error:", response.error)
         setTab(null)
       } else {
-        // Close popup so it doesn't appear in screenshot
         window.close()
       }
+    })
+  }
+
+  const handlePickColorFromBrowser = async () => {
+    // Eyedropper: same flow as magnifier; show Pick Panel with color details (HEX, RGB, HSL, copy) right away.
+    const hex = await openEyeDropper()
+    if (!hex) return
+    setLastPickSource("eyedropper")
+    setTab("PICK_PANEL")
+    dispatch({ type: "SET_COLOR", payload: hex })
+    chrome.storage.local.set({ eyedropperPick: true }, () => {
+      chrome.runtime.sendMessage({ type: "COLOR_PICKED", color: hex })
+    })
+  }
+
+  const handlePickAgainEyedropper = async () => {
+    const hex = await openEyeDropper()
+    if (!hex) return
+    dispatch({ type: "SET_COLOR", payload: hex })
+    chrome.storage.local.set({ eyedropperPick: true }, () => {
+      chrome.runtime.sendMessage({ type: "COLOR_PICKED", color: hex })
     })
   }
 
@@ -427,13 +453,18 @@ const App = () => {
         >
         <ExtensionContainer>
           <Show if={tab === null}>
-            <MainMenu setTab={setTab} onPickColor={handlePickColor} />
+            <MainMenu
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
           </Show>
           <Show if={tab === "PICK_PANEL"}>
             <PickPanel
               setTab={setTab}
               selected={selected}
               copyToClipboard={copyToClipboard}
+              onPickAgain={lastPickSource === "eyedropper" ? handlePickAgainEyedropper : undefined}
             />
           </Show>
           <Show if={tab === "AI_GENERATOR"}>

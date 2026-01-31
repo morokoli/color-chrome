@@ -11,10 +11,6 @@ import { FolderSelectionModal } from "./FolderSelectionModal"
 import { ChevronDown } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
 
-interface Props {
-  setIsLeftOpen: (isOpen: boolean) => void
-}
-
 interface SelectedColor {
   color: Color
   folderId: string
@@ -28,7 +24,7 @@ const NON_FOLDERED_ID = "__non_foldered__"
 // Type for dropdown items (can be folder or non-foldered option)
 type SelectableItem = Folder | { _id: string; name: string; isNonFoldered: true }
 
-const Left: React.FC<Props> = ({ setIsLeftOpen }) => {
+const Left: React.FC = () => {
   const { state } = useGlobalState()
   const toast = useToast()
   const queryClient = useQueryClient()
@@ -80,42 +76,41 @@ const Left: React.FC<Props> = ({ setIsLeftOpen }) => {
 
   const nonFolderedColors: Color[] = allColorData?.colorsWithoutFolders || []
 
-  // Load saved folder selection from localStorage
-  // Note: We don't load includeNonFoldered from localStorage - it should always start as false
+  // Load saved folder selection from localStorage, or default to all folders + non-foldered selected
   useEffect(() => {
     try {
-      // Clear any old non-foldered state to ensure fresh start
-      localStorage.removeItem('bulk_editor_include_non_foldered')
-      
       const saved = localStorage.getItem('bulk_editor_selected_folders')
-      if (saved && foldersData?.folders) {
+      const savedNonFoldered = localStorage.getItem('bulk_editor_include_non_foldered')
+      const folders = foldersData?.folders || []
+      if (saved && folders.length > 0) {
         const savedIds = JSON.parse(saved) as string[]
-        const folders = foldersData.folders.filter(f => savedIds.includes(f._id))
-        if (folders.length > 0) {
-          setSelectedFolders(folders)
+        const matched = folders.filter(f => savedIds.includes(f._id))
+        if (matched.length > 0) {
+          setSelectedFolders(matched)
+          setIncludeNonFoldered(savedNonFoldered === 'true')
+          return
         }
       }
-      // Don't load includeNonFoldered - always start as false
-      // User must explicitly select it in the dropdown
+      // No saved selection (or empty) – default to all folders + non-foldered selected
+      setSelectedFolders([...folders])
+      setIncludeNonFoldered(true)
     } catch (e) {
       console.error('Error loading saved folders:', e)
     }
   }, [foldersData])
 
   // Save folder selection to localStorage
-  // Note: We don't persist includeNonFoldered - it always starts as false
   useEffect(() => {
     if (selectedFolders.length > 0 || includeNonFoldered) {
       if (selectedFolders.length > 0) {
         localStorage.setItem('bulk_editor_selected_folders', JSON.stringify(selectedFolders.map(f => f._id)))
       }
-      // Don't save includeNonFoldered - it should always start fresh
-      setIsLeftOpen(true)
+      localStorage.setItem('bulk_editor_include_non_foldered', String(includeNonFoldered))
     } else {
       localStorage.removeItem('bulk_editor_selected_folders')
-      setIsLeftOpen(false)
+      localStorage.removeItem('bulk_editor_include_non_foldered')
     }
-  }, [selectedFolders, includeNonFoldered, setIsLeftOpen])
+  }, [selectedFolders, includeNonFoldered])
 
   const handleFolderToggle = (folderId: string) => {
     setCollapsedFolders(prev => {

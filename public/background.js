@@ -134,36 +134,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'START_COLOR_PICKER') {
-    // Get the active tab and inject the color picker script
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       const tab = tabs[0];
       if (!tab || !tab.id) {
         sendResponse({ error: 'No active tab' });
         return;
       }
-
-      // Check if we can inject into this tab
       if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || tab.url?.startsWith('edge://')) {
         sendResponse({ error: 'Cannot pick colors from browser pages' });
         return;
       }
-
       try {
-        // Send response immediately so popup can close
         sendResponse({ success: true });
-
-        // Small delay to ensure popup has closed before capturing
         await new Promise(resolve => setTimeout(resolve, 100));
-
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['colorPickerMagnifier.js']
         });
       } catch (error) {
         console.error('Injection error:', error);
-        // Can't sendResponse here as channel is already closed
       }
     });
-    return true; // Keep channel open for async
+    return true;
   }
 });

@@ -9,9 +9,11 @@ interface Props {
   selected: null | string;
   setTab: (tab: string | null) => void;
   copyToClipboard: (text: string, selection: null | string) => void;
+  /** When set, "Pick Another Color" uses this (e.g. Eyedropper); otherwise uses magnifier via ref */
+  onPickAgain?: () => void | Promise<void>;
 }
 
-const PickPanel: FC<Props> = ({ setTab, copyToClipboard }) => {
+const PickPanel: FC<Props> = ({ setTab, copyToClipboard, onPickAgain }) => {
   const { state } = useGlobalState();
   const { color } = state;
   const pickBtnRef = useRef<PickBtnRef | null>(null);
@@ -30,7 +32,9 @@ const PickPanel: FC<Props> = ({ setTab, copyToClipboard }) => {
   };
 
   const handlePickAgain = () => {
-    if (pickBtnRef.current) {
+    if (onPickAgain) {
+      onPickAgain();
+    } else if (pickBtnRef.current) {
       pickBtnRef.current.pickColor();
     }
   };
@@ -38,7 +42,7 @@ const PickPanel: FC<Props> = ({ setTab, copyToClipboard }) => {
   const displayColor = color || '#ffffff';
 
   return (
-    <div className="w-[270px] bg-white">
+    <div className="w-[340px] bg-white">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
         <div className="flex items-center gap-2">

@@ -499,8 +499,7 @@ const Right = () => {
       {selectedColors.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-400 text-sm py-8">
-            <div className="mb-2">Select folders on the left to view colors</div>
-            <div className="text-[11px] text-gray-300">Then click colors to add them here for editing</div>
+            <div className="mb-2">Select colors to add them here for editing</div>
           </div>
         </div>
       ) : (

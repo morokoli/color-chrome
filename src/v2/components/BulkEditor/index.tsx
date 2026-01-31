@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import Left from "./Left"
 import Right from "./Right"
@@ -8,30 +7,12 @@ interface Props {
   setTab: (tab: string | null) => void
 }
 
-// Check if there are any saved folder selections in localStorage
-const getInitialLeftOpenState = (): boolean => {
-//   try {
-//     const savedFolders = localStorage.getItem('bulk_editor_selected_folders')
-//     if (savedFolders) {
-//       const parsed = JSON.parse(savedFolders)
-//       if (Array.isArray(parsed) && parsed.length > 0) {
-//         return true
-//       }
-//     }
-//   } catch (e) {
-//     // Ignore errors
-//   }
-  // Always show left panel initially so users can select folders
-  return true
-}
-
 const BulkEditor: React.FC<Props> = ({ setTab }) => {
-  const [isLeftOpen, setIsLeftOpen] = useState(getInitialLeftOpenState)
   return (
     <div
       className="bg-white rounded-md shadow-sm border border-gray-200 overflow-visible"
       style={{
-        width: isLeftOpen ? "800px" : "400px",
+        width: "800px",
         transition: "width 0.3s ease-in-out",
       }}
     >
@@ -53,7 +34,7 @@ const BulkEditor: React.FC<Props> = ({ setTab }) => {
           transitionDuration={300}
         >
           <div className="flex flex-row flex-1 min-w-0 overflow-y-auto h-full border-r border-gray-200">
-            <Left setIsLeftOpen={setIsLeftOpen} />
+            <Left />
           </div>
         </CollapsibleBoxHorizontal>
         <div className="flex-1 min-w-0 overflow-hidden">
