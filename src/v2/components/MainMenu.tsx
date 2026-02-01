@@ -38,7 +38,7 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
         { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
         { title: "Pick color from browser", icon: Monitor, menuName: null, action: onPickColorFromBrowser },
         { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
-        { title: "Generate Palette", icon: Palette, menuName: "GENERATOR" },
+        { title: "Generator", icon: Palette, menuName: "GENERATOR" },
         { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
       ],
     },

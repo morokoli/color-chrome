@@ -10,6 +10,8 @@ interface SingleThumbSliderProps {
   label?: string
   color?: string
   backgroundColor?: string
+  /** When true, label and slider are in one row; label shows first letter (R,G,B,H,S,L) with full text on hover */
+  inlineLabel?: boolean
 }
 
 const SingleThumbSlider = ({
@@ -21,14 +23,55 @@ const SingleThumbSlider = ({
   label,
   color,
   backgroundColor,
+  inlineLabel = false,
 }: SingleThumbSliderProps) => {
   const [isFocused, setIsFocused] = useState(false)
+  const [showTooltip, setShowTooltip] = useState(false)
+  const shortLabel = label ? label.charAt(0).toUpperCase() : ""
 
   return (
-    <div style={{ width: "100%" }}>
+    <div
+      style={{
+        width: "100%",
+        display: inlineLabel ? "flex" : "block",
+        alignItems: "center",
+        gap: inlineLabel ? "8px" : undefined,
+      }}
+    >
       {label && (
-        <div style={{ fontSize: "11.65px" }}>
-          {label}
+        <div
+          style={{
+            position: "relative",
+            fontSize: "11.65px",
+            minWidth: inlineLabel ? "14px" : undefined,
+            textAlign: inlineLabel ? "center" : undefined,
+          }}
+          onMouseEnter={() => inlineLabel && setShowTooltip(true)}
+          onMouseLeave={() => inlineLabel && setShowTooltip(false)}
+        >
+          {inlineLabel ? shortLabel : label}
+          {inlineLabel && showTooltip && (
+            <span
+              role="tooltip"
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "100%",
+                transform: "translateY(-50%) translateX(4px)",
+                padding: "2px 6px",
+                fontSize: "10px",
+                fontWeight: 500,
+                color: "#fff",
+                backgroundColor: "rgba(0,0,0,0.85)",
+                borderRadius: "4px",
+                whiteSpace: "nowrap",
+                zIndex: 1000,
+                pointerEvents: "none",
+              }}
+            >
+              {label}
+            </span>
+          )}
         </div>
       )}
       <SliderPrimitive.Root
@@ -44,6 +87,8 @@ const SingleThumbSlider = ({
           userSelect: "none",
           touchAction: "none",
           width: "100%",
+          flex: inlineLabel ? 1 : undefined,
+          minWidth: inlineLabel ? 0 : undefined,
           height: "20px",
         }}
       >

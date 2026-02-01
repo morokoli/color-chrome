@@ -1,5 +1,5 @@
 import { FC, useRef, useState } from "react"
-import { ArrowLeft, RotateCcw } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import PaletteModal, { type PaletteModalHandle } from "./PaletteModal"
 
 interface Props {
@@ -8,11 +8,7 @@ interface Props {
 
 const Generator: FC<Props> = ({ setTab }) => {
     const paletteRef = useRef<PaletteModalHandle | null>(null)
-    const [primaryLabel, setPrimaryLabel] = useState("Add Palette")
     const [primaryDisabled, setPrimaryDisabled] = useState(false)
-    const [colorsCount, setColorsCount] = useState(2)
-    const [canUndo, setCanUndo] = useState(false)
-    const [canRedo, setCanRedo] = useState(false)
 
     const handleClose = () => {
         setTab(null)
@@ -22,72 +18,20 @@ const Generator: FC<Props> = ({ setTab }) => {
         setTab(null)
     }
 
-    const handleStateChange = (state: { colorsCount: number; canUndo: boolean; canRedo: boolean }) => {
-        setColorsCount(state.colorsCount)
-        setCanUndo(state.canUndo)
-        setCanRedo(state.canRedo)
-    }
-
-    const heading = colorsCount === 1 ? "Create Your Color" : "Create Your Palette"
+    const handleStateChange = () => {}
 
     return (
         <div className="w-[800px] h-[600px] flex flex-col generator-container">
-            <div className="flex items-center gap-2 p-4 border-b flex-shrink-0">
-                <button
-                    onClick={() => setTab(null)}
-                    className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                </button>
-                <h2 className="text-lg font-semibold flex-1">{heading}</h2>
+            {/* Header - same as AI Generator */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 flex-shrink-0">
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => paletteRef.current?.handleUndo()}
-                        title="Undo (Ctrl+Z)"
-                        disabled={!canUndo}
-                        style={{
-                            padding: "2px 6px",
-                            minWidth: "auto",
-                            opacity: canUndo ? 1 : 0.5,
-                            border: "none",
-                            background: "transparent",
-                            cursor: canUndo ? "pointer" : "not-allowed",
-                        }}
+                        onClick={() => setTab(null)}
+                        className="p-1 hover:bg-gray-100 rounded transition-colors"
                     >
-                        <RotateCcw style={{ width: "14px", height: "14px" }} />
+                        <ArrowLeft className="w-4 h-4 text-gray-600" />
                     </button>
-                    <button
-                        onClick={() => paletteRef.current?.handleRedo()}
-                        title="Redo (Ctrl+Shift+Z)"
-                        disabled={!canRedo}
-                        style={{
-                            padding: "2px 6px",
-                            minWidth: "auto",
-                            opacity: canRedo ? 1 : 0.5,
-                            border: "none",
-                            background: "transparent",
-                            cursor: canRedo ? "pointer" : "not-allowed",
-                        }}
-                    >
-                        <RotateCcw style={{ width: "14px", height: "14px", transform: "scaleX(-1)" }} />
-                    </button>
-                    <button
-                        onClick={() => paletteRef.current?.submit()}
-                        disabled={primaryDisabled}
-                        style={{
-                            padding: "4px 12px",
-                            fontSize: "14px",
-                            height: "32px",
-                            border: "2px solid #000",
-                            borderRadius: "0px",
-                            background: "#000",
-                            color: "#fff",
-                            cursor: primaryDisabled ? "not-allowed" : "pointer",
-                            opacity: primaryDisabled ? 0.6 : 1,
-                        }}
-                    >
-                        {primaryLabel}
-                    </button>
+                    <span className="text-[13px] font-medium text-gray-800">Generator</span>
                 </div>
             </div>
             <div className="flex-1 overflow-hidden flex justify-center items-start">
@@ -97,12 +41,25 @@ const Generator: FC<Props> = ({ setTab }) => {
                     onClose={handleClose}
                     onSuccess={handleSuccess}
                     hidePrimaryActionButton={true}
-                    onPrimaryActionMetaChange={({ label, disabled }) => {
-                        setPrimaryLabel(label)
+                    onPrimaryActionMetaChange={({ disabled }) => {
                         setPrimaryDisabled(disabled)
                     }}
                     onStateChange={handleStateChange}
                 />
+            </div>
+            {/* Save button at bottom - same area as AI Generator */}
+            <div className="px-3 pb-3 pt-2 border-t border-gray-200 flex-shrink-0 flex justify-end">
+                <button
+                    onClick={() => paletteRef.current?.submit()}
+                    disabled={primaryDisabled}
+                    className={`flex items-center justify-center py-2.5 min-w-[140px] text-[12px] rounded transition-colors ${
+                        !primaryDisabled
+                            ? "bg-gray-900 text-white hover:bg-gray-800"
+                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    }`}
+                >
+                    Save
+                </button>
             </div>
         </div>
     )

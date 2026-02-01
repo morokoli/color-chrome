@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { List, Collapse } from "antd"
 import SimplePaletteBox from "./SimplePaletteBox"
 
@@ -70,9 +70,7 @@ const PaletteHistory = ({
 }: PaletteHistoryProps) => {
   const [snapshots, setSnapshots] = useState<any[]>([])
   const [currentIndex, setCurrentIndex] = useState(-1)
-  const [lastAppliedTimestamp, setLastAppliedTimestamp] = useState<number | null>(
-    null
-  )
+  const lastUndoRedoTimestamp = useRef<number>(0)
   const todayKey = useMemo(() => new Date().toDateString(), [])
 
   const uniquePaletteId = useMemo(() => {
@@ -84,7 +82,11 @@ const PaletteHistory = ({
       const stored = sessionStorage.getItem(`palette_history_${uniquePaletteId}`)
       if (stored) {
         const parsed = JSON.parse(stored)
-        setSnapshots(Array.isArray(parsed) ? parsed : [])
+        const loaded = Array.isArray(parsed) ? parsed : []
+        setSnapshots(loaded)
+        if (loaded.length > 0) {
+          setCurrentIndex(0)
+        }
       }
     } catch (error) {
       console.error("Error loading palette history:", error)
@@ -103,18 +105,28 @@ const PaletteHistory = ({
     }
   }
 
-  const createSnapshot = (colors: any[], name: string | null = null) => {
-    const clonedColors = deepCloneColors(colors)
-    const snapshot = {
-      id: Date.now(),
-      timestamp: new Date().toISOString(),
-      colors: clonedColors,
-      name: name || new Date().toDateString(),
-    }
-    const newSnapshots = [snapshot, ...snapshots].slice(0, MAX_SNAPSHOTS)
-    setSnapshots(newSnapshots)
-    saveSnapshots(newSnapshots)
-  }
+  const createSnapshot = useCallback(
+    (colors: any[], name: string | null = null, options?: { fromUserEdit?: boolean }) => {
+      const clonedColors = deepCloneColors(colors)
+      const snapshot = {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        colors: clonedColors,
+        name: name || new Date().toDateString(),
+      }
+      let newSnapshots: any[]
+      if (options?.fromUserEdit && currentIndex > 0) {
+        // User made a new edit while "in the past" - truncate redo stack (standard undo behavior)
+        newSnapshots = [snapshot, ...snapshots.slice(currentIndex)].slice(0, MAX_SNAPSHOTS)
+        setCurrentIndex(0)
+      } else {
+        newSnapshots = [snapshot, ...snapshots].slice(0, MAX_SNAPSHOTS)
+      }
+      setSnapshots(newSnapshots)
+      saveSnapshots(newSnapshots)
+    },
+    [snapshots, currentIndex]
+  )
 
   const groupedSnapshots = useMemo(() => {
     const groups: Record<string, any[]> = {}
@@ -137,37 +149,42 @@ const PaletteHistory = ({
     if (currentIndex < snapshots.length - 1) {
       const nextIndex = currentIndex + 1
       const snapshot = snapshots[nextIndex]
-      if (snapshot && snapshot.timestamp !== lastAppliedTimestamp) {
+      if (snapshot) {
+        lastUndoRedoTimestamp.current = Date.now()
         setCurrentIndex(nextIndex)
-        setLastAppliedTimestamp(snapshot.timestamp)
         onApplySnapshot(snapshot.colors)
       }
     }
-  }, [currentIndex, snapshots, lastAppliedTimestamp, onApplySnapshot])
+  }, [currentIndex, snapshots, onApplySnapshot])
 
   const handleRedo = useCallback(() => {
     if (currentIndex > 0) {
       const prevIndex = currentIndex - 1
       const snapshot = snapshots[prevIndex]
-      if (snapshot && snapshot.timestamp !== lastAppliedTimestamp) {
+      if (snapshot) {
+        lastUndoRedoTimestamp.current = Date.now()
         setCurrentIndex(prevIndex)
-        setLastAppliedTimestamp(snapshot.timestamp)
         onApplySnapshot(snapshot.colors)
       }
     }
-  }, [currentIndex, snapshots, lastAppliedTimestamp, onApplySnapshot])
+  }, [currentIndex, snapshots, onApplySnapshot])
 
-  const handleApplySnapshot = (snapshot: any) => {
-    const snapshotIndex = snapshots.findIndex(
-      (s) => s.timestamp === snapshot.timestamp
-    )
-    if (snapshotIndex !== -1) {
-      setCurrentIndex(snapshotIndex)
-      setLastAppliedTimestamp(snapshot.timestamp)
-    }
-    createSnapshot(currentColors)
-    onApplySnapshot(snapshot.colors)
-  }
+  const handleApplySnapshot = useCallback(
+    (snapshot: any) => {
+      const snapshotIndex = snapshots.findIndex(
+        (s) => s.timestamp === snapshot.timestamp
+      )
+      if (snapshotIndex !== -1) {
+        lastUndoRedoTimestamp.current = Date.now()
+        // Save current state before navigating away (enables redo back to here)
+        createSnapshot(currentColors)
+        // After adding current at front, clicked snapshot is at snapshotIndex + 1
+        setCurrentIndex(snapshotIndex + 1)
+      }
+      onApplySnapshot(snapshot.colors)
+    },
+    [snapshots, currentColors, createSnapshot, onApplySnapshot]
+  )
 
   useEffect(() => {
     if (onUndoRef) {
@@ -188,6 +205,13 @@ const PaletteHistory = ({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      const isInputFocused =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      if (isInputFocused) return
+
       if (event.ctrlKey || event.metaKey) {
         if (event.key === "z" && !event.shiftKey) {
           event.preventDefault()
@@ -204,16 +228,22 @@ const PaletteHistory = ({
 
   useEffect(() => {
     if (currentColors.length > 0) {
+      const effectRunAt = Date.now()
       const timeoutId = setTimeout(() => {
+        // Skip only if this effect run was triggered by undo/redo (ran within 400ms of it)
+        const triggeredByUndoRedo = effectRunAt - lastUndoRedoTimestamp.current < 400
+        if (triggeredByUndoRedo) {
+          return
+        }
         const lastSnapshot = snapshots[0]
         const colorsChanged = !lastSnapshot || colorsHaveChanged(lastSnapshot.colors, currentColors)
         if (colorsChanged) {
-          createSnapshot(currentColors)
+          createSnapshot(currentColors, null, { fromUserEdit: true })
         }
-      }, 1000)
+      }, 800)
       return () => clearTimeout(timeoutId)
     }
-  }, [currentColors, snapshots])
+  }, [currentColors, snapshots, createSnapshot])
 
   if (snapshots.length === 0) {
     return (

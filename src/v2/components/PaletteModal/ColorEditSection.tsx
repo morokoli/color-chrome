@@ -1,6 +1,10 @@
+import { useState } from "react"
 import { ColorPicker } from "primereact/colorpicker"
 import tinycolor from "tinycolor2"
+import { Copy, Check, Pipette } from "lucide-react"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
+import { useToast } from "@/v2/hooks/useToast"
+import { openEyeDropper } from "@/v2/helpers/colorPicker"
 import SingleThumbSlider from "./SingleThumbSlider"
 
 const getColorHex = (color: any) => {
@@ -19,6 +23,8 @@ const ColorEditSection = ({
     onColorChange,
     colorPickerIndex,
 }: ColorEditSectionProps) => {
+    const toast = useToast()
+    const [hslCopied, setHslCopied] = useState(false)
 
     if (colorPickerIndex === null) {
         return (
@@ -91,6 +97,30 @@ const ColorEditSection = ({
         onColorChange(updatedColor)
     }
 
+    const hslString = `hsl(${Math.round(h)}, ${Math.round((s ?? 0) * 100)}%, ${Math.round((l ?? 0) * 100)}%)`
+    const handleCopyHsl = () => {
+        navigator.clipboard.writeText(hslString)
+        setHslCopied(true)
+        toast.display("success", "HSL copied to clipboard")
+        setTimeout(() => setHslCopied(false), 1500)
+    }
+
+    const handlePickFromScreen = async () => {
+        if (typeof window === "undefined" || !("EyeDropper" in window)) {
+            toast.display("error", "Eyedropper is not supported in this browser")
+            return
+        }
+        try {
+            const hex = await openEyeDropper()
+            if (hex) {
+                handleHexChange(hex)
+                toast.display("success", "Color applied")
+            }
+        } catch {
+            toast.display("error", "Could not pick color")
+        }
+    }
+
     return (
         <div
             style={{
@@ -134,6 +164,30 @@ const ColorEditSection = ({
                             border: "2px solid black",
                         }}
                     />
+                    <button
+                        type="button"
+                        onClick={handlePickFromScreen}
+                        title="Pick color from screen"
+                        style={{
+                            marginTop: "6px",
+                            padding: "6px",
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            borderRadius: "4px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#f0f0f0"
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent"
+                        }}
+                    >
+                        <Pipette className="w-4 h-4" style={{ color: "#374151" }} />
+                    </button>
                 </div>
                 <div
                     style={{
@@ -232,7 +286,8 @@ const ColorEditSection = ({
                         max={255}
                         min={0}
                         step={1}
-                        label="R"
+                        label="Red"
+                        inlineLabel
                         color={`rgb(${rgb.r},0,0)`}
                         backgroundColor={`linear-gradient(to right, rgb(0, 0, 0), rgb(255, 0, 0))`}
                     />
@@ -242,7 +297,8 @@ const ColorEditSection = ({
                         max={255}
                         min={0}
                         step={1}
-                        label="G"
+                        label="Green"
+                        inlineLabel
                         color={`rgb(0,${rgb.g},0)`}
                         backgroundColor={`linear-gradient(to right, rgb(0, 0, 0), rgb(0, 255, 0))`}
                     />
@@ -252,7 +308,8 @@ const ColorEditSection = ({
                         max={255}
                         min={0}
                         step={1}
-                        label="B"
+                        label="Blue"
+                        inlineLabel
                         color={`rgb(0,0,${rgb.b})`}
                         backgroundColor={`linear-gradient(to right, rgb(0, 0, 0), rgb(0, 0, 255))`}
                     />
@@ -267,7 +324,7 @@ const ColorEditSection = ({
                         marginBottom: 8,
                     }}
                 >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <input
                             value={Number(h || 0).toFixed(0)}
                             onChange={(e) => handleHslChange(0, e.target.value)}
@@ -332,6 +389,34 @@ const ColorEditSection = ({
                                 e.currentTarget.style.boxShadow = "none"
                             }}
                         />
+                        <button
+                            type="button"
+                            onClick={handleCopyHsl}
+                            title="Copy HSL"
+                            style={{
+                                padding: "6px",
+                                marginBottom: 8,
+                                border: "none",
+                                background: "transparent",
+                                cursor: "pointer",
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = "#f5f5f5"
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = "transparent"
+                            }}
+                        >
+                            {hslCopied ? (
+                                <Check className="w-4 h-4" style={{ color: "#22c55e" }} />
+                            ) : (
+                                <Copy className="w-4 h-4" style={{ color: "#6b7280" }} />
+                            )}
+                        </button>
                     </div>
                     <SingleThumbSlider
                         value={h}
@@ -340,6 +425,7 @@ const ColorEditSection = ({
                         min={0}
                         step={1}
                         label="Hue"
+                        inlineLabel
                         color={`hsl(${h},100%,50%)`}
                         backgroundColor={`linear-gradient(to right, hsl(0, 100%, 50%), hsl(60, 100%, 50%), hsl(120, 100%, 50%), hsl(180, 100%, 50%), hsl(240, 100%, 50%), hsl(300, 100%, 50%), hsl(359, 100%, 50%))`}
                     />
@@ -350,6 +436,7 @@ const ColorEditSection = ({
                         min={0}
                         step={0.01}
                         label="Saturation"
+                        inlineLabel
                         color={`hsl(${h},100%,50%)`}
                         backgroundColor={`linear-gradient(to right, hsl(${h}, 0%, ${l}%), hsl(${h}, 100%, ${l}%))`}
                     />
@@ -360,6 +447,7 @@ const ColorEditSection = ({
                         min={0}
                         step={0.01}
                         label="Lightness"
+                        inlineLabel
                         color={`hsl(${h},100%,50%)`}
                         backgroundColor={`linear-gradient(to right, hsl(${h}, 100%, 0%), hsl(${h}, 100%, 100%))`}
                     />

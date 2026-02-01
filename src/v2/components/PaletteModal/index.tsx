@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react"
+import { RotateCcw } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
@@ -23,7 +24,7 @@ interface PaletteModalProps {
   onSuccess?: (colors: any[]) => void
   hidePrimaryActionButton?: boolean
   onPrimaryActionMetaChange?: (meta: { label: string; disabled: boolean }) => void
-  onStateChange?: (state: { colorsCount: number; canUndo: boolean; canRedo: boolean }) => void
+  onStateChange?: (state: { colorsCount: number }) => void
 }
 
 export type PaletteModalHandle = {
@@ -212,18 +213,14 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const handleUndoStateChange = (canUndo: boolean, canRedo: boolean) => {
     setCanUndo(canUndo)
     setCanRedo(canRedo)
-    // Notify parent of state changes
-    if (onStateChange) {
-      onStateChange({ colorsCount: colors.length, canUndo, canRedo })
-    }
   }
 
-  // Notify parent when colors change
+  // Notify parent when colors count changes
   useEffect(() => {
     if (onStateChange) {
-      onStateChange({ colorsCount: colors.length, canUndo, canRedo })
+      onStateChange({ colorsCount: colors.length })
     }
-  }, [colors.length, canUndo, canRedo, onStateChange])
+  }, [colors.length, onStateChange])
 
   const primaryActionLabel = loading
     ? "Saving..."
@@ -855,8 +852,48 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               flexDirection: "column",
             }}
           >
-            <h3 style={{ margin: "0 0 0px 0", fontSize: "12px", fontWeight: 500 }}>History</h3>
-            <div style={{ fontSize: "10px", color: "#666", marginBottom: "8px", marginTop: "3px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+              <h3 style={{ margin: 0, fontSize: "12px", fontWeight: 500 }}>Versions</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                <button
+                  onClick={handleUndo}
+                  title="Undo (Ctrl+Z)"
+                  disabled={!canUndo}
+                  style={{
+                    padding: "2px 4px",
+                    minWidth: "auto",
+                    opacity: canUndo ? 1 : 0.4,
+                    border: "none",
+                    background: "transparent",
+                    cursor: canUndo ? "pointer" : "not-allowed",
+                    borderRadius: "2px",
+                  }}
+                  onMouseEnter={(e) => canUndo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
+                >
+                  <RotateCcw style={{ width: "12px", height: "12px" }} />
+                </button>
+                <button
+                  onClick={handleRedo}
+                  title="Redo (Ctrl+Shift+Z)"
+                  disabled={!canRedo}
+                  style={{
+                    padding: "2px 4px",
+                    minWidth: "auto",
+                    opacity: canRedo ? 1 : 0.4,
+                    border: "none",
+                    background: "transparent",
+                    cursor: canRedo ? "pointer" : "not-allowed",
+                    borderRadius: "2px",
+                  }}
+                  onMouseEnter={(e) => canRedo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
+                >
+                  <RotateCcw style={{ width: "12px", height: "12px", transform: "scaleX(-1)" }} />
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: "10px", color: "#666", marginBottom: "8px", marginTop: "0px" }}>
               <p style={{ margin: 0 }}>
                 Previous iterations of your {isPalette ? "palette" : "color"}
               </p>
