@@ -3,7 +3,8 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
-import { ArrowLeft, Sparkles, Loader2, History, Link, Copy } from "lucide-react"
+import { Sparkles, Loader2, History, Link, Copy } from "lucide-react"
+import SectionHeader from "./common/SectionHeader"
 import axios from "axios"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 
@@ -11,9 +12,11 @@ interface Props {
   selected: null | string
   setTab: (tab: string | null) => void
   copyToClipboard: (text: string, selection: null | string) => void
+  onPickColor?: () => void
+  onPickColorFromBrowser?: () => void
 }
 
-const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
+const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickColorFromBrowser }) => {
   const toast = useToast()
   const [loading, setLoading] = useState<boolean>(false)
   const [respColor, setRespColor] = useState<string>("")
@@ -134,26 +137,24 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard }) => {
 
   return (
     <div className="w-[320px] bg-white rounded-md shadow-sm border border-gray-200">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTab(null)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 text-gray-600" />
-          </button>
-          <span className="text-[13px] font-medium text-gray-800">AI Generator</span>
-          <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Beta</span>
-        </div>
-        <button
-          onClick={() => setTab('COMMENT')}
-          className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-          title="History & Editor"
-        >
-          <History className="w-4 h-4 text-gray-500" />
-        </button>
-      </div>
+      <SectionHeader
+        title="AI Generator"
+        setTab={setTab}
+        onPickColor={onPickColor}
+        onPickColorFromBrowser={onPickColorFromBrowser}
+        extraRight={
+          <>
+            <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Beta</span>
+            <button
+              onClick={() => setTab("COMMENT")}
+              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+              title="History & Editor"
+            >
+              <History className="w-4 h-4 text-gray-500" />
+            </button>
+          </>
+        }
+      />
 
       {/* Output section */}
       <div className="p-3 bg-gray-50 border-b border-gray-200">

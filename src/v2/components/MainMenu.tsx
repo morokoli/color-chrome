@@ -1,19 +1,8 @@
-import { FC } from "react"
+import { FC, useMemo } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { eraseAllCookies } from "@/v2/helpers/cookie"
-import {
-  Pipette,
-  Sparkles,
-  History,
-  Copy,
-  FileSpreadsheet,
-  LogIn,
-  Figma,
-  PanelTop,
-  Palette,
-  Edit3,
-  Monitor,
-} from "lucide-react"
+import { LogIn } from "lucide-react"
+import { SECTION_MENU_ITEMS } from "@/v2/constants/sectionMenu"
 import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
 
 interface Props {
@@ -30,39 +19,21 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
     dispatch({ type: "RESET_STATE" })
   }
 
-  // Organized menu sections
-  const menuSections = [
-    {
-      title: "Color Actions",
-      items: [
-        { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
-        { title: "Pick color from browser", icon: Monitor, menuName: null, action: onPickColorFromBrowser },
-        { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
-        { title: "Generator", icon: Palette, menuName: "GENERATOR" },
-        { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
-      ],
-    },
-    {
-      title: null, // No header for general actions
-      items: [
-        { title: "Copy", icon: Copy, menuName: "COPY" },
-        { title: "History & Editor", icon: History, menuName: "COMMENT" },
-        { title: "Bulk Editor", icon: Edit3, menuName: "BULK_EDITOR" },
-      ],
-    },
-    {
-      title: "Integration",
-      items: [
-        { title: "Figma", icon: Figma, menuName: "FIGMA_MANAGER" },
-      ],
-    },
-    {
-      title: "Export to",
-      items: [
-        { title: "Sheet", icon: FileSpreadsheet, menuName: "ADD_SHEET" },
-      ],
-    },
-  ]
+  const menuSections = useMemo(() => {
+    const sections: { title: string | null; items: typeof SECTION_MENU_ITEMS }[] = []
+    const bySection = new Map<string | null, (typeof SECTION_MENU_ITEMS)[number][]>()
+    SECTION_MENU_ITEMS.forEach((item) => {
+      const key = item.section
+      if (!bySection.has(key)) bySection.set(key, [])
+      bySection.get(key)!.push(item)
+    })
+    const order: (string | null)[] = ["Color Actions", null, "Integration", "Export to"]
+    order.forEach((sectionTitle) => {
+      const items = bySection.get(sectionTitle) ?? []
+      if (items.length > 0) sections.push({ title: sectionTitle, items })
+    })
+    return sections
+  }, [])
 
   const logInHandler = () => {
     setTab("ADD_SHEET")
@@ -83,11 +54,16 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
             )}
             <div className="flex flex-col">
               {section.items.map((item) => {
-                const Icon = item.icon
+                const Icon = item.Icon
+                const handleClick = () => {
+                  if (item.actionKey === "pickColor") onPickColor()
+                  else if (item.actionKey === "pickFromBrowser") onPickColorFromBrowser()
+                  else if (item.menuName != null) setTab(item.menuName)
+                }
                 return (
                   <button
                     key={item.title}
-                    onClick={() => item.action ? item.action() : setTab(item.menuName!)}
+                    onClick={handleClick}
                     className="w-full flex items-center px-4 gap-2.5 py-1.5 text-left hover:bg-gray-100 transition-colors cursor-pointer"
                   >
                     {Icon && <Icon className="w-4 h-4 text-gray-600" />}

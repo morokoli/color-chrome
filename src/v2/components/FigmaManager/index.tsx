@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from "react"
-import { ArrowLeft, Plus, X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { useFigmaBindAccount, useFigmaDeleteAccount, useFigmaGetAccounts } from "@/v2/api/figma.api"
 import { config } from "@/v2/others/config"
+import SectionHeader from "../common/SectionHeader"
 import { DeletionConfirmationModal } from "./DeletionConfirmationModal"
 
 interface Props {
   setTab: (tab: string | null) => void
+  onPickColor?: () => void
+  onPickColorFromBrowser?: () => void
 }
 
-const FigmaManager: React.FC<Props> = ({ setTab }) => {
+const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const { mutateAsync: bindAccountMutation } = useFigmaBindAccount()
   const { mutateAsync: deleteAccountMutation } = useFigmaDeleteAccount()
   const { data: accountsData, isLoading: isAccountsLoading } = useFigmaGetAccounts()
@@ -94,16 +97,12 @@ const FigmaManager: React.FC<Props> = ({ setTab }) => {
 
   return (
     <div className="bg-white rounded-md overflow-visible w-[360px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <button
-          onClick={() => setTab(null)}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 text-gray-600" />
-        </button>
-        <span className="text-[13px] font-medium text-gray-800">Figma</span>
-      </div>
+      <SectionHeader
+        title="Figma"
+        setTab={setTab}
+        onPickColor={onPickColor}
+        onPickColorFromBrowser={onPickColorFromBrowser}
+      />
 
       {/* Content */}
       <div className="p-4">

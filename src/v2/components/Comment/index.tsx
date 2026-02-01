@@ -6,7 +6,8 @@ import { colors } from '@/v2/helpers/colors'
 import { config } from '@/v2/others/config'
 import { useAPI } from '@/v2/hooks/useAPI'
 import { useUpsertColors } from '@/v2/api/sheet.api'
-import { ArrowLeft, Trash2, Copy, Check, Plus, X, Link, ExternalLink } from 'lucide-react'
+import { Trash2, Copy, Check, Plus, X, Link, ExternalLink } from 'lucide-react'
+import SectionHeader from '../common/SectionHeader'
 import { Slider } from '@/components/ui/slider'
 import { HexColorPicker } from 'react-colorful'
 
@@ -17,10 +18,12 @@ const MAX_LOCAL_COLORS = 30
 interface Props {
   selected: null | string;
   setTab: (tab: string | null) => void;
-  copyToClipboard: (text: string, selection: null | string) => void
+  copyToClipboard: (text: string, selection: null | string) => void;
+  onPickColor?: () => void;
+  onPickColorFromBrowser?: () => void;
 }
 
-const Comment: FC<Props> = ({ setTab }) => {
+const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState()
   const { colorHistory, selectedFile, parsedData, files, newColumns: allNewColumns } = state
@@ -378,16 +381,12 @@ const Comment: FC<Props> = ({ setTab }) => {
 
   return (
     <div className="w-[520px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <button
-          onClick={() => setTab(null)}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <span className="text-[14px] font-medium">History & Editor</span>
-      </div>
+      <SectionHeader
+        title="History & Editor"
+        setTab={setTab}
+        onPickColor={onPickColor}
+        onPickColorFromBrowser={onPickColorFromBrowser}
+      />
 
       <div className="flex">
         {/* Column 1 - Color Picker & Local Colors */}

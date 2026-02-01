@@ -465,6 +465,8 @@ const App = () => {
               selected={selected}
               copyToClipboard={copyToClipboard}
               onPickAgain={lastPickSource === "eyedropper" ? handlePickAgainEyedropper : undefined}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
             />
           </Show>
           <Show if={tab === "AI_GENERATOR"}>
@@ -472,6 +474,8 @@ const App = () => {
               setTab={setTab}
               selected={selected}
               copyToClipboard={copyToClipboard}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
             />
           </Show>
           <Show if={tab === "COPY"}>
@@ -479,6 +483,8 @@ const App = () => {
               setTab={setTab}
               selected={selected}
               copyToClipboard={copyToClipboard}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
             />
           </Show>
           <Show if={tab === "COMMENT"}>
@@ -486,22 +492,44 @@ const App = () => {
               setTab={setTab}
               selected={selected}
               copyToClipboard={copyToClipboard}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
             />
           </Show>
           <Show if={tab === "FIGMA_MANAGER"}>
-            <FigmaManager setTab={setTab}/>
+            <FigmaManager
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
           </Show>
           <Show if={tab === "ADD_SHEET"}>
-            <AddSheet setTab={setTab} />
+            <AddSheet
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
           </Show>
           <Show if={tab === "COLOR_EXTRACTION"}>
-            <PageColorExtraction setTab={setTab} />
+            <PageColorExtraction
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
           </Show>
           <Show if={tab === "GENERATOR"}>
-            <Generator setTab={setTab} />
+            <Generator
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
           </Show>
           <Show if={tab === "BULK_EDITOR"}>
-            <BulkEditor setTab={setTab} />
+            <BulkEditor
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
           </Show>
         </ExtensionContainer>
         </ToastContext.Provider>

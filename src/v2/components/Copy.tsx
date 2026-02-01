@@ -1,15 +1,18 @@
 import { FC, useState } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { colors } from "@/v2/helpers/colors"
-import { Pipette, Copy as CopyIcon, Check, ArrowLeft } from "lucide-react"
+import { Pipette, Copy as CopyIcon, Check } from "lucide-react"
+import SectionHeader from "./common/SectionHeader"
 
 interface Props {
   selected: null | string
   setTab: (tab: string | null) => void
   copyToClipboard: (text: string, selection: null | string) => void
+  onPickColor?: () => void
+  onPickColorFromBrowser?: () => void
 }
 
-const Copy: FC<Props> = ({ setTab, copyToClipboard }) => {
+const Copy: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickColorFromBrowser }) => {
   const { state } = useGlobalState()
   const { color } = state
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null)
@@ -32,16 +35,12 @@ const Copy: FC<Props> = ({ setTab, copyToClipboard }) => {
 
   return (
     <div className="w-[240px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <button
-          onClick={() => setTab(null)}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <span className="text-[14px] font-medium">Copy</span>
-      </div>
+      <SectionHeader
+        title="Copy"
+        setTab={setTab}
+        onPickColor={onPickColor}
+        onPickColorFromBrowser={onPickColorFromBrowser}
+      />
 
       <div className="p-3">
       {/* Color Preview */}

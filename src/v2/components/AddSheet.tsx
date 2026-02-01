@@ -16,7 +16,6 @@ import {
   Link,
   FilePlus,
   Trash2,
-  ArrowLeft,
   CheckCircle,
   Check,
   ChevronDown,
@@ -25,9 +24,12 @@ import {
 
 import Input from '@/v2/components/Input';
 import Select from '@/v2/components/Select'
+import SectionHeader from './common/SectionHeader'
 
 interface Props {
   setTab: (tab: string | null) => void;
+  onPickColor?: () => void;
+  onPickColorFromBrowser?: () => void;
 }
 
 type TabType = 'select' | 'exist' | 'new' | 'remove'
@@ -39,7 +41,7 @@ const tabs: { id: TabType; label: string; icon: typeof Link }[] = [
   { id: 'remove', label: 'Remove', icon: Trash2 },
 ]
 
-const AddSheet: FC<Props> = memo(({ setTab }) => {
+const AddSheet: FC<Props> = memo(({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState();
   const { user, selectedFile, files } = state;
@@ -255,16 +257,12 @@ const AddSheet: FC<Props> = memo(({ setTab }) => {
 
   return (
     <div className="w-[340px] bg-white rounded-md shadow-sm border border-gray-200">
-      {/* Header with back button */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <button
-          onClick={() => setTab(null)}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 text-gray-600" />
-        </button>
-        <span className="text-[13px] font-medium text-gray-800">Sheet Manager</span>
-      </div>
+      <SectionHeader
+        title="Sheet Manager"
+        setTab={setTab}
+        onPickColor={onPickColor}
+        onPickColorFromBrowser={onPickColorFromBrowser}
+      />
 
       {/* Tab Navigation */}
       <div className="flex border-b border-gray-200">

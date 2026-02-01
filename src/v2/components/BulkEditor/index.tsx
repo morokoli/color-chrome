@@ -1,13 +1,15 @@
-import { ArrowLeft } from "lucide-react"
 import Left from "./Left"
 import Right from "./Right"
 import { CollapsibleBoxHorizontal } from "../CollapsibleBoxHorizontal"
+import SectionHeader from "../common/SectionHeader"
 
 interface Props {
   setTab: (tab: string | null) => void
+  onPickColor?: () => void
+  onPickColorFromBrowser?: () => void
 }
 
-const BulkEditor: React.FC<Props> = ({ setTab }) => {
+const BulkEditor: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   return (
     <div
       className="bg-white rounded-md shadow-sm border border-gray-200 overflow-visible"
@@ -16,16 +18,12 @@ const BulkEditor: React.FC<Props> = ({ setTab }) => {
         transition: "width 0.3s ease-in-out",
       }}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
-        <button
-          onClick={() => setTab(null)}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 text-gray-600" />
-        </button>
-        <span className="text-[13px] font-medium text-gray-800">Bulk Editor</span>
-      </div>
+      <SectionHeader
+        title="Bulk Editor"
+        setTab={setTab}
+        onPickColor={onPickColor}
+        onPickColorFromBrowser={onPickColorFromBrowser}
+      />
 
       <div className="flex" style={{ height: "500px" }}>
         <CollapsibleBoxHorizontal
