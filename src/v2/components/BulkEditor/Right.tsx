@@ -6,7 +6,6 @@ import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { colors } from "@/v2/helpers/colors"
 import { ColorList } from "./ColorList"
-import { SlashNameInputs } from "../FigmaManager/SlashNameInputs"
 import { SelectedColor } from "@/v2/api/folders.api"
 import { SheetSelectionModal } from "./SheetSelectionModal"
 
@@ -16,16 +15,12 @@ const Right = () => {
   const queryClient = useQueryClient()
   const [selectedColors, setSelectedColors] = useState<SelectedColor[]>([])
   const [activeColors, setActiveColors] = useState<number[]>([])
-  const [slash_nameInputs, setslash_nameInputs] = useState<string[]>([
-    "",
-    "",
-    "",
-    "",
-    "",
-  ])
+  const [nameInput, setNameInput] = useState<string>("")
+  const [nameMode, setNameMode] = useState<"hex" | "numerator">("hex")
   const [tagsInput, setTagsInput] = useState<string>("")
   const [sheetModalOpen, setSheetModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState<"save" | "export" | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
 
   // Helper function to merge colors, preserving existing values
   const mergeColors = (prev: SelectedColor[], newColors: SelectedColor[]): SelectedColor[] => {
@@ -120,20 +115,13 @@ const Right = () => {
       if (activeColors.length === 0) {
         setActiveColors(selectedColors.map((_, i) => i))
         if (selectedColors.length > 0) {
-          const parts = getslash_nameParts(0)
-          const sharedParts = parts.map((part) =>
-            selectedColors.every((item) =>
-              item.color.slash_naming?.includes(part) || !item.color.slash_naming
-            )
-              ? part
-              : "",
+          const firstSlashNaming = selectedColors[0]?.color.slash_naming || ""
+          const allSameName = selectedColors.every(
+            (item) => (item.color.slash_naming || "") === firstSlashNaming
           )
-          const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
-          setslash_nameInputs(filled)
-          
-          // Set tags from first color if all have same tags
+          setNameInput(allSameName ? firstSlashNaming : "")
           const firstTags = selectedColors[0]?.color.tags || []
-          if (selectedColors.every(item => 
+          if (selectedColors.every(item =>
             JSON.stringify(item.color.tags || []) === JSON.stringify(firstTags)
           )) {
             setTagsInput(firstTags.join(", "))
@@ -143,7 +131,7 @@ const Right = () => {
         }
       } else {
         setActiveColors([])
-        setslash_nameInputs(["", "", "", "", ""])
+        setNameInput("")
         setTagsInput("")
       }
       return
@@ -154,96 +142,74 @@ const Right = () => {
       setActiveColors(filteredColors)
 
       if (filteredColors.length === 0) {
-        setslash_nameInputs(["", "", "", "", ""])
+        setNameInput("")
         setTagsInput("")
       } else if (filteredColors.length === 1) {
-        const parts = getslash_nameParts(filteredColors[0])
-        const filled = [...parts, "", "", "", "", ""].slice(0, 5)
-        setslash_nameInputs(filled)
+        setNameInput(selectedColors[filteredColors[0]]?.color.slash_naming || "")
         const tags = selectedColors[filteredColors[0]]?.color.tags || []
         setTagsInput(tags.join(", "))
       } else {
-        const parts = getslash_nameParts(filteredColors[0])
-        const sharedParts = parts.map((part) =>
-          selectedColors
-            .filter((_, index) => activeColors.includes(index) && index !== colorId)
-            .every((item) =>
-              item.color.slash_naming?.includes(part) || !item.color.slash_naming
-            )
-            ? part
-            : "",
+        const firstSlashNaming = selectedColors[filteredColors[0]]?.color.slash_naming || ""
+        const allSameName = filteredColors.every(
+          (idx) => (selectedColors[idx]?.color.slash_naming || "") === firstSlashNaming
         )
-        const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
-        setslash_nameInputs(filled)
+        setNameInput(allSameName ? firstSlashNaming : "")
       }
     } else {
-      const parts = getslash_nameParts(colorId)
-      const sharedParts = parts.map((part) =>
-        selectedColors
-          .filter((_, index) => activeColors.includes(index))
-          .every((item) =>
-            item.color.slash_naming?.includes(part) || !item.color.slash_naming
-          )
-          ? part
-          : "",
-      )
-      const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
-      setslash_nameInputs(filled)
-      setActiveColors([...activeColors, colorId])
+      const newActive = [...activeColors, colorId]
+      if (newActive.length === 1) {
+        setNameInput(selectedColors[colorId]?.color.slash_naming || "")
+        const tags = selectedColors[colorId]?.color.tags || []
+        setTagsInput(tags.join(", "))
+      } else {
+        const firstSlashNaming = selectedColors[newActive[0]]?.color.slash_naming || ""
+        const allSameName = newActive.every(
+          (idx) => (selectedColors[idx]?.color.slash_naming || "") === firstSlashNaming
+        )
+        setNameInput(allSameName ? firstSlashNaming : "")
+      }
+      setActiveColors(newActive)
     }
   }
 
-  const getslash_nameParts = (colorId: number) => {
-    const slash_naming = selectedColors[colorId]?.color.slash_naming || ""
-    return slash_naming
-      .split("/")
-      .map((p) => p.trim())
-      .slice(0, 5)
-  }
-
-  const handleChangeslash_naming = () => {
+  const handleUpdate = () => {
     if (!activeColors.length) return
-    const newslash_naming = slash_nameInputs.filter(Boolean).join(" / ")
-    
-    setSelectedColors(prev => 
-      prev.map((item, index) => 
-        activeColors.includes(index)
-          ? {
-              ...item,
-              color: {
-                ...item.color,
-                slash_naming: newslash_naming,
-              }
-            }
-          : item
-      )
-    )
-    
-    toast.display("success", `Updated slash naming for ${activeColors.length} color(s)`)
-  }
-
-  const handleChangeTags = () => {
-    if (!activeColors.length) return
+    const base = nameInput.trim().replace(/\s*\/\s*/g, " / ")
     const tags = tagsInput
       .split(",")
-      .map(t => t.trim())
+      .map((t) => t.trim())
       .filter(Boolean)
-    
-    setSelectedColors(prev => 
-      prev.map((item, index) => 
+
+    const namingByIndex = new Map<number, string>()
+    if (nameMode === "hex") {
+      activeColors.forEach((colorIndex) => {
+        const hex = selectedColors[colorIndex]?.color.hex || ""
+        const hexWithHash = hex.startsWith("#") ? hex : `#${hex}`
+        namingByIndex.set(colorIndex, base ? `${base} / ${hexWithHash}` : hexWithHash)
+      })
+    } else {
+      activeColors.forEach((colorIndex, position) => {
+        const lineNum = position + 1
+        namingByIndex.set(colorIndex, base ? `${base} / ${lineNum}` : String(lineNum))
+      })
+    }
+
+    setSelectedColors((prev) =>
+      prev.map((item, index) =>
         activeColors.includes(index)
           ? {
               ...item,
               color: {
                 ...item.color,
+                slash_naming: namingByIndex.get(index) ?? item.color.slash_naming,
                 tags,
-              }
+              },
             }
           : item
       )
     )
-    
-    toast.display("success", `Updated tags for ${activeColors.length} color(s)`)
+    setIsDirty(true)
+    toast.display("success", `Updated name and tags for ${activeColors.length} color(s)`)
   }
 
   const handleManualslash_namingChange = (
@@ -268,6 +234,7 @@ const Right = () => {
           : item
       )
     )
+    setIsDirty(true)
   }
 
   const handleRemoveColor = (colorId: number) => {
@@ -287,8 +254,9 @@ const Right = () => {
   const clearColors = () => {
     setSelectedColors([])
     setActiveColors([])
-    setslash_nameInputs(["", "", "", "", ""])
+    setNameInput("")
     setTagsInput("")
+    setIsDirty(false)
     localStorage.removeItem('bulk_editor_selected_colors')
     window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
       detail: { colors: [] }
@@ -406,6 +374,7 @@ const Right = () => {
       // Dispatch event to trigger refresh in Left component
       // The Left component will update the selected colors with the latest data from server
       window.dispatchEvent(new CustomEvent('bulk-editor-folders-refresh'))
+      setIsDirty(false)
     } catch (error: any) {
       console.error("Error saving colors:", error)
       toast.display("error", error.response?.data?.message || "Failed to save colors")
@@ -512,29 +481,70 @@ const Right = () => {
               </div>
             </div>
 
-            <SlashNameInputs
-              inputs={slash_nameInputs}
-              onInputChange={setslash_nameInputs}
-              onChangeslash_naming={handleChangeslash_naming}
-            />
-
-            {/* Tags Input */}
+            {/* Name input + Hex/Numerator selector */}
             <div className="mb-3">
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <input
                   type="text"
-                  placeholder="Tags (comma separated)"
-                  value={tagsInput}
-                  onChange={(e) => setTagsInput(e.target.value)}
-                  className="flex-grow px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+                  placeholder="Name"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  className="flex-1 min-w-[120px] px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
                 />
-                <button
-                  onClick={handleChangeTags}
-                  className="px-3 py-2 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
-                >
-                  Update Tags
-                </button>
+                <div className="flex rounded overflow-hidden border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setNameMode("hex")}
+                    className={`px-3 py-2 text-[12px] transition-colors ${
+                      nameMode === "hex"
+                        ? "bg-gray-900 text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Hex
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNameMode("numerator")}
+                    className={`px-3 py-2 text-[12px] transition-colors border-l border-gray-200 ${
+                      nameMode === "numerator"
+                        ? "bg-gray-900 text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Numerator
+                  </button>
+                </div>
               </div>
+            </div>
+
+            {/* Tags - big input */}
+            <div className="mb-3">
+              <textarea
+                placeholder="Tags (comma separated)"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-y min-h-[80px]"
+              />
+            </div>
+
+            {/* Single Update button - enabled only when (name or tags) and at least one color selected */}
+            <div className="mb-3">
+              <button
+                onClick={handleUpdate}
+                disabled={
+                  activeColors.length === 0 ||
+                  (!nameInput.trim() && !tagsInput.trim())
+                }
+                className={`w-full px-3 py-2 text-[12px] rounded transition-colors ${
+                  activeColors.length === 0 || (!nameInput.trim() && !tagsInput.trim())
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : "bg-gray-900 text-white hover:bg-gray-800"
+                }`}
+              >
+                Update
+              </button>
             </div>
 
             <div className="bg-blue-50 text-blue-800 border border-blue-200 rounded px-3 py-2 mb-3 text-[11px]">
@@ -568,11 +578,18 @@ const Right = () => {
                 </button>
                 <button
                   onClick={handleSaveChanges}
-                  disabled={isLoading !== null}
+                  disabled={
+                    isLoading !== null ||
+                    selectedColors.length === 0 ||
+                    (activeColors.length === 0 && !isDirty)
+                  }
                   className={`flex-1 py-2 text-[12px] rounded transition-colors ${
                     isLoading === "save"
                       ? "bg-gray-600 text-gray-300 cursor-wait"
-                      : "bg-gray-900 text-white hover:bg-gray-800"
+                      : selectedColors.length === 0 ||
+                          (activeColors.length === 0 && !isDirty)
+                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        : "bg-gray-900 text-white hover:bg-gray-800"
                   }`}
                 >
                   {isLoading === "save" ? "Saving..." : "Save Changes"}
