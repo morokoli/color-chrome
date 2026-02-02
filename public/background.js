@@ -37,21 +37,22 @@ async function saveColorToDatabase(hexColor, sourceUrl) {
     const state = result.colorPickerState;
 
     // Only require JWT token, not selectedFileData
-    if (!state || !state.jwtToken) return;
+    if (!state || !state.jwtToken) return null;
 
-    const { jwtToken, selectedFileData, apiUrl } = state;
+    const { jwtToken, selectedFileData, selectedFolders, apiUrl } = state;
+    const folderIds = Array.isArray(selectedFolders) ? selectedFolders : [];
 
-    await fetch(`${apiUrl}/api/database-sheets/add-color`, {
+    const addRes = await fetch(`${apiUrl}/api/database-sheets/add-color`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${jwtToken}`,
       },
       body: JSON.stringify({
-        // If no file selected, use null to save to "No sheet"
         spreadsheetId: selectedFileData?.spreadsheetId || null,
         sheetName: selectedFileData?.sheetName || null,
         sheetId: selectedFileData?.sheetId ?? null,
+        folderIds: folderIds.length > 0 ? folderIds : undefined,
         row: {
           timestamp: Date.now(),
           url: sourceUrl,
@@ -66,8 +67,13 @@ async function saveColorToDatabase(hexColor, sourceUrl) {
         },
       }),
     });
+
+    const addJson = await addRes.json().catch(() => ({}));
+    const createdColor = addJson?.data?.createdColor || addJson?.createdColor;
+    return createdColor || null;
   } catch (error) {
-    // Silently fail
+    console.error('[ColorBoard:bg] saveColorToDatabase error', error);
+    return null;
   }
 }
 
@@ -83,6 +89,11 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // Handle messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'COLOR_PICKER_STATE_SYNCED') {
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message.type === 'CAPTURE_SCREEN') {
     // Capture the visible tab
     chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
@@ -97,9 +108,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'COLOR_PICKED') {
-    chrome.storage.local.set({
-      pickedColor: message.color,
-      pickedAt: Date.now()
+    const sourceUrl = sender.tab?.url || 'Picked Color';
+    saveColorToDatabase(message.color, sourceUrl).then((createdColor) => {
+      chrome.storage.local.set({
+        pickedColor: message.color,
+        pickedAt: Date.now(),
+        createdColor: createdColor || null,
+      });
     });
 
     if (popupPort) {
@@ -108,7 +123,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (e) {}
     }
 
-    saveColorToDatabase(message.color, sender.tab?.url || 'Picked Color');
     sendResponse({ success: true });
     return true;
   }

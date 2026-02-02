@@ -33,6 +33,16 @@ const App = () => {
   const [selected, setSelected] = useState<null | string>(null)
   const [lastPickSource, setLastPickSource] = useState<"eyedropper" | "magnifier" | null>(null)
   const processedColorsRef = useRef<Set<string>>(new Set()) // Track processed colors to prevent duplicates
+  const stateRef = useRef(state)
+  stateRef.current = state
+
+  // Sync parsedData to colorHistory on mount (fixes persisted/corrupted state where lengths differ)
+  useEffect(() => {
+    if (state.colorHistory.length !== state.parsedData.length) {
+      console.log('[ColorBoard:App] mount sync needed', { colorHistoryLen: state.colorHistory.length, parsedDataLen: state.parsedData.length })
+      dispatch({ type: "SYNC_PARSED_DATA_TO_HISTORY" })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- run once on mount
 
   // Helper to save color to Google Sheets
   const saveColorToDatabase = useCallback(async (hexColor: string, source: string) => {
@@ -221,7 +231,7 @@ const App = () => {
   }, [state])
 
   // Handle picked color from custom magnifier
-  const handlePickedColor = useCallback((pickedColor: string, pickedAt?: number) => {
+  const handlePickedColor = useCallback((pickedColor: string, pickedAt?: number, createdColor?: any) => {
     // Use the pickedAt timestamp if provided, otherwise use current time
     const timestamp = pickedAt || Date.now()
     // Create a unique key using color + exact timestamp to prevent duplicates
@@ -229,17 +239,39 @@ const App = () => {
     
     // Check in-memory cache first (fast)
     if (processedColorsRef.current.has(colorKey)) {
-      console.log('Skipping duplicate color save (in-memory):', pickedColor, 'at', timestamp)
+      // Backfill: if we already processed but now have createdColor and last parsed is empty, update it
+      if (createdColor && (createdColor._id || createdColor.id)) {
+        const s = stateRef.current
+        const lastIdx = s.colorHistory.length - 1
+        if (lastIdx >= 0 && s.colorHistory[lastIdx] === pickedColor) {
+          const lastParsed = s.parsedData[lastIdx] as any
+          if (!lastParsed?._id && !lastParsed?.id) {
+            dispatch({ type: "UPDATE_PARSED_AT", payload: { index: lastIdx, parsed: createdColor } })
+            queryClient.invalidateQueries({ queryKey: ["folders"] })
+          }
+        }
+      }
       return
     }
-    
+
     // Check localStorage for persistent tracking (survives popup close/reopen)
     try {
       const processedStr = localStorage.getItem('processed_colors')
       if (processedStr) {
         const processed: string[] = JSON.parse(processedStr)
         if (processed.includes(colorKey)) {
-          console.log('Skipping duplicate color save (localStorage):', pickedColor, 'at', timestamp)
+          // Backfill: same as above when createdColor arrives late
+          if (createdColor && (createdColor._id || createdColor.id)) {
+            const s = stateRef.current
+            const lastIdx = s.colorHistory.length - 1
+            if (lastIdx >= 0 && s.colorHistory[lastIdx] === pickedColor) {
+              const lastParsed = s.parsedData[lastIdx] as any
+              if (!lastParsed?._id && !lastParsed?.id) {
+                dispatch({ type: "UPDATE_PARSED_AT", payload: { index: lastIdx, parsed: createdColor } })
+                queryClient.invalidateQueries({ queryKey: ["folders"] })
+              }
+            }
+          }
           return
         }
       }
@@ -276,7 +308,16 @@ const App = () => {
     }
     
     dispatch({ type: "SET_COLOR", payload: pickedColor })
-    dispatch({ type: "ADD_COLOR_HISTORY", payload: pickedColor })
+    const hasCreatedColor = createdColor && (createdColor._id || createdColor.id)
+    dispatch({
+      type: "ADD_COLOR_HISTORY",
+      payload: hasCreatedColor ? { hex: pickedColor, parsed: createdColor } : pickedColor,
+    })
+
+    // Invalidate folders so Comment gets fresh folder data with the new color in colorIds
+    if (hasCreatedColor) {
+      queryClient.invalidateQueries({ queryKey: ["folders"] })
+    }
 
     // Add to file color history if a file is selected
     if (state.selectedFile) {
@@ -290,8 +331,7 @@ const App = () => {
     }
 
     // Clear storage immediately to prevent reprocessing on mount
-    // Do this before saving to database to ensure it's cleared even if save fails
-    chrome.storage.local.remove(['pickedColor', 'pickedAt'], () => {
+    chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'], () => {
       // Storage cleared
       // Note: Database saving is handled by background.js when COLOR_PICKED message is received
       // No need to save here to avoid duplicate saves
@@ -313,13 +353,15 @@ const App = () => {
   useEffect(() => {
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.pickedColor?.newValue) {
-        chrome.storage.local.get(['pickedAt', 'eyedropperPick', 'generatorPickingState', 'generatorPickingActive'], (storageResult) => {
+        // Use values from changes directly (avoids race with get) - they're set together by background
+        const pickedColor = changes.pickedColor.newValue
+        const pickedAt = changes.pickedAt?.newValue ?? Date.now()
+        const createdColor = changes.createdColor?.newValue ?? null
+        chrome.storage.local.get(['eyedropperPick', 'generatorPickingState', 'generatorPickingActive'], (storageResult) => {
           if (storageResult.generatorPickingState || storageResult.generatorPickingActive) return
-          const pickedAt = storageResult.pickedAt || Date.now()
-          handlePickedColor(changes.pickedColor.newValue, pickedAt)
+          handlePickedColor(pickedColor, pickedAt, createdColor)
           if (storageResult.eyedropperPick) {
             setLastPickSource("eyedropper")
-            setTab("PICK_PANEL")
             chrome.storage.local.remove(['eyedropperPick'])
           }
         })
@@ -333,17 +375,43 @@ const App = () => {
     chrome.storage.onChanged.addListener(handleStorageChange)
 
     // Check for pending color on mount (30 second window)
-    chrome.storage.local.get(['pickedColor', 'pickedAt', 'openTab', 'eyedropperPick'], (result) => {
-      if (result.pickedColor && result.pickedAt) {
-        if (Date.now() - result.pickedAt < 30000) {
-          handlePickedColor(result.pickedColor, result.pickedAt)
-          if (result.eyedropperPick) {
+    chrome.storage.local.get(['pickedColor', 'pickedAt', 'createdColor', 'openTab', 'eyedropperPick'], (result) => {
+      if (result.pickedColor && result.pickedAt && Date.now() - result.pickedAt < 30000) {
+        // Background sets storage async after save - retry get if createdColor missing (handles mount-before-save race)
+        const process = (r: typeof result) => {
+          handlePickedColor(r.pickedColor!, r.pickedAt!, r.createdColor)
+          if (r.eyedropperPick) {
             setLastPickSource("eyedropper")
-            setTab("PICK_PANEL")
             chrome.storage.local.remove(['eyedropperPick'])
           }
+          chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'])
         }
-        chrome.storage.local.remove(['pickedColor', 'pickedAt'])
+        if (result.createdColor) {
+          process(result)
+        } else {
+          // Background sets storage async after save - retry up to 3x (popup may open before save completes)
+          const retry = (attempt: number) => {
+            const delay = [800, 1600, 2400][attempt] ?? 2400
+            setTimeout(() => {
+              chrome.storage.local.get(['pickedColor', 'pickedAt', 'createdColor', 'eyedropperPick'], (retryResult) => {
+                if (retryResult.pickedColor && retryResult.pickedAt && Date.now() - retryResult.pickedAt < 30000) {
+                  if (retryResult.createdColor) {
+                    process({ ...result, ...retryResult })
+                  } else if (attempt < 2) {
+                    retry(attempt + 1)
+                  } else {
+                    process({ ...result, ...retryResult })
+                  }
+                } else {
+                  chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'])
+                }
+              })
+            }, delay)
+          }
+          retry(0)
+        }
+      } else if (result.pickedColor && result.pickedAt) {
+        chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'])
       }
       if (result.openTab) {
         setTab(result.openTab)
@@ -354,8 +422,27 @@ const App = () => {
     return () => chrome.storage.onChanged.removeListener(handleStorageChange)
   }, [handlePickedColor])
 
+  const syncColorPickerStateForBackground = () => {
+    const { user, selectedFile, files, selectedFolders } = state
+    const selectedFileData = files.find((f) => f.spreadsheetId === selectedFile)
+    const payload = {
+      jwtToken: user?.jwtToken || null,
+      selectedFileData: selectedFileData
+        ? {
+            spreadsheetId: selectedFileData.spreadsheetId,
+            sheetName: selectedFileData.sheets?.[0]?.name || "",
+            sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
+          }
+        : null,
+      selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
+      apiUrl: config.api.baseURL,
+    }
+    chrome.storage.local.set({ colorPickerState: payload })
+    chrome.runtime.sendMessage({ type: "COLOR_PICKER_STATE_SYNCED", payload }).catch(() => {})
+  }
+
   const handlePickColor = () => {
-    // Magnifier: inject script, capture page, show magnifier on page; close extension so it's not in screenshot
+    syncColorPickerStateForBackground()
     chrome.runtime.sendMessage({ type: "START_COLOR_PICKER" }, (response) => {
       if (response?.error) {
         console.error("Picker error:", response.error)
@@ -367,18 +454,19 @@ const App = () => {
   }
 
   const handlePickColorFromBrowser = async () => {
-    // Eyedropper: same flow as magnifier; show Pick Panel with color details (HEX, RGB, HSL, copy) right away.
+    syncColorPickerStateForBackground()
     const hex = await openEyeDropper()
     if (!hex) return
     setLastPickSource("eyedropper")
-    setTab("PICK_PANEL")
     dispatch({ type: "SET_COLOR", payload: hex })
+    dispatch({ type: "ADD_COLOR_HISTORY", payload: hex })
     chrome.storage.local.set({ eyedropperPick: true }, () => {
       chrome.runtime.sendMessage({ type: "COLOR_PICKED", color: hex })
     })
   }
 
   const handlePickAgainEyedropper = async () => {
+    syncColorPickerStateForBackground()
     const hex = await openEyeDropper()
     if (!hex) return
     dispatch({ type: "SET_COLOR", payload: hex })
@@ -426,9 +514,9 @@ const App = () => {
     }, 1000)
   }, [])
 
-  // Sync state to chrome.storage.local for background script access
+  // Sync state to chrome.storage.local for background script access (picked colors saved to selected folders)
   useEffect(() => {
-    const { user, selectedFile, files } = state
+    const { user, selectedFile, files, selectedFolders } = state
     const selectedFileData = files.find(file => file.spreadsheetId === selectedFile)
 
     const colorPickerState = {
@@ -439,11 +527,12 @@ const App = () => {
         sheetName: selectedFileData.sheets?.[0]?.name || '',
         sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
       } : null,
+      selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
       apiUrl: config.api.baseURL,
     }
 
     chrome.storage.local.set({ colorPickerState })
-  }, [state.user, state.selectedFile, state.files])
+  }, [state.user, state.selectedFile, state.files, state.selectedFolders])
 
   return (
     <QueryClientProvider client={queryClient}>

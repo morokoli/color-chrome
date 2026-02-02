@@ -44,6 +44,7 @@ export const useGetFolders = (populate: boolean = true) => {
   const { state } = useGlobalState()
   return useQuery<GetFoldersResponse, Error>({
     queryKey: ["folders", populate],
+    refetchOnMount: "always",
     queryFn: async () => {
       const response = await axiosInstance.get(config.api.endpoints.getFolders, {
         headers: {

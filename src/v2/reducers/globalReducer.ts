@@ -47,7 +47,7 @@ export type Action =
   | { type: "ADD_FILES"; payload: File }
   | { type: "REMOVE_FILES"; payload: string }
   | { type: "SET_COLOR"; payload: string }
-  | { type: "ADD_COLOR_HISTORY"; payload: string }
+  | { type: "ADD_COLOR_HISTORY"; payload: string | { hex: string; parsed?: any } }
   | { type: "CLEAR_COLOR_HISTORY" }
   | { type: "REMOVE_OLDEST_COLOR_HISTORY" }
   | { type: "ADD_NEW_COLUMN"; payload: { spreadsheetId: string; column: NewColumn } }
@@ -83,6 +83,9 @@ export type Action =
     }
   | { type: "SET_SELECTED_FOLDERS"; payload: string[] }
   | { type: "SET_SELECTED_SHEETS"; payload: string[] }
+  | { type: "UPDATE_PARSED_AT"; payload: { index: number; parsed: any } }
+  | { type: "UPDATE_COLOR_AT"; payload: { index: number; hex?: string; parsed?: any } }
+  | { type: "SYNC_PARSED_DATA_TO_HISTORY" }
 
 export function globalReducer(state: GlobalState, action: Action): GlobalState {
   switch (action.type) {
@@ -154,23 +157,39 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "SET_PARSED_DATA":
       return produce(state, (draft) => {
-        draft.parsedData = action.payload
+        const payload = action.payload as any[]
+        // Don't replace pick history with sheet data - preserves createdColor in parsedData for folder lookup
+        if (payload.length === 0 || draft.colorHistory.length === 0) {
+          draft.parsedData = payload
+          draft.colorHistory = payload.map((row) => row?.hex ?? "#000000")
+        } else if (payload.length >= draft.colorHistory.length) {
+          draft.parsedData = payload
+          draft.colorHistory = payload.map((row) => row?.hex ?? "#000000")
+        }
+        // else: keep existing - more picks than sheet rows
       })
 
-    case "ADD_COLOR_HISTORY":
+    case "ADD_COLOR_HISTORY": {
+      const payload = action.payload
+      const hex = typeof payload === "string" ? payload : payload.hex
+      const parsed = typeof payload === "object" && payload.parsed != null ? payload.parsed : undefined
       return produce(state, (draft) => {
-        draft.colorHistory.push(action.payload)
+        draft.colorHistory.push(hex)
+        draft.parsedData.push(parsed ?? ({} as any))
       })
+    }
 
     case "CLEAR_COLOR_HISTORY":
       return produce(state, (draft) => {
         draft.colorHistory = []
+        draft.parsedData = []
       })
 
     case "REMOVE_OLDEST_COLOR_HISTORY":
       return produce(state, (draft) => {
         if (draft.colorHistory.length > 0) {
-          draft.colorHistory.shift() // Remove the oldest (first) color
+          draft.colorHistory.shift()
+          draft.parsedData.shift()
         }
       })
 
@@ -294,6 +313,38 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "SET_SELECTED_SHEETS":
       return produce(state, (draft) => {
         draft.selectedSheets = action.payload
+      })
+
+    case "UPDATE_PARSED_AT": {
+      const { index, parsed } = action.payload
+      return produce(state, (draft) => {
+        if (index >= 0 && index < draft.parsedData.length && parsed) {
+          draft.parsedData[index] = { ...(draft.parsedData[index] as any), ...parsed }
+        }
+      })
+    }
+
+    case "UPDATE_COLOR_AT": {
+      const { index, hex, parsed } = action.payload
+      return produce(state, (draft) => {
+        if (index >= 0 && index < draft.colorHistory.length) {
+          if (hex !== undefined) draft.colorHistory[index] = hex
+          if (parsed && index < draft.parsedData.length) {
+            draft.parsedData[index] = { ...(draft.parsedData[index] as any), ...parsed }
+          }
+        }
+      })
+    }
+
+    case "SYNC_PARSED_DATA_TO_HISTORY":
+      return produce(state, (draft) => {
+        const chLen = draft.colorHistory.length
+        const pdLen = draft.parsedData.length
+        if (pdLen < chLen) {
+          for (let i = 0; i < chLen - pdLen; i++) draft.parsedData.push({} as any)
+        } else if (pdLen > chLen) {
+          draft.parsedData = draft.parsedData.slice(0, chLen)
+        }
       })
 
     default:

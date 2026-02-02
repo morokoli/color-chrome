@@ -1,17 +1,17 @@
 import { FC, useState, useEffect, useRef } from 'react'
-import { AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse } from '@/v2/types/api'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
 import { colors } from '@/v2/helpers/colors'
 import { config } from '@/v2/others/config'
-import { useAPI } from '@/v2/hooks/useAPI'
+import { axiosInstance } from '@/v2/hooks/useAPI'
 import { useUpsertColors } from '@/v2/api/sheet.api'
-import { Trash2, Copy, Check, Plus, X, Link, ExternalLink } from 'lucide-react'
+import { useGetFolders } from '@/v2/api/folders.api'
+import { useQueryClient } from '@tanstack/react-query'
+import { Trash2, Copy, Check, X } from 'lucide-react'
 import SectionHeader from '../common/SectionHeader'
 import { Slider } from '@/components/ui/slider'
 import { HexColorPicker } from 'react-colorful'
-
-import Select from '../Select'
+import { Dropdown } from '../FigmaManager/Dropdown'
 
 const MAX_LOCAL_COLORS = 30
 
@@ -25,6 +25,7 @@ interface Props {
 
 const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const toast = useToast()
+  const queryClient = useQueryClient()
   const { state, dispatch } = useGlobalState()
   const { colorHistory, selectedFile, parsedData, files, newColumns: allNewColumns } = state
   const sheetColumns = selectedFile ? (allNewColumns[selectedFile] || []) : []
@@ -33,8 +34,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [originalColor, setOriginalColor] = useState<string>('#ffffff') // Track original for cancel
   const [isEditing, setIsEditing] = useState<boolean>(false) // Track if user is editing
   const [ranking, setRanking] = useState<number>(0)
-  const [loading, setLoading] = useState<boolean>(false)
-  const [checkValidFlag, setCheckValidFlag] = useState<boolean>(false)
+  const [updateLoading, setUpdateLoading] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
   const [copiedType, setCopiedType] = useState<string>('')
   const [slashParts, setSlashParts] = useState<string[]>([])
@@ -45,12 +45,49 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [currentTabUrl, setCurrentTabUrl] = useState<string>('Manually created')
   const [comment, setComment] = useState<string>('')
   const [columnValues, setColumnValues] = useState<Record<string, string>>({})
-  const [newColumnName, setNewColumnName] = useState<string>('')
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const justSavedRef = useRef(false)
   const lastLoadedDataRef = useRef<string>('')  // Track what data we last loaded
 
   // For single color editing (first selected)
   const selectedColorIndex = selectedColorIndices.length > 0 ? selectedColorIndices[0] : null
+
+  const { data: foldersData } = useGetFolders(true)
+  const folders = foldersData?.folders ?? []
+
+  // When user selects a color, show its folder if parsedData has color id (from createdColor when picked)
+  // Fallback: when parsedData has no _id (e.g. padded slot), match by hex in folder.colors and store colorId for Update
+  useEffect(() => {
+    let folderId: string | null = null
+    if (selectedColorIndex !== null && folders.length > 0) {
+      const data = parsedData[selectedColorIndex] as any
+      const colorId = data?._id ?? data?.id
+      const colorIdStr = colorId != null ? String(colorId) : null
+      const hex = colorHistory[selectedColorIndex]
+      const hexNorm = hex ? String(hex).toLowerCase() : null
+
+      if (colorIdStr) {
+        const folder = folders.find((f) =>
+          (f.colorIds ?? []).some((cid) => String(cid) === colorIdStr)
+        )
+        folderId = folder ? folder._id : null
+      } else if (hexNorm && Array.isArray((folders[0] as any)?.colors)) {
+        const folder = folders.find((f) =>
+          (f.colors ?? []).some((c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm)
+        )
+        if (folder) {
+          folderId = folder._id
+          const matchedColor = (folder.colors ?? []).find((c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm)
+          if (matchedColor?._id && !(data?._id ?? data?.id)) {
+            dispatch({ type: "UPDATE_PARSED_AT", payload: { index: selectedColorIndex, parsed: { _id: matchedColor._id } } })
+          }
+        }
+      }
+      setSelectedFolderId(folderId)
+    } else {
+      setSelectedFolderId(null)
+    }
+  }, [selectedColorIndex, parsedData, folders, colorHistory, dispatch])
 
   // Fetch current tab URL on mount
   useEffect(() => {
@@ -72,12 +109,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const { upsertColorsAsync } = useUpsertColors()
 
   // Note: deleteRow and updateRow removed - now we only add colors to sheets from local history
-
-  const { call: addColumnAPI } = useAPI<AddNewAdditionalColumnRequest, AddNewAdditionalColumnResponse>({
-    url: config.api.endpoints.addColumn,
-    method: "POST",
-    jwtToken: state.user?.jwtToken,
-  })
 
   const selectedFileData = files.find(item => item.spreadsheetId === selectedFile)
 
@@ -242,22 +273,16 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     window.open(url, "Google Sign-in", "width=1000,height=700")
   }
 
-  const handleSave = async () => {
+  const _handleSaveUnused = async () => {
     if (selectedColorIndices.length === 0) return
-
-    // Check if user is logged in - open login popup if not
     if (!state.user?.jwtToken) {
       openLogin()
       return
     }
-
     if (!selectedFile) {
       toast.display("error", "Please select a sheet first")
       return
     }
-
-    setLoading(true)
-
     try {
       // Build slash naming from parts array
       const slashNamingStr = slashParts.join('/')
@@ -311,40 +336,11 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       setComment('')
       setRanking(0)
       setColorUrl(currentTabUrl)
-      setCheckValidFlag(true)
     } catch {
       toast.display("error", "Failed to save colors")
-    } finally {
-      setLoading(false)
     }
   }
-
-  const addColumn = async () => {
-    if (newColumnName.trim() && selectedFile && selectedFileData) {
-      try {
-        // Call API to add column header to the sheet
-        await addColumnAPI({
-          spreadsheetId: selectedFile,
-          sheetName: selectedFileData.sheets?.[0]?.name || '',
-          sheetId: selectedFileData.sheets?.[0]?.id || 0,
-          columnName: newColumnName.trim(),
-        })
-
-        // Update local state
-        dispatch({
-          type: "ADD_NEW_COLUMN",
-          payload: {
-            spreadsheetId: selectedFile,
-            column: { name: newColumnName.trim(), value: '' }
-          }
-        })
-        setNewColumnName('')
-        toast.display("success", "Column added")
-      } catch {
-        toast.display("error", "Failed to add column")
-      }
-    }
-  }
+  void _handleSaveUnused
 
   const removeColumn = (columnName: string) => {
     if (!selectedFile) return
@@ -364,6 +360,94 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     setColumnValues(prev => ({ ...prev, [columnName]: value }))
   }
 
+  const handleUpdate = async () => {
+    if (selectedColorIndex === null) {
+      toast.display("error", "Select a color to update")
+      return
+    }
+    const data = parsedData[selectedColorIndex] as any
+    const colorId = data?._id ?? data?.id
+    if (!colorId) {
+      toast.display("error", "Select a saved color (with ID) to update it in the database")
+      return
+    }
+    setUpdateLoading(true)
+    try {
+      const normalizedHex = colors.expandHex(editingColor)
+      const slashNamingStr = slashParts.join('/')
+      const existingCols = (data?.additionalColumns ?? []) as { name: string; value: string }[]
+      const allColNames = [...new Set([...sheetColumns.map(c => c.name), ...existingCols.map(c => c.name)])]
+      const additionalColumnsToSave = allColNames.map(name => ({
+        name,
+        value: columnValues[name] ?? existingCols.find(c => c.name === name)?.value ?? ''
+      }))
+      const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
+      const row = {
+        url: finalUrl,
+        hex: normalizedHex,
+        rgb: colors.hexToRGB(normalizedHex),
+        hsl: colors.hexToHSL(normalizedHex),
+        slash_naming: slashNamingStr,
+        comments: comment,
+        ranking: Number(ranking) || 0,
+        tags: tagsList,
+        additionalColumns: additionalColumnsToSave,
+        timestamp: Date.now(),
+      }
+      const response = await axiosInstance.put(
+        config.api.endpoints.updateColor,
+        {
+          colorId,
+          sheetId: null,
+          isUpdateSheet: false,
+          row,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${state.user?.jwtToken}`,
+          },
+        }
+      )
+      const result = response?.data?.data ?? response?.data
+      const updatedColor = result?.color
+
+      if (updatedColor) {
+        const parsed = {
+          _id: updatedColor._id,
+          id: updatedColor._id,
+          hex: updatedColor.hex,
+          url: updatedColor.url,
+          slash_naming: updatedColor.slash_naming,
+          comments: updatedColor.comments,
+          ranking: updatedColor.ranking,
+          tags: updatedColor.tags,
+          additionalColumns: updatedColor.additionalColumns ?? [],
+        }
+        dispatch({ type: "UPDATE_COLOR_AT", payload: { index: selectedColorIndex, hex: updatedColor.hex, parsed } })
+      } else {
+        dispatch({ type: "UPDATE_COLOR_AT", payload: { index: selectedColorIndex, hex: normalizedHex, parsed: { ...data, ...row, _id: colorId } } })
+      }
+
+      if (selectedFolderId) {
+        await axiosInstance.post(
+          `${config.api.endpoints.moveColorsToFolder}/${selectedFolderId}/move-colors`,
+          { colorIds: [colorId], isNotFoldered: false },
+          { headers: { Authorization: `Bearer ${state.user?.jwtToken}` } }
+        )
+        await queryClient.invalidateQueries({ queryKey: ["folders"] })
+      }
+
+      justSavedRef.current = true
+      setOriginalColor(normalizedHex)
+      setIsEditing(false)
+      toast.display("success", "Color updated successfully")
+    } catch (err: any) {
+      toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to update color")
+    } finally {
+      setUpdateLoading(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (selectedColorIndices.length === 0) return
 
@@ -372,8 +456,14 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
 
     // Remove from local state
     const newHistory = colorHistory.filter((_, i) => !selectedColorIndices.includes(i))
+    const newParsedData = parsedData.filter((_, i) => !selectedColorIndices.includes(i))
     dispatch({ type: "CLEAR_COLOR_HISTORY" })
-    newHistory.forEach(color => dispatch({ type: "ADD_COLOR_HISTORY", payload: color }))
+    newHistory.forEach((color, i) =>
+      dispatch({
+        type: "ADD_COLOR_HISTORY",
+        payload: newParsedData[i] ? { hex: color, parsed: newParsedData[i] } : color,
+      })
+    )
     setSelectedColorIndices([])
     setEditingColor('#ffffff')
     toast.display("success", `${selectedColorIndices.length} color${selectedColorIndices.length > 1 ? 's' : ''} removed`)
@@ -561,29 +651,38 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           </button>
         </div>
 
-        {/* Column 2 - Sheet Details */}
+        {/* Column 2 - Details */}
         <div className="flex-1 p-3">
-          {/* Sheet Selector */}
+          {/* Save to: Folder (color id stored in parsedData for folder lookup) */}
           <div className="mb-3">
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-2">
               <span className="text-[11px] text-gray-500">Save to</span>
-              {selectedFile && (
-                <button
-                  onClick={() => window.open(`${config.spreadsheet.baseURL}${selectedFile}`, '_blank')}
-                  className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                  title="Open sheet in new tab"
-                >
-                  <ExternalLink size={12} />
-                </button>
+            </div>
+            {/* Folder dropdown - shows selected color's folder when color has id in parsedData */}
+            <div className="mb-2">
+              <label className="block text-[11px] text-gray-500 mb-1">Select folder</label>
+              {folders.length === 0 ? (
+                <div className="px-2 py-1.5 text-[11px] text-gray-400 border border-gray-200 rounded">
+                  No folders — create folders in Bulk Editor
+                </div>
+              ) : (
+                <Dropdown
+                  selected={selectedFolderId}
+                  items={folders.map((f) => f._id)}
+                  renderItem={(folderId) => {
+                    const folder = folders.find((f) => f._id === folderId)
+                    return folder?.name ?? folderId
+                  }}
+                  renderSelected={(folderId) => {
+                    const folder = folders.find((f) => f._id === folderId)
+                    return folder?.name ?? 'Select a folder'
+                  }}
+                  onSelect={(folderId) => setSelectedFolderId(folderId)}
+                  placeholder="Select a folder"
+                  width="100%"
+                />
               )}
             </div>
-            <Select
-              isComment
-              setTab={setTab}
-              ckeckFlag={checkValidFlag}
-              setCheckValidFlag={setCheckValidFlag}
-              placeholder="Select Sheet"
-            />
           </div>
 
           {/* Metadata Fields - always shown */}
@@ -720,53 +819,25 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                       </button>
                     </div>
                   ))}
-                  <div className="flex gap-1 items-center">
-                    <input
-                      type="text"
-                      value={newColumnName}
-                      onChange={(e) => setNewColumnName(e.target.value)}
-                      placeholder="Add column..."
-                      className="flex-1 px-2 py-1.5 text-[11px] border border-dashed border-gray-300 rounded focus:outline-none focus:border-gray-400"
-                      onKeyDown={(e) => e.key === 'Enter' && addColumn()}
-                    />
-                    <button
-                      onClick={addColumn}
-                      disabled={!newColumnName.trim()}
-                      className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              {/* Save Button */}
-              <button
-                onClick={() => {
-                  if (!state.user?.jwtToken) {
-                    openLogin()
-                  } else if (!selectedFile) {
-                    setTab('ADD_SHEET')
-                  } else {
-                    handleSave()
-                  }
-                }}
-                disabled={!!state.user?.jwtToken && !!selectedFile && (loading || selectedColorIndices.length === 0)}
-                className="w-full mt-4 px-3 py-2.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors disabled:bg-gray-300 flex items-center justify-center gap-1.5"
-              >
-                {loading ? (
-                  'Saving...'
-                ) : !state.user?.jwtToken ? (
-                  'Login to save'
-                ) : !selectedFile ? (
-                  <>
-                    <Link size={12} />
-                    Link a sheet
-                  </>
-                ) : (
-                  `Save ${selectedColorIndices.length} color${selectedColorIndices.length !== 1 ? 's' : ''} to Sheet`
-                )}
-              </button>
+              {/* Update Button - updates selected color in database */}
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => {
+                    if (!state.user?.jwtToken) {
+                      openLogin()
+                    } else {
+                      handleUpdate()
+                    }
+                  }}
+                  disabled={!state.user?.jwtToken || selectedColorIndex === null || updateLoading || !((parsedData[selectedColorIndex] as any)?._id ?? (parsedData[selectedColorIndex] as any)?.id)}
+                  className="px-4 py-2.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors disabled:bg-gray-200 disabled:text-gray-500 flex items-center justify-center gap-1.5 min-w-[120px]"
+                >
+                  {updateLoading ? 'Updating...' : 'Update'}
+                </button>
+              </div>
             </>
         </div>
       </div>
