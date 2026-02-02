@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react"
-import { RotateCcw } from "lucide-react"
+import { Undo2, Redo2 } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
@@ -24,6 +24,8 @@ interface PaletteModalProps {
   onSuccess?: (colors: any[]) => void
   hidePrimaryActionButton?: boolean
   onPrimaryActionMetaChange?: (meta: { label: string; disabled: boolean }) => void
+  /** When hidePrimaryActionButton is true, parent can show "Save selected color separately" in its footer; this callback provides disabled/loading */
+  onSaveSelectedColorMetaChange?: (meta: { disabled: boolean; loading: boolean }) => void
   onStateChange?: (state: { colorsCount: number }) => void
 }
 
@@ -34,6 +36,7 @@ export type PaletteModalHandle = {
   canRedo: boolean
   handleUndo: () => void
   handleRedo: () => void
+  saveSelectedColorSeparately: () => void
 }
 
 const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, ref) => {
@@ -47,6 +50,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     initialTags = null,
     onSuccess,
     onPrimaryActionMetaChange,
+    onSaveSelectedColorMetaChange,
     onStateChange,
   } = props
   const { state } = useGlobalState()
@@ -243,6 +247,9 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     canRedo,
     handleUndo,
     handleRedo,
+    saveSelectedColorSeparately: () => {
+      if (!loading) handleSaveSelectedColor()
+    },
   }))
 
   useEffect(() => {
@@ -251,6 +258,14 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       disabled: loading,
     })
   }, [onPrimaryActionMetaChange, primaryActionLabel, loading])
+
+  const canSaveSelectedColorSeparately = isPalette && !isEditing && colorPickerIndex !== null
+  useEffect(() => {
+    onSaveSelectedColorMetaChange?.({
+      disabled: !canSaveSelectedColorSeparately || loading,
+      loading,
+    })
+  }, [onSaveSelectedColorMetaChange, canSaveSelectedColorSeparately, loading])
 
   const parseSheetUrl = (url: string) => {
     if (!url) return null
@@ -871,7 +886,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   onMouseEnter={(e) => canUndo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
                 >
-                  <RotateCcw style={{ width: "12px", height: "12px" }} />
+                  <Undo2 style={{ width: "12px", height: "12px" }} />
                 </button>
                 <button
                   onClick={handleRedo}
@@ -889,7 +904,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   onMouseEnter={(e) => canRedo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
                 >
-                  <RotateCcw style={{ width: "12px", height: "12px", transform: "scaleX(-1)" }} />
+                  <Redo2 style={{ width: "12px", height: "12px" }} />
                 </button>
               </div>
             </div>
@@ -924,7 +939,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         }}
       >
         <div>
-          {isPalette && !isEditing && colorPickerIndex !== null && (
+          {isPalette && !isEditing && colorPickerIndex !== null && !props.hidePrimaryActionButton && (
             <button
               onClick={handleSaveSelectedColor}
               disabled={loading}

@@ -7,9 +7,20 @@ import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { CollapsibleBox } from "../CollapsibleBox"
-import { FolderSelectionModal } from "./FolderSelectionModal"
-import { ChevronDown } from "lucide-react"
+import { FolderSelectionModal, type SelectedColorItem } from "./FolderSelectionModal"
+import { ChevronDown, Check } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
+
+/** Returns "black" or "white" for contrast on the given hex background */
+function getContrastColor(hex: string): "black" | "white" {
+  const h = (hex || "#808080").replace("#", "")
+  if (h.length !== 6) return "white"
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance < 0.5 ? "white" : "black"
+}
 
 interface SelectedColor {
   color: Color
@@ -336,17 +347,16 @@ const Left: React.FC = () => {
     setFolderModalOpen(true)
   }
 
-  const handleFolderConfirm = async (folderId: string) => {
+  const handleFolderConfirm = async (folderId: string, colorsToOperateOn: SelectedColorItem[]) => {
     if (!folderActionType) return
 
-    const colorsArray = Array.from(selectedColors.values())
-    if (colorsArray.length === 0) return
+    if (colorsToOperateOn.length === 0) return
 
     setActionLoading(folderActionType)
     try {
       if (folderActionType === "copy") {
-        // Copy each color to the folder
-        const promises = colorsArray.map(async (item) => {
+        // Copy each color to the folder (use modal's selection, not bulk editor selection)
+        const promises = colorsToOperateOn.map(async (item) => {
           const response = await axiosInstance.post(
             `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
             {
@@ -362,10 +372,10 @@ const Left: React.FC = () => {
         })
 
         await Promise.all(promises)
-        toast.display("success", `Successfully copied ${colorsArray.length} color(s) to folder`)
+        toast.display("success", `Successfully copied ${colorsToOperateOn.length} color(s) to folder`)
       } else if (folderActionType === "move") {
-        // Move all colors to the folder (bulk operation)
-        const colorIds = colorsArray.map(item => item.color._id)
+        // Move all colors to the folder (use modal's selection)
+        const colorIds = colorsToOperateOn.map(item => item.color._id)
         await axiosInstance.post(
           `${config.api.endpoints.moveColorsToFolder}/${folderId}/move-colors`,
           {
@@ -379,7 +389,7 @@ const Left: React.FC = () => {
           }
         )
 
-        toast.display("success", `Successfully moved ${colorsArray.length} color(s) to folder`)
+        toast.display("success", `Successfully moved ${colorsToOperateOn.length} color(s) to folder`)
       }
 
       // Invalidate and refetch folders to update the left panel
@@ -544,6 +554,7 @@ const Left: React.FC = () => {
                   <Tooltip.Provider>
                     {nonFolderedColors.map((color) => {
                       const isSelected = isColorSelected(color._id, null)
+                      const contrast = getContrastColor(color.hex)
                       return (
                         <Tooltip.Root key={color._id}>
                           <Tooltip.Trigger asChild>
@@ -551,13 +562,17 @@ const Left: React.FC = () => {
                               style={{
                                 backgroundColor: color.hex,
                               }}
-                              className={`w-[32px] h-[32px] cursor-pointer border-2 transition-all ${
-                                isSelected
-                                  ? "border-blue-500 ring-2 ring-blue-200"
-                                  : "border-gray-300 hover:border-gray-400"
-                              }`}
+                              className="relative w-[32px] h-[32px] cursor-pointer border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center"
                               onClick={() => handleColorClick(color, null)}
-                            />
+                            >
+                              {isSelected && (
+                                <Check
+                                  size={18}
+                                  strokeWidth={3}
+                                  className={`flex-shrink-0 ${contrast === "white" ? "text-white" : "text-black"}`}
+                                />
+                              )}
+                            </div>
                           </Tooltip.Trigger>
                           <Tooltip.Portal>
                             <Tooltip.Content
@@ -658,6 +673,7 @@ const Left: React.FC = () => {
                         <Tooltip.Provider>
                           {colors.map((color) => {
                             const isSelected = isColorSelected(color._id, folder._id)
+                            const contrast = getContrastColor(color.hex)
                             return (
                               <Tooltip.Root key={color._id}>
                                 <Tooltip.Trigger asChild>
@@ -665,13 +681,17 @@ const Left: React.FC = () => {
                                     style={{
                                       backgroundColor: color.hex,
                                     }}
-                                    className={`w-[32px] h-[32px] cursor-pointer border-2 transition-all ${
-                                      isSelected
-                                        ? "border-blue-500 ring-2 ring-blue-200"
-                                        : "border-gray-300 hover:border-gray-400"
-                                    }`}
+                                    className="relative w-[32px] h-[32px] cursor-pointer border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center"
                                     onClick={() => handleColorClick(color, folder)}
-                                  />
+                                  >
+                                    {isSelected && (
+                                      <Check
+                                        size={18}
+                                        strokeWidth={3}
+                                        className={`flex-shrink-0 ${contrast === "white" ? "text-white" : "text-black"}`}
+                                      />
+                                    )}
+                                  </div>
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
                                   <Tooltip.Content
@@ -720,35 +740,33 @@ const Left: React.FC = () => {
       ) : null}
       </div>
 
-      {/* Fixed Bottom Buttons - Copy to and Move to */}
-      {selectedColorsArray.length > 0 && (
-        <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0">
-          <div className="flex gap-2">
-            <button
-              onClick={handleCopyToFolder}
-              disabled={actionLoading !== null}
-              className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
-                actionLoading === "copy"
-                  ? "bg-gray-100 text-gray-400 cursor-wait"
-                  : "bg-white hover:bg-gray-50 text-gray-700"
-              }`}
-            >
-              {actionLoading === "copy" ? "Copying..." : "Copy to"}
-            </button>
-            <button
-              onClick={handleMoveToFolder}
-              disabled={actionLoading !== null}
-              className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
-                actionLoading === "move"
-                  ? "bg-gray-100 text-gray-400 cursor-wait"
-                  : "bg-white hover:bg-gray-50 text-gray-700"
-              }`}
-            >
-              {actionLoading === "move" ? "Moving..." : "Move to"}
-            </button>
-          </div>
+      {/* Fixed Bottom Buttons - Copy to and Move to (disabled when no color selected) */}
+      <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0">
+        <div className="flex gap-2">
+          <button
+            onClick={handleCopyToFolder}
+            disabled={selectedColorsArray.length === 0 || actionLoading !== null}
+            className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
+              selectedColorsArray.length === 0 || actionLoading === "copy"
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-white hover:bg-gray-50 text-gray-700"
+            }`}
+          >
+            {actionLoading === "copy" ? "Copying..." : "Copy to"}
+          </button>
+          <button
+            onClick={handleMoveToFolder}
+            disabled={selectedColorsArray.length === 0 || actionLoading !== null}
+            className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
+              selectedColorsArray.length === 0 || actionLoading === "move"
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-white hover:bg-gray-50 text-gray-700"
+            }`}
+          >
+            {actionLoading === "move" ? "Moving..." : "Move to"}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Folder Selection Modal */}
       <FolderSelectionModal
@@ -761,6 +779,7 @@ const Left: React.FC = () => {
         title={folderActionType === "copy" ? "Copy to Folder" : "Move to Folder"}
         actionType={folderActionType || "copy"}
         isLoading={actionLoading === "copy" || actionLoading === "move"}
+        selectedColors={selectedColorsArray}
       />
     </div>
   )

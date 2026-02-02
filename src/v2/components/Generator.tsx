@@ -11,6 +11,8 @@ interface Props {
 const Generator: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
     const paletteRef = useRef<PaletteModalHandle | null>(null)
     const [primaryDisabled, setPrimaryDisabled] = useState(false)
+    const [saveSelectedColorDisabled, setSaveSelectedColorDisabled] = useState(true)
+    const [saveSelectedColorLoading, setSaveSelectedColorLoading] = useState(false)
 
     const handleClose = () => {
         setTab(null)
@@ -40,11 +42,26 @@ const Generator: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =
                     onPrimaryActionMetaChange={({ disabled }) => {
                         setPrimaryDisabled(disabled)
                     }}
+                    onSaveSelectedColorMetaChange={({ disabled, loading }) => {
+                        setSaveSelectedColorDisabled(disabled)
+                        setSaveSelectedColorLoading(loading)
+                    }}
                     onStateChange={handleStateChange}
                 />
             </div>
-            {/* Save button at bottom - same area as AI Generator */}
-            <div className="px-3 pb-3 pt-2 border-t border-gray-200 flex-shrink-0 flex justify-end">
+            {/* Footer: Save selected color separately + Save (same row as AI Generator) */}
+            <div className="px-3 pb-3 pt-2 border-t border-gray-200 flex-shrink-0 flex items-center justify-between gap-3">
+                <button
+                    onClick={() => paletteRef.current?.saveSelectedColorSeparately()}
+                    disabled={saveSelectedColorDisabled}
+                    className={`flex items-center justify-center py-2.5 px-[15px] min-w-[180px] text-[12px] rounded transition-colors border ${
+                        !saveSelectedColorDisabled
+                            ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                            : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                    }`}
+                >
+                    {saveSelectedColorLoading ? "Saving..." : "Save selected color individually"}
+                </button>
                 <button
                     onClick={() => paletteRef.current?.submit()}
                     disabled={primaryDisabled}
