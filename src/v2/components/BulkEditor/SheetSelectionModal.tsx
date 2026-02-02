@@ -15,6 +15,8 @@ interface SheetSelectionModalProps {
   onClose: () => void
   onConfirm: (spreadsheetId: string, sheetId: number, sheetName: string) => void
   isLoading?: boolean
+  /** When provided, called after export via URL - adds the sheet to user's files for future use */
+  onSheetAddedViaUrl?: (spreadsheet: { spreadsheetId: string; fileName: string; sheets: Sheet[] }, sheetId: number) => void
 }
 
 export const SheetSelectionModal = ({
@@ -22,6 +24,7 @@ export const SheetSelectionModal = ({
   onClose,
   onConfirm,
   isLoading: parentIsLoading = false,
+  onSheetAddedViaUrl,
 }: SheetSelectionModalProps) => {
   const { state } = useGlobalState()
   const { files, user } = state
@@ -100,6 +103,7 @@ export const SheetSelectionModal = ({
     if (useUrl && fetchedSpreadsheet && selectedSheetId !== null) {
       const sheet = fetchedSpreadsheet.sheets.find(s => s.id === selectedSheetId)
       if (sheet) {
+        onSheetAddedViaUrl?.(fetchedSpreadsheet, sheet.id)
         onConfirm(fetchedSpreadsheet.spreadsheetId, sheet.id, sheet.name)
         handleClose()
       }

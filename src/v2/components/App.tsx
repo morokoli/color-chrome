@@ -23,6 +23,7 @@ import FigmaManager from "./FigmaManager"
 import { PageColorExtraction } from "./PageColorExtraction"
 import Generator from "./Generator"
 import BulkEditor from "./BulkEditor"
+import { ExportToSheet } from "./ExportToSheet"
 
 const queryClient = new QueryClient()
 
@@ -615,6 +616,13 @@ const App = () => {
           </Show>
           <Show if={tab === "BULK_EDITOR"}>
             <BulkEditor
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
+          </Show>
+          <Show if={tab === "EXPORT_TO_SHEET"}>
+            <ExportToSheet
               setTab={setTab}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}

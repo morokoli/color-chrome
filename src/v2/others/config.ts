@@ -9,7 +9,7 @@ export const config = {
   },
   api: {
     baseURL: import.meta.env.VITE_API_URL,
-    timeout: 10_000,
+    timeout: 30_000,
     endpoints: {
       auth: "/auth",
       refreshAccessToken: "/api/auth/refresh",

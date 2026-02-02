@@ -164,7 +164,7 @@ const DualThumbSlider: React.FC<DualThumbSliderProps> = ({
           </Tooltip.Root>
         </Slider.Root>
       </Tooltip.Provider>
-      <div className="mt-2">{label}</div>
+      {label ? <div className="mt-2">{label}</div> : null}
     </div>
   )
 }

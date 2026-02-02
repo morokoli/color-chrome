@@ -33,5 +33,6 @@ export const SECTION_MENU_ITEMS: SectionMenuItem[] = [
   { title: "History & Editor", Icon: History, menuName: "COMMENT", section: null },
   { title: "Bulk Editor", Icon: Edit3, menuName: "BULK_EDITOR", section: null },
   { title: "Figma", Icon: Figma, menuName: "FIGMA_MANAGER", section: "Integration" },
-  { title: "Sheet", Icon: FileSpreadsheet, menuName: "ADD_SHEET", section: "Export to" },
+  { title: "Sheet", Icon: FileSpreadsheet, menuName: "ADD_SHEET", section: "Integration" },
+  { title: "Sheet", Icon: FileSpreadsheet, menuName: "EXPORT_TO_SHEET", section: "Export to" },
 ]
