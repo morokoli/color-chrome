@@ -4,7 +4,6 @@ import { useToast } from '@/v2/hooks/useToast'
 import { colors } from '@/v2/helpers/colors'
 import { config } from '@/v2/others/config'
 import { axiosInstance } from '@/v2/hooks/useAPI'
-import { useUpsertColors } from '@/v2/api/sheet.api'
 import { useGetFolders } from '@/v2/api/folders.api'
 import { useQueryClient } from '@tanstack/react-query'
 import { Trash2, Copy, Check, X } from 'lucide-react'
@@ -14,6 +13,17 @@ import { HexColorPicker } from 'react-colorful'
 import { Dropdown } from '../FigmaManager/Dropdown'
 
 const MAX_LOCAL_COLORS = 30
+
+/** Returns "black" or "white" for contrast on the given hex background */
+function getContrastColor(hex: string): "black" | "white" {
+  const h = (hex || "#808080").replace("#", "")
+  if (h.length !== 6) return "white"
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance < 0.5 ? "white" : "black"
+}
 
 interface Props {
   selected: null | string;
@@ -27,8 +37,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const toast = useToast()
   const queryClient = useQueryClient()
   const { state, dispatch } = useGlobalState()
-  const { colorHistory, selectedFile, parsedData, files, newColumns: allNewColumns } = state
-  const sheetColumns = selectedFile ? (allNewColumns[selectedFile] || []) : []
+  const { colorHistory, parsedData } = state
   const [selectedColorIndices, setSelectedColorIndices] = useState<number[]>([]) // Multi-select
   const [editingColor, setEditingColor] = useState<string>('#ffffff')
   const [originalColor, setOriginalColor] = useState<string>('#ffffff') // Track original for cancel
@@ -44,7 +53,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [colorUrl, setColorUrl] = useState<string>('')
   const [currentTabUrl, setCurrentTabUrl] = useState<string>('Manually created')
   const [comment, setComment] = useState<string>('')
-  const [columnValues, setColumnValues] = useState<Record<string, string>>({})
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const justSavedRef = useRef(false)
   const lastLoadedDataRef = useRef<string>('')  // Track what data we last loaded
@@ -106,12 +114,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     })
   }, [])
 
-  const { upsertColorsAsync } = useUpsertColors()
-
-  // Note: deleteRow and updateRow removed - now we only add colors to sheets from local history
-
-  const selectedFileData = files.find(item => item.spreadsheetId === selectedFile)
-
   // Load all fields when color is selected or when parsedData changes
   useEffect(() => {
     if (selectedColorIndex !== null && colorHistory[selectedColorIndex]) {
@@ -128,8 +130,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
 
       const data = parsedData[selectedColorIndex]
       if (data) {
-        // Create a unique key for this data to detect changes
-        const dataKey = `${selectedColorIndex}:${data.hex}:${JSON.stringify(data.additionalColumns || [])}`
+        // Create a unique key for this data to detect changes (include name/tags so Bulk Editor updates are reflected)
+        const dataKey = `${selectedColorIndex}:${data.hex}:${data.slash_naming || ''}:${JSON.stringify((data as any).tags || [])}`
 
         // Only reload if the data has actually changed
         if (lastLoadedDataRef.current !== dataKey) {
@@ -137,7 +139,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           setRanking(Number(data.ranking) || 0)
           // Parse slash naming into parts array
           const slashNameStr = data.slash_naming || ''
-          setSlashParts(slashNameStr ? slashNameStr.split('/').filter(Boolean) : [])
+          setSlashParts(slashNameStr ? slashNameStr.split('/').filter(Boolean).slice(0, 4) : [])
           setSlashInput('')
           // Parse tags into list array
           const tagsData = (data as any).tags
@@ -151,14 +153,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           setTagsInput('')
           setComment(data.comments || '')
           setColorUrl((data as any).url || 'Manually created')
-          // Load column values from color's additionalColumns matched by name
-          const values: Record<string, string> = {}
-          if (data.additionalColumns) {
-            for (const col of data.additionalColumns) {
-              values[col.name] = col.value
-            }
-          }
-          setColumnValues(values)
         }
       } else {
         // Reset fields for new colors (not in parsedData)
@@ -171,7 +165,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           setTagsInput('')
           setComment('')
           setColorUrl(currentTabUrl)
-          setColumnValues({})
         }
       }
     }
@@ -254,14 +247,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     }
     dispatch({ type: "ADD_COLOR_HISTORY", payload: editingColor })
 
-    // Also add to file color history if a file is selected
-    if (selectedFile) {
-      dispatch({
-        type: "ADD_FILE_COLOR_HISTORY",
-        payload: { spreadsheetId: selectedFile, color: editingColor }
-      })
-    }
-
     setOriginalColor(editingColor)
     setIsEditing(false)
     toast.display("success", "Color added to history")
@@ -271,93 +256,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const openLogin = () => {
     const url = config.api.baseURL + config.api.endpoints.auth
     window.open(url, "Google Sign-in", "width=1000,height=700")
-  }
-
-  const _handleSaveUnused = async () => {
-    if (selectedColorIndices.length === 0) return
-    if (!state.user?.jwtToken) {
-      openLogin()
-      return
-    }
-    if (!selectedFile) {
-      toast.display("error", "Please select a sheet first")
-      return
-    }
-    try {
-      // Build slash naming from parts array
-      const slashNamingStr = slashParts.join('/')
-
-      // Build additionalColumns from sheetColumns + columnValues
-      const additionalColumnsToSave = sheetColumns.map(col => ({
-        name: col.name,
-        value: columnValues[col.name] || ''
-      }))
-
-      // Build all rows for batch save
-      // Determine the URL - use "Manually Added" if it's a manually created color
-      const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
-
-      const rows = selectedColorIndices
-        .map(colorIndex => {
-          const colorHex = colorHistory[colorIndex]
-          if (!colorHex) return null
-          return {
-            id: crypto.randomUUID(),
-            timestamp: new Date().valueOf(),
-            url: finalUrl,
-            hex: colorHex,
-            slash_naming: slashNamingStr,
-            tags: tagsList.join(','),
-            hsl: colors.hexToHSL(colorHex),
-            rgb: colors.hexToRGB(colorHex),
-            comments: comment,
-            ranking: String(ranking),
-            additionalColumns: additionalColumnsToSave,
-          }
-        })
-        .filter(Boolean)
-
-      // Save all colors using upsert (updates existing colors, adds new ones)
-      await upsertColorsAsync({
-        spreadsheetId: selectedFile,
-        sheetName: selectedFileData?.sheets?.[0]?.name || '',
-        sheetId: selectedFileData?.sheets?.[0]?.id || 0,
-        rows: rows as any,
-      })
-
-      toast.display("success", `${rows.length} color${rows.length > 1 ? 's' : ''} saved to sheet`)
-
-      // Clear values after saving
-      setColumnValues({})
-      setSlashParts([])
-      setSlashInput('')
-      setTagsList([])
-      setTagsInput('')
-      setComment('')
-      setRanking(0)
-      setColorUrl(currentTabUrl)
-    } catch {
-      toast.display("error", "Failed to save colors")
-    }
-  }
-  void _handleSaveUnused
-
-  const removeColumn = (columnName: string) => {
-    if (!selectedFile) return
-    dispatch({
-      type: "REMOVE_NEW_COLUMN",
-      payload: { spreadsheetId: selectedFile, columnName }
-    })
-    // Also remove from columnValues
-    setColumnValues(prev => {
-      const updated = { ...prev }
-      delete updated[columnName]
-      return updated
-    })
-  }
-
-  const updateColumnValue = (columnName: string, value: string) => {
-    setColumnValues(prev => ({ ...prev, [columnName]: value }))
   }
 
   const handleUpdate = async () => {
@@ -375,12 +273,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     try {
       const normalizedHex = colors.expandHex(editingColor)
       const slashNamingStr = slashParts.join('/')
-      const existingCols = (data?.additionalColumns ?? []) as { name: string; value: string }[]
-      const allColNames = [...new Set([...sheetColumns.map(c => c.name), ...existingCols.map(c => c.name)])]
-      const additionalColumnsToSave = allColNames.map(name => ({
-        name,
-        value: columnValues[name] ?? existingCols.find(c => c.name === name)?.value ?? ''
-      }))
       const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
       const row = {
         url: finalUrl,
@@ -391,7 +283,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
         comments: comment,
         ranking: Number(ranking) || 0,
         tags: tagsList,
-        additionalColumns: additionalColumnsToSave,
+        additionalColumns: data?.additionalColumns ?? [],
         timestamp: Date.now(),
       }
       const response = await axiosInstance.put(
@@ -621,18 +513,23 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                 [...colorHistory].reverse().map((color, reverseIndex) => {
                   const index = colorHistory.length - 1 - reverseIndex
                   const isSelected = selectedColorIndices.includes(index)
+                  const contrast = getContrastColor(color)
                   return (
                     <div
                       key={color + index}
                       onClick={(e) => handleColorClick(index, e)}
-                      className={`aspect-square cursor-pointer rounded-sm transition-all border border-gray-200 ${
-                        isSelected
-                          ? 'ring-2 ring-gray-900 ring-inset'
-                          : 'hover:brightness-90'
-                      }`}
+                      className="aspect-square cursor-pointer rounded-sm transition-all border border-gray-200 hover:brightness-90 relative flex items-center justify-center"
                       style={{ backgroundColor: color }}
                       title={`${color} (Ctrl+click to multi-select)`}
-                    />
+                    >
+                      {isSelected && (
+                        <Check
+                          size={14}
+                          strokeWidth={3}
+                          className={`flex-shrink-0 ${contrast === "white" ? "text-white" : "text-black"}`}
+                        />
+                      )}
+                    </div>
                   )
                 })
               )}
@@ -652,193 +549,168 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
         </div>
 
         {/* Column 2 - Details */}
-        <div className="flex-1 p-3">
+        <div className="flex-1 p-3 flex flex-col">
           {/* Save to: Folder (color id stored in parsedData for folder lookup) */}
           <div className="mb-3">
-            <div className="mb-2">
-              <span className="text-[11px] text-gray-500">Save to</span>
-            </div>
             {/* Folder dropdown - shows selected color's folder when color has id in parsedData */}
             <div className="mb-2">
               <label className="block text-[11px] text-gray-500 mb-1">Select folder</label>
-              {folders.length === 0 ? (
-                <div className="px-2 py-1.5 text-[11px] text-gray-400 border border-gray-200 rounded">
-                  No folders — create folders in Bulk Editor
-                </div>
-              ) : (
-                <Dropdown
-                  selected={selectedFolderId}
-                  items={folders.map((f) => f._id)}
-                  renderItem={(folderId) => {
-                    const folder = folders.find((f) => f._id === folderId)
-                    return folder?.name ?? folderId
-                  }}
-                  renderSelected={(folderId) => {
-                    const folder = folders.find((f) => f._id === folderId)
-                    return folder?.name ?? 'Select a folder'
-                  }}
-                  onSelect={(folderId) => setSelectedFolderId(folderId)}
-                  placeholder="Select a folder"
-                  width="100%"
-                />
-              )}
+
+              <Dropdown
+                selected={selectedFolderId}
+                items={folders.map((f) => f._id)}
+                renderItem={(folderId) => {
+                  const folder = folders.find((f) => f._id === folderId)
+                  return folder?.name ?? folderId
+                }}
+                renderSelected={(folderId) => {
+                  const folder = folders.find((f) => f._id === folderId)
+                  return folder?.name ?? 'Select a folder'
+                }}
+                onSelect={(folderId) => setSelectedFolderId(folderId)}
+                placeholder="Select a folder"
+                width="100%"
+              />
             </div>
           </div>
 
           {/* Metadata Fields - always shown */}
-          <>
-              {/* Metadata Fields */}
-              <div className="space-y-2">
-                {/* URL Source */}
-                <input
-                  type="text"
-                  value={colorUrl}
-                  onChange={(e) => setColorUrl(e.target.value)}
-                  placeholder="Source URL"
-                  className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 text-gray-500"
-                />
+          <div className="flex-grow">
+            {/* Metadata Fields */}
+            <div className="space-y-2">
+              {/* URL Source */}
+              <input
+                type="text"
+                value={colorUrl}
+                onChange={(e) => setColorUrl(e.target.value)}
+                placeholder="Source URL"
+                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 text-gray-500"
+              />
 
-                {/* Slash Naming Chip Input */}
-                <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
-                  <div className="flex flex-wrap gap-1 items-center">
-                    {slashParts.map((part, idx) => (
-                      <span key={idx} className="inline-flex items-center">
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 text-[11px] rounded">
-                          {part}
-                          <button
-                            onClick={() => setSlashParts(slashParts.filter((_, i) => i !== idx))}
-                            className="ml-0.5 text-gray-400 hover:text-gray-600"
-                          >
-                            <X size={10} />
-                          </button>
-                        </span>
-                        {idx < slashParts.length - 1 && (
-                          <span className="mx-1 text-gray-400 text-[11px]">/</span>
-                        )}
-                      </span>
-                    ))}
-                    {slashParts.length < 4 && (
-                      <input
-                        type="text"
-                        value={slashInput}
-                        onChange={(e) => setSlashInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if ((e.key === 'Enter' || e.key === '/') && slashInput.trim()) {
-                            e.preventDefault()
-                            setSlashParts([...slashParts, slashInput.trim()])
-                            setSlashInput('')
-                          } else if (e.key === 'Backspace' && !slashInput && slashParts.length > 0) {
-                            setSlashParts(slashParts.slice(0, -1))
-                          }
-                        }}
-                        placeholder={slashParts.length === 0 ? "Slash Naming (press / or Enter)" : ""}
-                        className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Tags Chip Input */}
-                <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
-                  <div className="flex flex-wrap gap-1 items-center">
-                    {tagsList.map((tag, idx) => (
-                      <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] rounded">
-                        {tag}
+              {/* Slash Naming Chip Input */}
+              <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {slashParts.map((part, idx) => (
+                    <span key={idx} className="inline-flex items-center">
+                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 text-[11px] rounded">
+                        {part}
                         <button
-                          onClick={() => setTagsList(tagsList.filter((_, i) => i !== idx))}
-                          className="ml-0.5 text-blue-400 hover:text-blue-600"
+                          onClick={() => setSlashParts(slashParts.filter((_, i) => i !== idx))}
+                          className="ml-0.5 text-gray-400 hover:text-gray-600"
                         >
                           <X size={10} />
                         </button>
                       </span>
-                    ))}
-                    {tagsList.length < 4 && (
-                      <input
-                        type="text"
-                        value={tagsInput}
-                        onChange={(e) => setTagsInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if ((e.key === 'Enter' || e.key === ',') && tagsInput.trim()) {
-                            e.preventDefault()
-                            setTagsList([...tagsList, tagsInput.trim()])
-                            setTagsInput('')
-                          } else if (e.key === 'Backspace' && !tagsInput && tagsList.length > 0) {
-                            setTagsList(tagsList.slice(0, -1))
-                          }
-                        }}
-                        placeholder={tagsList.length === 0 ? "Tags (press , or Enter)" : ""}
-                        className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Comment Input */}
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Comment"
-                  rows={2}
-                  className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-y min-h-[60px]"
-                />
-
-                {/* Priority Slider */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] text-gray-500">Priority</span>
-                    <span className="text-[11px] font-medium text-gray-700">{ranking}</span>
-                  </div>
-                  <Slider
-                    value={[ranking]}
-                    onValueChange={(value) => setRanking(value[0])}
-                    max={100}
-                    step={1}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Additional Columns */}
-                <div className="space-y-2 pt-1">
-                  {sheetColumns.map((col) => (
-                    <div key={col.name} className="flex gap-1 items-center">
-                      <span className="w-[80px] px-2 py-1.5 text-[11px] text-gray-600 truncate" title={col.name}>
-                        {col.name}
-                      </span>
-                      <input
-                        type="text"
-                        value={columnValues[col.name] || ''}
-                        onChange={(e) => updateColumnValue(col.name, e.target.value)}
-                        placeholder="Value"
-                        className="flex-1 px-2 py-1.5 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
-                      />
-                      <button
-                        onClick={() => removeColumn(col.name)}
-                        className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
+                      {idx < slashParts.length - 1 && (
+                        <span className="mx-1 text-gray-400 text-[11px]">/</span>
+                      )}
+                    </span>
                   ))}
+                  {slashParts.length < 4 && (
+                    <input
+                      type="text"
+                      value={slashInput}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        const parts = val.split('/').map((p) => p.trim()).filter(Boolean).slice(0, 4)
+                        setSlashInput(parts.join('/'))
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === '/') {
+                          const newParts = slashInput.split('/').map((p) => p.trim()).filter(Boolean)
+                          const remaining = 4 - slashParts.length
+                          const toAdd = newParts.slice(0, remaining)
+                          if (toAdd.length > 0) {
+                            e.preventDefault()
+                            setSlashParts([...slashParts, ...toAdd])
+                            setSlashInput('')
+                          }
+                        } else if (e.key === 'Backspace' && !slashInput && slashParts.length > 0) {
+                          setSlashParts(slashParts.slice(0, -1))
+                        }
+                      }}
+                      placeholder={slashParts.length === 0 ? "Slash Naming (e.g. Brand/Primary/Blue, max 4 names)" : ""}
+                      className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
+                    />
+                  )}
                 </div>
               </div>
 
-              {/* Update Button - updates selected color in database */}
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => {
-                    if (!state.user?.jwtToken) {
-                      openLogin()
-                    } else {
-                      handleUpdate()
-                    }
-                  }}
-                  disabled={!state.user?.jwtToken || selectedColorIndex === null || updateLoading || !((parsedData[selectedColorIndex] as any)?._id ?? (parsedData[selectedColorIndex] as any)?.id)}
-                  className="px-4 py-2.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors disabled:bg-gray-200 disabled:text-gray-500 flex items-center justify-center gap-1.5 min-w-[120px]"
-                >
-                  {updateLoading ? 'Updating...' : 'Update'}
-                </button>
+              {/* Tags Chip Input */}
+              <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {tagsList.map((tag, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] rounded">
+                      {tag}
+                      <button
+                        onClick={() => setTagsList(tagsList.filter((_, i) => i !== idx))}
+                        className="ml-0.5 text-blue-400 hover:text-blue-600"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  {tagsList.length < 4 && (
+                    <input
+                      type="text"
+                      value={tagsInput}
+                      onChange={(e) => setTagsInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ',') && tagsInput.trim()) {
+                          e.preventDefault()
+                          setTagsList([...tagsList, tagsInput.trim()])
+                          setTagsInput('')
+                        } else if (e.key === 'Backspace' && !tagsInput && tagsList.length > 0) {
+                          setTagsList(tagsList.slice(0, -1))
+                        }
+                      }}
+                      placeholder={tagsList.length === 0 ? "Tags (press , or Enter)" : ""}
+                      className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
+                    />
+                  )}
+                </div>
               </div>
-            </>
+
+              {/* Comment Input */}
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Comment"
+                rows={2}
+                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-y min-h-[60px]"
+              />
+
+              {/* Priority Slider */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-gray-500">Priority</span>
+                  <span className="text-[11px] font-medium text-gray-700">{ranking}</span>
+                </div>
+                <Slider
+                  value={[ranking]}
+                  onValueChange={(value) => setRanking(value[0])}
+                  max={100}
+                  step={1}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                if (!state.user?.jwtToken) {
+                  openLogin()
+                } else {
+                  handleUpdate()
+                }
+              }}
+              disabled={!state.user?.jwtToken || selectedColorIndex === null || updateLoading || !((parsedData[selectedColorIndex] as any)?._id ?? (parsedData[selectedColorIndex] as any)?.id)}
+              className="px-4 py-2.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors disabled:bg-gray-200 disabled:text-gray-500 flex items-center justify-center gap-1.5 min-w-[120px]"
+            >
+              {updateLoading ? 'Updating...' : 'Update'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

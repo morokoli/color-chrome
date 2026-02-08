@@ -1,22 +1,25 @@
 import { useState } from "react"
-import { X } from "lucide-react"
+import { X, Plus } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { Dropdown } from "../FigmaManager/Dropdown"
 import { useAPI } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
-import {
-  DriveFileGetByURLRequest,
-  DriveFileGetByURLResponse,
-} from "@/v2/types/api"
-import { Sheet } from "@/v2/types/general"
+import type { DriveFileCreateRequest, DriveFileCreateResponse } from "@/v2/types/api"
+import { useToast } from "@/v2/hooks/useToast"
+
+type SheetOption = {
+  id: string
+  spreadsheetId: string
+  sheetId: number
+  sheetName: string
+  displayName: string
+}
 
 interface SheetSelectionModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (spreadsheetId: string, sheetId: number, sheetName: string) => void
   isLoading?: boolean
-  /** When provided, called after export via URL - adds the sheet to user's files for future use */
-  onSheetAddedViaUrl?: (spreadsheet: { spreadsheetId: string; fileName: string; sheets: Sheet[] }, sheetId: number) => void
 }
 
 export const SheetSelectionModal = ({
@@ -24,45 +27,25 @@ export const SheetSelectionModal = ({
   onClose,
   onConfirm,
   isLoading: parentIsLoading = false,
-  onSheetAddedViaUrl,
 }: SheetSelectionModalProps) => {
-  const { state } = useGlobalState()
+  const toast = useToast()
+  const { state, dispatch } = useGlobalState()
   const { files, user } = state
-  const [selectedSheet, setSelectedSheet] = useState<{
-    spreadsheetId: string
-    sheetId: number
-    sheetName: string
-  } | null>(null)
-  const [sheetUrl, setSheetUrl] = useState("")
-  const [useUrl, setUseUrl] = useState(false)
-  const [fetchedSpreadsheet, setFetchedSpreadsheet] = useState<{
-    spreadsheetId: string
-    fileName: string
-    sheets: Sheet[]
-  } | null>(null)
-  const [selectedSheetId, setSelectedSheetId] = useState<number | null>(null)
-  const [isFetching, setIsFetching] = useState(false)
+  const [selectedSheet, setSelectedSheet] = useState<SheetOption | null>(null)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [fileName, setFileName] = useState("")
+  const [sheetName, setSheetName] = useState("")
 
-  const { call: callGetSheetByUrl, isStatusLoading: loadingGetSheetByUrl } = useAPI<
-    DriveFileGetByURLRequest,
-    DriveFileGetByURLResponse
+  const { call: callCreateSheet, isStatusLoading: isCreatingSheet } = useAPI<
+    DriveFileCreateRequest,
+    DriveFileCreateResponse
   >({
-    url: config.api.endpoints.sheetGetByURL,
+    url: config.api.endpoints.sheetCreate,
     method: "POST",
     jwtToken: user?.jwtToken,
   })
 
-  if (!isOpen) return null
-
-  // Build flat list of all sheets from files
-  const allSheets: Array<{
-    id: string
-    spreadsheetId: string
-    sheetId: number
-    sheetName: string
-    displayName: string
-  }> = []
-  
+  const allSheets: SheetOption[] = []
   files.forEach((file) => {
     file.sheets.forEach((sheet) => {
       allSheets.push({
@@ -75,39 +58,10 @@ export const SheetSelectionModal = ({
     })
   })
 
-  const handleFetchSheet = async () => {
-    if (!sheetUrl.trim()) {
-      return
-    }
-    setIsFetching(true)
-    try {
-      const data = await callGetSheetByUrl({ url: sheetUrl })
-      if (data.spreadsheet) {
-        setFetchedSpreadsheet({
-          spreadsheetId: data.spreadsheet.spreadsheetId,
-          fileName: data.spreadsheet.fileName,
-          sheets: data.spreadsheet.sheets,
-        })
-        if (data.spreadsheet.sheets.length > 0) {
-          setSelectedSheetId(data.spreadsheet.sheets[0].id)
-        }
-      }
-    } catch (error: any) {
-      console.error("Error fetching sheet:", error)
-    } finally {
-      setIsFetching(false)
-    }
-  }
+  if (!isOpen) return null
 
   const handleConfirm = () => {
-    if (useUrl && fetchedSpreadsheet && selectedSheetId !== null) {
-      const sheet = fetchedSpreadsheet.sheets.find(s => s.id === selectedSheetId)
-      if (sheet) {
-        onSheetAddedViaUrl?.(fetchedSpreadsheet, sheet.id)
-        onConfirm(fetchedSpreadsheet.spreadsheetId, sheet.id, sheet.name)
-        handleClose()
-      }
-    } else if (!useUrl && selectedSheet) {
+    if (selectedSheet) {
       onConfirm(selectedSheet.spreadsheetId, selectedSheet.sheetId, selectedSheet.sheetName)
       handleClose()
     }
@@ -115,16 +69,60 @@ export const SheetSelectionModal = ({
 
   const handleClose = () => {
     setSelectedSheet(null)
-    setSheetUrl("")
-    setUseUrl(false)
-    setFetchedSpreadsheet(null)
-    setSelectedSheetId(null)
     onClose()
   }
 
-  const canConfirm = useUrl
-    ? fetchedSpreadsheet !== null && selectedSheetId !== null
-    : selectedSheet !== null
+  const canConfirm = selectedSheet !== null
+
+  const handleCreateSheet = async () => {
+    const trimmedFile = fileName.trim()
+    const trimmedTab = sheetName.trim() || "Sheet1"
+
+    if (!trimmedFile) {
+      toast.display("error", "Please enter a sheet name")
+      return
+    }
+
+    try {
+      const data = await callCreateSheet({ fileName: trimmedFile, sheetName: trimmedTab })
+      if (!data?.spreadsheetId) throw new Error("Failed to create spreadsheet")
+
+      const fileObj = {
+        fileName: trimmedFile,
+        spreadsheetId: data.spreadsheetId,
+        sheets: [
+          {
+            name: trimmedTab,
+            id: data.sheetId,
+          },
+        ],
+      }
+
+      dispatch({
+        type: "ADD_FILES",
+        payload: {
+          ...(fileObj as any),
+          colorHistory: [],
+        },
+      })
+      dispatch({ type: "SET_SELECTED_FILE", payload: data.spreadsheetId })
+
+      setSelectedSheet({
+        id: `${data.spreadsheetId}-${data.sheetId}`,
+        spreadsheetId: data.spreadsheetId,
+        sheetId: data.sheetId,
+        sheetName: trimmedTab,
+        displayName: `${trimmedFile} - ${trimmedTab}`,
+      })
+
+      toast.display("success", "Spreadsheet created successfully")
+      setFileName("")
+      setSheetName("")
+      setIsCreateOpen(false)
+    } catch {
+      toast.display("error", "Failed to create spreadsheet")
+    }
+  }
 
   return (
     <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-50">
@@ -140,125 +138,94 @@ export const SheetSelectionModal = ({
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content - dropdown to select sheet, with Add sheet in footer */}
         <div className="p-4 overflow-y-auto flex-1">
-          {/* Toggle between existing sheets and URL */}
-          <div className="mb-4 flex gap-2">
-            <button
-              onClick={() => setUseUrl(false)}
-              className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-                !useUrl
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Select Sheet
-            </button>
-            <button
-              onClick={() => setUseUrl(true)}
-              className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-                useUrl
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              Add Sheet URL
-            </button>
-          </div>
-
-          {!useUrl ? (
-            <div className="mb-4">
-              <label className="block text-[12px] text-gray-700 mb-2">
-                Select Sheet
-              </label>
-              {allSheets.length === 0 ? (
-                <div className="text-center text-gray-400 text-sm py-4">
-                  No sheets available. Add a sheet first.
-                </div>
-              ) : (
-                <Dropdown<string>
-                  selected={selectedSheet ? `${selectedSheet.spreadsheetId}-${selectedSheet.sheetId}` : null}
-                  items={allSheets.map(s => s.id)}
-                  renderItem={(sheetId) => {
-                    const sheet = allSheets.find(s => s.id === sheetId)
-                    return sheet?.displayName || sheetId
-                  }}
-                  renderSelected={(sheetId) => {
-                    const sheet = allSheets.find(s => s.id === sheetId)
-                    return sheet?.displayName || "Select a sheet"
-                  }}
-                  onSelect={(sheetId) => {
-                    const sheet = allSheets.find(s => s.id === sheetId)
-                    if (sheet) {
-                      setSelectedSheet({
-                        spreadsheetId: sheet.spreadsheetId,
-                        sheetId: sheet.sheetId,
-                        sheetName: sheet.sheetName,
-                      })
-                    }
-                  }}
-                  placeholder="Select a sheet"
-                  width="100%"
-                  isSearchable
-                  usePortal={true}
-                />
-              )}
+          <label className="block text-[12px] text-gray-700 mb-2">
+            Select sheet
+          </label>
+          {allSheets.length === 0 ? (
+            <div className="text-center text-gray-400 text-sm py-4">
+              No sheets available. Create one below.
             </div>
           ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[12px] text-gray-700 mb-2">
-                  Sheet URL
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={sheetUrl}
-                    onChange={(e) => setSheetUrl(e.target.value)}
-                    placeholder="https://docs.google.com/spreadsheets/d/..."
-                    className="flex-1 px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
-                  />
-                  <button
-                    onClick={handleFetchSheet}
-                    disabled={!sheetUrl.trim() || isFetching || loadingGetSheetByUrl}
-                    className={`px-4 py-2 text-[12px] rounded transition-colors ${
-                      sheetUrl.trim() && !isFetching && !loadingGetSheetByUrl
-                        ? "bg-gray-900 text-white hover:bg-gray-800"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
-                  >
-                    {isFetching || loadingGetSheetByUrl ? "Loading..." : "Fetch"}
-                  </button>
-                </div>
-              </div>
-
-              {fetchedSpreadsheet && (
-                <div>
-                  <div className="bg-gray-50 rounded p-2 mb-2">
-                    <p className="text-[11px] text-gray-500">File</p>
-                    <p className="text-[13px] text-gray-800 font-medium truncate">
-                      {fetchedSpreadsheet.fileName}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] text-gray-700 mb-2">
-                      Select Tab
-                    </label>
-                    <select
-                      value={selectedSheetId ?? ''}
-                      onChange={(e) => setSelectedSheetId(Number(e.target.value))}
-                      className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded bg-white appearance-none cursor-pointer hover:border-gray-300 focus:outline-none focus:border-gray-400"
-                    >
-                      {fetchedSpreadsheet.sheets.map((sheet) => (
-                        <option key={sheet.id} value={sheet.id}>
-                          {sheet.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+            <Dropdown<SheetOption>
+              selected={selectedSheet}
+              items={allSheets}
+              renderItem={(sheet) => (
+                <span className="text-[12px] truncate">{sheet.displayName}</span>
               )}
-            </div>
+              renderSelected={(sheet) => sheet.displayName}
+              onSelect={(sheet) => setSelectedSheet(sheet)}
+              placeholder="Select a sheet"
+              width="100%"
+              isSearchable
+              usePortal
+              renderFooter={
+                () => (
+                  <div className="border-t border-gray-100">
+                    {!isCreateOpen ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIsCreateOpen(true)
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 transition-colors"
+                      >
+                        <Plus size={14} />
+                        Add sheet
+                      </button>
+                    ) : (
+                      <div
+                        className="px-3 py-2"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex gap-2">
+                          <input
+                            value={fileName}
+                            onChange={(e) => setFileName(e.target.value)}
+                            placeholder="Sheet name"
+                            className="flex-1 h-8 px-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                          />
+                          <input
+                            value={sheetName}
+                            onChange={(e) => setSheetName(e.target.value)}
+                            placeholder="Tab name"
+                            className="flex-1 h-8 px-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                          />
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCreateOpen(false)
+                              setFileName("")
+                              setSheetName("")
+                            }}
+                            className="flex-1 h-8 text-[12px] border border-gray-200 rounded bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCreateSheet}
+                            disabled={isCreatingSheet}
+                            className={`flex-1 h-8 text-[12px] rounded transition-colors ${
+                              !isCreatingSheet
+                                ? "bg-gray-900 text-white hover:bg-gray-800"
+                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            }`}
+                          >
+                            {isCreatingSheet ? "Creating..." : "Create"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+            />
           )}
         </div>
 
@@ -272,9 +239,9 @@ export const SheetSelectionModal = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!canConfirm || parentIsLoading || isFetching || loadingGetSheetByUrl}
+            disabled={!canConfirm || parentIsLoading}
             className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-              canConfirm && !parentIsLoading && !isFetching && !loadingGetSheetByUrl
+              canConfirm && !parentIsLoading
                 ? "bg-gray-900 text-white hover:bg-gray-800"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}

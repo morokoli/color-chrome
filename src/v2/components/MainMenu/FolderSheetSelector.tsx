@@ -1,9 +1,13 @@
-import { FC, useMemo } from "react"
+import { FC, useMemo, useState, useCallback } from "react"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useGetFolders } from "@/v2/api/folders.api"
 import { Folder } from "@/v2/api/folders.api"
 import { File } from "@/v2/types/general"
-import { Folder as FolderIcon } from "lucide-react"
+import { Folder as FolderIcon, Plus } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { axiosInstance } from "@/v2/hooks/useAPI"
+import { config } from "@/v2/others/config"
+import { useToast } from "@/v2/hooks/useToast"
 
 interface FolderSheetSelectorProps {
     selectedFolders: string[]
@@ -27,6 +31,35 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     userToken,
 }) => {
     const { data: foldersData } = useGetFolders(false)
+    const queryClient = useQueryClient()
+    const toast = useToast()
+    const [isCreating, setIsCreating] = useState(false)
+    const [newFolderName, setNewFolderName] = useState("")
+    const [isCreatingLoading, setIsCreatingLoading] = useState(false)
+
+    const handleCreateFolder = useCallback(async () => {
+        const name = newFolderName.trim()
+        if (!name || !userToken) return
+        setIsCreatingLoading(true)
+        try {
+            const response = await axiosInstance.post(
+                config.api.endpoints.createFolder,
+                { name, colorIds: [], paletteIds: [] },
+                { headers: { Authorization: `Bearer ${userToken}` } }
+            )
+            const folder = response.data?.folder ?? response.data
+            if (folder?._id) {
+                await queryClient.invalidateQueries({ queryKey: ["folders"] })
+                toast.display("success", "Folder created")
+                setNewFolderName("")
+                setIsCreating(false)
+            }
+        } catch (err: any) {
+            toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to create folder")
+        } finally {
+            setIsCreatingLoading(false)
+        }
+    }, [newFolderName, userToken, queryClient, toast])
 
     // Build flat list of all selectable items (folders only - sheets removed)
     const allItems = useMemo<SelectableItem[]>(() => {
@@ -102,6 +135,49 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
         return null
     }
 
+    const renderFooter = useCallback(() => {
+        if (isCreating) {
+            return (
+                <div className="p-2 border-t border-gray-100 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    <input
+                        type="text"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        placeholder="Folder name"
+                        className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+                        autoFocus
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleCreateFolder()
+                            if (e.key === "Escape") {
+                                setIsCreating(false)
+                                setNewFolderName("")
+                            }
+                        }}
+                    />
+                    <button
+                        onClick={handleCreateFolder}
+                        disabled={!newFolderName.trim() || isCreatingLoading}
+                        className="px-3 py-1.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isCreatingLoading ? "..." : "Save"}
+                    </button>
+                </div>
+            )
+        }
+        return (
+            <button
+                onClick={(e) => {
+                    e.stopPropagation()
+                    setIsCreating(true)
+                }}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 border-t border-gray-100 transition-colors"
+            >
+                <Plus size={14} />
+                Create
+            </button>
+        )
+    }, [isCreating, newFolderName, isCreatingLoading, handleCreateFolder])
+
     return (
         <div className="px-4">
             <div className="pb-4">
@@ -118,6 +194,7 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
                     width="100%"
                     checkboxAtEnd={true}
                     openUpward={true}
+                    renderFooter={renderFooter}
                 />
             </div>
         </div>

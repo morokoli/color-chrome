@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { Plus, X } from "lucide-react"
+import { Plus, X, ExternalLink } from "lucide-react"
 import { useFigmaBindAccount, useFigmaDeleteAccount, useFigmaGetAccounts } from "@/v2/api/figma.api"
 import { config } from "@/v2/others/config"
 import SectionHeader from "../common/SectionHeader"
@@ -95,6 +95,10 @@ const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBro
     getFigmaJwt()
   }, [])
 
+  const openFigma = () => {
+    chrome.tabs.create({ url: "https://www.figma.com", active: false })
+  }
+
   return (
     <div className="bg-white rounded-md overflow-visible w-[360px]">
       <SectionHeader
@@ -102,6 +106,16 @@ const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBro
         setTab={setTab}
         onPickColor={onPickColor}
         onPickColorFromBrowser={onPickColorFromBrowser}
+        extraRight={
+          <button
+            type="button"
+            onClick={openFigma}
+            className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+            title="Open Figma"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </button>
+        }
       />
 
       {/* Content */}
@@ -122,7 +136,7 @@ const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBro
           </div>
         ) : accounts.length === 0 ? (
           <div className="text-center text-gray-400 text-sm py-8">
-            <div className="mb-2">No Figma accounts connected</div>
+            <div className="mb-2">No Figma account connected</div>
             <div className="text-[11px] text-gray-300">
               Click the button above to connect your first account
             </div>

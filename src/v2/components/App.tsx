@@ -15,7 +15,6 @@ import { openEyeDropper } from "@/v2/helpers/colorPicker"
 import Copy from "./Copy"
 import Comment from "./Comment"
 import MainMenu from "./MainMenu"
-import AddSheet from "./AddSheet"
 import PickPanel from "./PickPanel"
 import { Show } from "./common/Show"
 import AiGenerator from "./AIGenerator"
@@ -45,10 +44,10 @@ const App = () => {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- run once on mount
 
-  // Helper to save color to Google Sheets
+  // Helper to save color to database (no sheet integration)
   const saveColorToDatabase = useCallback(async (hexColor: string, source: string) => {
-    const { selectedFile, files, user, selectedFolders, selectedSheets } = state
-    if (!user?.jwtToken) return // Only require user to be logged in
+    const { user, selectedFolders } = state
+    if (!user?.jwtToken) return
 
     const colorData = {
       timestamp: new Date().valueOf(),
@@ -63,141 +62,36 @@ const App = () => {
       additionalColumns: [],
     }
 
-    const promises: Promise<any>[] = []
-    let colorIdPromise: Promise<string | null> | null = null
+    // Always save to database (no selected sheet)
+    const promise = axiosInstance.post(
+      config.api.endpoints.addColor,
+      {
+        spreadsheetId: null,
+        sheetName: null,
+        sheetId: null,
+        row: colorData,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${user.jwtToken}`,
+        },
+      }
+    )
 
-    // Save to selected sheets (optimistic - fire all requests in parallel)
-    if (selectedSheets && selectedSheets.length > 0) {
-      selectedSheets.forEach(sheetId => {
-        // Parse sheetId format: "spreadsheetId-sheetId"
-        const [spreadsheetId, sheetIdNum] = sheetId.split('-')
-        const file = files.find(f => f.spreadsheetId === spreadsheetId)
-        const sheet = file?.sheets.find(s => s.id === Number(sheetIdNum))
-
-        if (file && sheet) {
-          const promise = axiosInstance.post(
-            config.api.endpoints.addColor,
-            {
-              spreadsheetId,
-              sheetName: sheet.name,
-              sheetId: sheet.id,
-              row: colorData,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${user.jwtToken}`,
-              },
-            }
-          )
-          promises.push(promise)
-          
-          // Use first response to get color ID for folders
-          if (!colorIdPromise) {
-            colorIdPromise = promise.then((response) => {
-              // axiosInstance.post returns Axios response, so access response.data
-              // Backend wraps in createOkResponse, so it's response.data.data
-              const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse;
-              if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
-                return apiResponse.data.createdColor?._id || null;
-              } else if (apiResponse && 'createdColor' in apiResponse) {
-                return (apiResponse as AddColorResponse).createdColor?._id || null;
-              }
-              return null;
-            }).catch(() => null)
-          }
+    const colorIdPromise: Promise<string | null> = promise
+      .then((response) => {
+        const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse
+        if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
+          return apiResponse.data.createdColor?._id || null
+        } else if (apiResponse && 'createdColor' in apiResponse) {
+          return (apiResponse as AddColorResponse).createdColor?._id || null
         }
+        return null
       })
-    } else if (selectedFile) {
-      // Fallback to old behavior if no sheets selected but file is selected
-      const selectedFileData = files.find(file => file.spreadsheetId === selectedFile)
-      const promise = axiosInstance.post(
-        config.api.endpoints.addColor,
-        {
-          spreadsheetId: selectedFile,
-          sheetName: selectedFileData?.sheets?.[0]?.name || null,
-          sheetId: selectedFileData?.sheets?.[0]?.id ?? null,
-          row: colorData,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${user.jwtToken}`,
-          },
-        }
-      )
-      promises.push(promise)
-      // axiosInstance.post returns Axios response, so access response.data
-      // Backend wraps in createOkResponse, so it's response.data.data
-      colorIdPromise = promise.then((response) => {
-        const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse;
-        if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
-          return apiResponse.data.createdColor?._id || null;
-        } else if (apiResponse && 'createdColor' in apiResponse) {
-          return (apiResponse as AddColorResponse).createdColor?._id || null;
-        }
-        return null;
-      }).catch(() => null)
-    } else {
-      // Save to "No sheet" if nothing is selected OR if only folders are selected
-      // This ensures we always have a color ID to copy to folders
-      const promise = axiosInstance.post(
-        config.api.endpoints.addColor,
-        {
-          spreadsheetId: null,
-          sheetName: null,
-          sheetId: null,
-          row: colorData,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${user.jwtToken}`,
-          },
-        }
-      )
-      promises.push(promise)
-      // axiosInstance.post returns Axios response, so access response.data
-      // Backend wraps in createOkResponse, so it's response.data.data
-      colorIdPromise = promise.then((response) => {
-        const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse;
-        if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
-          return apiResponse.data.createdColor?._id || null;
-        } else if (apiResponse && 'createdColor' in apiResponse) {
-          return (apiResponse as AddColorResponse).createdColor?._id || null;
-        }
-        return null;
-      }).catch(() => null)
-    }
+      .catch(() => null)
 
     // Save to selected folders - ensure we always copy to ALL selected folders
     if (selectedFolders && selectedFolders.length > 0) {
-      // If we don't have a colorIdPromise yet (shouldn't happen, but safety check),
-      // create one by saving to "No sheet"
-      if (!colorIdPromise) {
-        const promise = axiosInstance.post(
-          config.api.endpoints.addColor,
-          {
-            spreadsheetId: null,
-            sheetName: null,
-            sheetId: null,
-            row: colorData,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${user.jwtToken}`,
-            },
-          }
-        )
-        promises.push(promise)
-        colorIdPromise = promise.then((response) => {
-          const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse;
-          if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
-            return apiResponse.data.createdColor?._id || null;
-          } else if (apiResponse && 'createdColor' in apiResponse) {
-            return (apiResponse as AddColorResponse).createdColor?._id || null;
-          }
-          return null;
-        }).catch(() => null)
-      }
-
       // Copy color to ALL selected folders (optimistic - all in parallel)
       colorIdPromise.then((colorId) => {
         if (colorId) {
@@ -220,13 +114,6 @@ const App = () => {
         }
       }).catch(err => {
         console.error("Failed to get color ID for folder copying:", err)
-      })
-    }
-
-    // Execute all sheet saves in parallel (optimistic - don't wait)
-    if (promises.length > 0) {
-      Promise.all(promises).catch(err => {
-        console.error("Some color saves failed:", err)
       })
     }
   }, [state])
@@ -320,17 +207,6 @@ const App = () => {
       queryClient.invalidateQueries({ queryKey: ["folders"] })
     }
 
-    // Add to file color history if a file is selected
-    if (state.selectedFile) {
-      dispatch({
-        type: "ADD_FILE_COLOR_HISTORY",
-        payload: {
-          spreadsheetId: state.selectedFile,
-          color: pickedColor,
-        },
-      })
-    }
-
     // Clear storage immediately to prevent reprocessing on mount
     chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'], () => {
       // Storage cleared
@@ -348,7 +224,7 @@ const App = () => {
     })
 
     // Don't navigate - the on-page panel shows the results
-  }, [state.selectedFile, saveColorToDatabase])
+  }, [saveColorToDatabase])
 
   // Listen for picked color from magnifier
   useEffect(() => {
@@ -424,17 +300,10 @@ const App = () => {
   }, [handlePickedColor])
 
   const syncColorPickerStateForBackground = () => {
-    const { user, selectedFile, files, selectedFolders } = state
-    const selectedFileData = files.find((f) => f.spreadsheetId === selectedFile)
+    const { user, selectedFolders } = state
     const payload = {
       jwtToken: user?.jwtToken || null,
-      selectedFileData: selectedFileData
-        ? {
-            spreadsheetId: selectedFileData.spreadsheetId,
-            sheetName: selectedFileData.sheets?.[0]?.name || "",
-            sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
-          }
-        : null,
+      selectedFileData: null,
       selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
       apiUrl: config.api.baseURL,
     }
@@ -588,13 +457,6 @@ const App = () => {
           </Show>
           <Show if={tab === "FIGMA_MANAGER"}>
             <FigmaManager
-              setTab={setTab}
-              onPickColor={handlePickColor}
-              onPickColorFromBrowser={handlePickColorFromBrowser}
-            />
-          </Show>
-          <Show if={tab === "ADD_SHEET"}>
-            <AddSheet
               setTab={setTab}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}

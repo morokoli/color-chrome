@@ -42,7 +42,6 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
           transition: "border-width 0.3s ease-in-out",
           cursor: "pointer",
           backgroundColor: colorData.hex,
-          borderRadius: "6px"
         }}
       >
         <div
@@ -98,7 +97,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         {
           filters: {},
           grouping: {},
-          sorting: { sortBy: "ranking", sortOrder: "desc" },
+          sorting: { sortBy: "newest", sortOrder: "desc" },
           searchingValue: "",
         },
         {
@@ -128,7 +127,11 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
             color?.comments?.toLowerCase().includes(searchQuery.toLowerCase())
           )
         })
-        .sort((a: any, b: any) => (b.ranking || 0) - (a.ranking || 0))
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.createdAt || a.created_at || 0).getTime()
+          const dateB = new Date(b.createdAt || b.created_at || 0).getTime()
+          return dateB - dateA
+        })
     } catch (error) {
       console.error("Error processing colors:", error)
       return []
@@ -196,7 +199,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
             placeholder="Search colors"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full h-9 px-3 text-sm border border-gray-300"
           />
         </div>
       )

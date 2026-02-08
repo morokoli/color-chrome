@@ -84,6 +84,7 @@ export type Action =
   | { type: "SET_SELECTED_FOLDERS"; payload: string[] }
   | { type: "SET_SELECTED_SHEETS"; payload: string[] }
   | { type: "UPDATE_PARSED_AT"; payload: { index: number; parsed: any } }
+  | { type: "UPDATE_PARSED_BY_COLOR_ID"; payload: { colorId: string; parsed: any } }
   | { type: "UPDATE_COLOR_AT"; payload: { index: number; hex?: string; parsed?: any } }
   | { type: "SYNC_PARSED_DATA_TO_HISTORY" }
 
@@ -320,6 +321,20 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
       return produce(state, (draft) => {
         if (index >= 0 && index < draft.parsedData.length && parsed) {
           draft.parsedData[index] = { ...(draft.parsedData[index] as any), ...parsed }
+        }
+      })
+    }
+
+    case "UPDATE_PARSED_BY_COLOR_ID": {
+      const { colorId, parsed } = action.payload
+      return produce(state, (draft) => {
+        if (!colorId || !parsed) return
+        const idx = draft.parsedData.findIndex(
+          (p: any) => (p?._id ?? p?.id) === colorId
+        )
+        if (idx >= 0 && idx < draft.parsedData.length) {
+          draft.parsedData[idx] = { ...(draft.parsedData[idx] as any), ...parsed }
+          if (parsed.hex) draft.colorHistory[idx] = parsed.hex
         }
       })
     }

@@ -4,6 +4,7 @@ import { eraseAllCookies } from "@/v2/helpers/cookie"
 import { LogIn } from "lucide-react"
 import { SECTION_MENU_ITEMS } from "@/v2/constants/sectionMenu"
 import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
+import { config } from "@/v2/others/config"
 
 interface Props {
   setTab: (tab: string | null) => void
@@ -36,7 +37,8 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
   }, [])
 
   const logInHandler = () => {
-    setTab("ADD_SHEET")
+    const url = config.api.baseURL + config.api.endpoints.auth
+    chrome.tabs.create({ url })
   }
 
   return (

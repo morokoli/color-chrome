@@ -51,6 +51,18 @@ const colorsHaveChanged = (colors1: any[], colors2: any[]) => {
   return false
 }
 
+/** Within a list of snapshots (newest first), keep one per run of consecutive same colors. */
+const collapseConsecutiveSameColors = (snapshots: any[]) => {
+  if (snapshots.length === 0) return []
+  const out = [snapshots[0]]
+  for (let i = 1; i < snapshots.length; i++) {
+    if (colorsHaveChanged(snapshots[i].colors, out[out.length - 1].colors)) {
+      out.push(snapshots[i])
+    }
+  }
+  return out
+}
+
 interface PaletteHistoryProps {
   currentColors: any[]
   paletteId: string | null
@@ -138,10 +150,11 @@ const PaletteHistory = ({
       }
       groups[dateKey].push(snapshot)
     })
-    return Object.entries(groups).map(([dateKey, snapshots]) => ({
+    return Object.entries(groups).map(([dateKey, daySnapshots]) => ({
       dateKey,
       date: new Date(dateKey),
-      snapshots,
+      snapshots: daySnapshots,
+      displaySnapshots: collapseConsecutiveSameColors(daySnapshots),
     }))
   }, [snapshots])
 
@@ -276,7 +289,7 @@ const PaletteHistory = ({
               }
             >
               <List
-                dataSource={group.snapshots}
+                dataSource={group.displaySnapshots}
                 style={{ padding: "0px 1px" }}
                 renderItem={(snapshot: any) => (
                   <List.Item

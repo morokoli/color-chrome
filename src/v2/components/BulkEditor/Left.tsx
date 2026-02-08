@@ -179,6 +179,35 @@ const Left: React.FC = () => {
     return selectedColors.has(key)
   }
 
+  /** Toggle select all / deselect all for a folder (or non-foldered). Same behavior as Export to Sheet. */
+  const handleSelectAllInFolder = (folder: Folder | null, colorsInFolder: Color[]) => {
+    if (colorsInFolder.length === 0) return
+    const allSelected = colorsInFolder.every((c) => isColorSelected(c._id, folder?._id ?? null))
+    setSelectedColors((prev) => {
+      const next = new Map(prev)
+      if (allSelected) {
+        colorsInFolder.forEach((c) => {
+          const key = folder ? `${folder._id}_${c._id}` : `non-foldered_${c._id}`
+          next.delete(key)
+        })
+      } else {
+        colorsInFolder.forEach((c) => {
+          const key = folder ? `${folder._id}_${c._id}` : `non-foldered_${c._id}`
+          const folderId = folder ? folder._id : "non-foldered"
+          const folderName = folder ? folder.name : "Non-foldered"
+          next.delete(key)
+          next.set(key, {
+            color: c,
+            folderId,
+            folderName,
+            originalColorId: c._id,
+          })
+        })
+      }
+      return next
+    })
+  }
+
   // Dispatch selected colors to global state or parent component
   useEffect(() => {
     // Store in localStorage for Right component to access
@@ -190,6 +219,20 @@ const Left: React.FC = () => {
       detail: { colors: colorsArray }
     }))
   }, [selectedColors])
+
+  // When Right side clears (Clear button), de-select all on the left so checkmarks stay in sync
+  useEffect(() => {
+    const handleClearFromRight = (event: CustomEvent<{ colors: SelectedColor[] }>) => {
+      const colors = event.detail?.colors
+      if (Array.isArray(colors) && colors.length === 0) {
+        setSelectedColors(new Map())
+      }
+    }
+    window.addEventListener('bulk-editor-colors-changed', handleClearFromRight as EventListener)
+    return () => {
+      window.removeEventListener('bulk-editor-colors-changed', handleClearFromRight as EventListener)
+    }
+  }, [])
 
   // Listen for folder refresh events from Right component
   useEffect(() => {
@@ -347,49 +390,42 @@ const Left: React.FC = () => {
     setFolderModalOpen(true)
   }
 
-  const handleFolderConfirm = async (folderId: string, colorsToOperateOn: SelectedColorItem[]) => {
+  const handleFolderConfirm = async (folderIds: string[], colorsToOperateOn: SelectedColorItem[]) => {
     if (!folderActionType) return
 
-    if (colorsToOperateOn.length === 0) return
+    if (colorsToOperateOn.length === 0 || folderIds.length === 0) return
 
+    const colorIds = colorsToOperateOn.map((item) => item.color._id)
     setActionLoading(folderActionType)
     try {
       if (folderActionType === "copy") {
-        // Copy each color to the folder (use modal's selection, not bulk editor selection)
-        const promises = colorsToOperateOn.map(async (item) => {
-          const response = await axiosInstance.post(
-            `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-            {
-              colorId: item.color._id,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
-              },
-            }
-          )
-          return response.data
-        })
-
-        await Promise.all(promises)
-        toast.display("success", `Successfully copied ${colorsToOperateOn.length} color(s) to folder`)
-      } else if (folderActionType === "move") {
-        // Move all colors to the folder (use modal's selection)
-        const colorIds = colorsToOperateOn.map(item => item.color._id)
         await axiosInstance.post(
-          `${config.api.endpoints.moveColorsToFolder}/${folderId}/move-colors`,
-          {
-            colorIds,
-            isNotFoldered: false,
-          },
+          config.api.endpoints.copyColorsToFolders,
+          { folderIds, colorIds },
           {
             headers: {
               Authorization: `Bearer ${state.user?.jwtToken}`,
             },
           }
         )
-
-        toast.display("success", `Successfully moved ${colorsToOperateOn.length} color(s) to folder`)
+        toast.display(
+          "success",
+          `Successfully copied ${colorsToOperateOn.length} color(s) to ${folderIds.length} folder${folderIds.length !== 1 ? "s" : ""}`
+        )
+      } else if (folderActionType === "move") {
+        await axiosInstance.post(
+          config.api.endpoints.moveColorsToFolders,
+          { folderIds, colorIds },
+          {
+            headers: {
+              Authorization: `Bearer ${state.user?.jwtToken}`,
+            },
+          }
+        )
+        toast.display(
+          "success",
+          `Successfully moved ${colorsToOperateOn.length} color(s) to ${folderIds.length} folder${folderIds.length !== 1 ? "s" : ""}`
+        )
       }
 
       // Invalidate and refetch folders to update the left panel
@@ -512,19 +548,23 @@ const Left: React.FC = () => {
         <div className="mb-3 border border-gray-200 rounded">
           <div className="flex items-center gap-2 p-2 bg-gray-50 border-b border-gray-200">
             <button
-              onClick={() => setCollapsedNonFoldered(!collapsedNonFoldered)}
-              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSelectAllInFolder(null, nonFolderedColors)
+              }}
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                nonFolderedColors.length > 0 && nonFolderedColors.every((c) => isColorSelected(c._id, null))
+                  ? "bg-gray-900 border-gray-900"
+                  : "border-gray-300 hover:border-gray-400"
+              }`}
+              title={nonFolderedColors.length > 0 && nonFolderedColors.every((c) => isColorSelected(c._id, null)) ? "Deselect all" : "Select all"}
             >
-              <ChevronDown
-                size={14}
-                style={{
-                  transformOrigin: "center",
-                  transform: `rotate(${collapsedNonFoldered ? -90 : 0}deg)`,
-                  transition: "transform 0.2s ease-in-out",
-                }}
-              />
+              {nonFolderedColors.length > 0 && nonFolderedColors.every((c) => isColorSelected(c._id, null)) && (
+                <Check size={12} className="text-white" />
+              )}
             </button>
-            <div className="flex-grow">
+            <div className="flex-grow min-w-0">
               <div className="text-[12px] font-medium text-gray-800">
                 Non-foldered Colors
               </div>
@@ -537,6 +577,19 @@ const Left: React.FC = () => {
                 )}
               </div>
             </div>
+            <button
+              onClick={() => setCollapsedNonFoldered(!collapsedNonFoldered)}
+              className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+            >
+              <ChevronDown
+                size={14}
+                style={{
+                  transformOrigin: "center",
+                  transform: `rotate(${collapsedNonFoldered ? -90 : 0}deg)`,
+                  transition: "transform 0.2s ease-in-out",
+                }}
+              />
+            </button>
           </div>
           <CollapsibleBox
             isOpen={!collapsedNonFoldered}
@@ -635,8 +688,34 @@ const Left: React.FC = () => {
                 {/* Folder Header */}
                 <div className="flex items-center gap-2 p-2 bg-gray-50 border-b border-gray-200">
                   <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSelectAllInFolder(folder, colors)
+                    }}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      colors.length > 0 && colors.every((c) => isColorSelected(c._id, folder._id))
+                        ? "bg-gray-900 border-gray-900"
+                        : "border-gray-300 hover:border-gray-400"
+                    }`}
+                    title={colors.length > 0 && colors.every((c) => isColorSelected(c._id, folder._id)) ? "Deselect all" : "Select all"}
+                  >
+                    {colors.length > 0 && colors.every((c) => isColorSelected(c._id, folder._id)) && (
+                      <Check size={12} className="text-white" />
+                    )}
+                  </button>
+                  <div className="flex-grow min-w-0">
+                    <div className="text-[12px] font-medium text-gray-800 truncate">
+                      {folder.name}
+                    </div>
+                    <div className="text-[10px] text-gray-500">
+                      {colors.length} color{colors.length !== 1 ? "s" : ""}
+                      {selectedCount > 0 && ` • ${selectedCount} selected`}
+                    </div>
+                  </div>
+                  <button
                     onClick={() => handleFolderToggle(folder._id)}
-                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
                   >
                     <ChevronDown
                       size={14}
@@ -647,15 +726,6 @@ const Left: React.FC = () => {
                       }}
                     />
                   </button>
-                  <div className="flex-grow">
-                    <div className="text-[12px] font-medium text-gray-800 truncate">
-                      {folder.name}
-                    </div>
-                    <div className="text-[10px] text-gray-500">
-                      {colors.length} color{colors.length !== 1 ? "s" : ""}
-                      {selectedCount > 0 && ` • ${selectedCount} selected`}
-                    </div>
-                  </div>
                 </div>
 
                 {/* Colors Grid */}

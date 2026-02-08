@@ -4,13 +4,11 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
-import { colors } from "@/v2/helpers/colors"
 import { ColorList } from "./ColorList"
 import { SelectedColor } from "@/v2/api/folders.api"
-import { SheetSelectionModal } from "./SheetSelectionModal"
 
 const Right = () => {
-  const { state } = useGlobalState()
+  const { state, dispatch } = useGlobalState()
   const toast = useToast()
   const queryClient = useQueryClient()
   const [selectedColors, setSelectedColors] = useState<SelectedColor[]>([])
@@ -18,8 +16,7 @@ const Right = () => {
   const [nameInput, setNameInput] = useState<string>("")
   const [nameMode, setNameMode] = useState<"hex" | "numerator">("hex")
   const [tagsInput, setTagsInput] = useState<string>("")
-  const [sheetModalOpen, setSheetModalOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState<"save" | "export" | null>(null)
+  const [isLoading, setIsLoading] = useState<"save" | null>(null)
   const [isDirty, setIsDirty] = useState(false)
 
   // Helper function to merge colors, preserving existing values
@@ -174,23 +171,30 @@ const Right = () => {
 
   const handleUpdate = () => {
     if (!activeColors.length) return
-    const base = nameInput.trim().replace(/\s*\/\s*/g, " / ")
+    const baseParts = nameInput.trim().split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 4)
+    const base = baseParts.join(" / ")
     const tags = tagsInput
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean)
 
+    const limitToFourParts = (s: string) => {
+      const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 4)
+      return parts.join(" / ")
+    }
     const namingByIndex = new Map<number, string>()
     if (nameMode === "hex") {
       activeColors.forEach((colorIndex) => {
         const hex = selectedColors[colorIndex]?.color.hex || ""
         const hexWithHash = hex.startsWith("#") ? hex : `#${hex}`
-        namingByIndex.set(colorIndex, base ? `${base} / ${hexWithHash}` : hexWithHash)
+        const full = base ? `${base} / ${hexWithHash}` : hexWithHash
+        namingByIndex.set(colorIndex, limitToFourParts(full))
       })
     } else {
       activeColors.forEach((colorIndex, position) => {
         const lineNum = position + 1
-        namingByIndex.set(colorIndex, base ? `${base} / ${lineNum}` : String(lineNum))
+        const full = base ? `${base} / ${lineNum}` : String(lineNum)
+        namingByIndex.set(colorIndex, limitToFourParts(full))
       })
     }
 
@@ -216,11 +220,17 @@ const Right = () => {
     colorId: number,
     slash_nameInput: string,
   ) => {
-    const newslash_naming = slash_nameInput
-      .replace(/\s+/g, "")
-      .replace(/ /g, "/")
-      .replace(/\//g, " / ")
-    
+    const hasTrailingSlash = slash_nameInput.trim().endsWith("/")
+    let newslash_naming = slash_nameInput
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\s*\/\s*/g, " / ")
+    const parts = newslash_naming.split(/\s*\/\s*/).map((p) => p.trim())
+    const nonEmpty = parts.filter(Boolean)
+    const limitedParts = nonEmpty.slice(0, 4)
+    newslash_naming = limitedParts.join(" / ")
+    if (hasTrailingSlash && limitedParts.length < 4) newslash_naming += " / "
+
     setSelectedColors(prev => 
       prev.map((item, index) => 
         index === colorId
@@ -322,6 +332,31 @@ const Right = () => {
       const results = await Promise.all(promises)
       toast.display("success", `Successfully updated ${selectedColors.length} color(s)`)
       
+      // Sync parsedData in global state so History tab shows updated name, tags, etc.
+      results.forEach(({ response }) => {
+        const serverColor = response?.data?.data?.color || response?.data?.color
+        const colorId = serverColor?._id ?? serverColor?.id
+        if (colorId && serverColor) {
+          dispatch({
+            type: "UPDATE_PARSED_BY_COLOR_ID",
+            payload: {
+              colorId: String(colorId),
+              parsed: {
+                hex: serverColor.hex,
+                slash_naming: serverColor.slash_naming,
+                tags: serverColor.tags,
+                comments: serverColor.comments,
+                ranking: serverColor.ranking,
+                additionalColumns: serverColor.additionalColumns,
+                url: serverColor.url,
+                rgb: serverColor.rgb,
+                hsl: serverColor.hsl,
+              },
+            },
+          })
+        }
+      })
+      
       // Update colors immediately with server response data to prevent flickering
       // The server response contains the updated color data
       setSelectedColors(prev => {
@@ -383,86 +418,6 @@ const Right = () => {
     }
   }
 
-  const handleExportToSheet = () => {
-    if (selectedColors.length === 0) {
-      toast.display("error", "No colors selected")
-      return
-    }
-    setSheetModalOpen(true)
-  }
-
-  const handleSheetConfirm = async (spreadsheetId: string, sheetId: number, sheetName: string) => {
-    if (selectedColors.length === 0) return
-
-    setIsLoading("export")
-    try {
-      // Convert selected colors to the format expected by addMultipleColors
-      const rows = selectedColors.map((item) => {
-        const color = item.color
-        
-        // Handle rgb conversion
-        let rgbValue: string = ''
-        if (typeof color.rgb === 'string') {
-          rgbValue = color.rgb
-        } else if (color.rgb && typeof color.rgb === 'object' && 'r' in color.rgb && 'g' in color.rgb && 'b' in color.rgb) {
-          rgbValue = `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`
-        } else {
-          rgbValue = colors.hexToRGB(color.hex)
-        }
-        
-        // Handle hsl conversion
-        let hslValue: string = ''
-        if (typeof color.hsl === 'string') {
-          hslValue = color.hsl
-        } else if (color.hsl && typeof color.hsl === 'object' && 'h' in color.hsl && 's' in color.hsl && 'l' in color.hsl) {
-          hslValue = `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`
-        } else {
-          hslValue = colors.hexToHSL(color.hex)
-        }
-
-        return {
-          timestamp: Date.now(),
-          url: (color as any).url || "Bulk Editor Export",
-          hex: color.hex,
-          hsl: hslValue,
-          rgb: rgbValue,
-          ranking: (color.ranking || 0).toString(),
-          comments: color.comments || "",
-          slash_naming: color.slash_naming || "",
-          tags: (color.tags || []).join(", "),
-          additionalColumns: (color.additionalColumns || []).map(col => ({
-            name: col.name,
-            value: col.value,
-          })),
-        }
-      })
-
-      await axiosInstance.post(
-        config.api.endpoints.addMultipleColors,
-        {
-          spreadsheetId,
-          sheetName,
-          sheetId,
-          rows,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${state.user?.jwtToken}`,
-          },
-        }
-      )
-
-      toast.display("success", `Successfully exported ${selectedColors.length} color(s) to Google Sheet`)
-      
-      setSheetModalOpen(false)
-    } catch (error: any) {
-      console.error("Error exporting colors to sheet:", error)
-      toast.display("error", error.response?.data?.message || "Failed to export colors to sheet")
-    } finally {
-      setIsLoading(null)
-    }
-  }
-
   return (
     <div className="flex flex-col h-full" style={{ height: "500px" }}>
       {selectedColors.length === 0 ? (
@@ -486,9 +441,17 @@ const Right = () => {
               <div className="flex items-center gap-2 flex-wrap">
                 <input
                   type="text"
-                  placeholder="Name"
+                  placeholder="Name (e.g. Brand/Primary/Blue)"
                   value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const parts = val.split("/").map((p) => p.trim())
+                    const nonEmpty = parts.filter(Boolean)
+                    const limited = nonEmpty.slice(0, 4)
+                    let next = limited.join("/")
+                    if (val.trim().endsWith("/") && limited.length < 4) next += "/"
+                    setNameInput(next)
+                  }}
                   className="flex-1 min-w-[120px] px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
                 />
                 <div className="flex rounded overflow-hidden border border-gray-200">
@@ -566,17 +529,6 @@ const Right = () => {
             <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0">
               <div className="flex gap-2">
                 <button
-                  onClick={handleExportToSheet}
-                  disabled={isLoading !== null}
-                  className={`flex-1 py-2 text-[12px] border border-gray-200 rounded transition-colors ${
-                    isLoading === "export"
-                      ? "bg-gray-100 text-gray-400 cursor-wait"
-                      : "bg-white hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  {isLoading === "export" ? "Exporting..." : "Export to Google Sheet"}
-                </button>
-                <button
                   onClick={handleSaveChanges}
                   disabled={
                     isLoading !== null ||
@@ -599,16 +551,6 @@ const Right = () => {
           )}
         </>
       )}
-
-      {/* Sheet Selection Modal */}
-      <SheetSelectionModal
-        isOpen={sheetModalOpen}
-        onClose={() => {
-          setSheetModalOpen(false)
-        }}
-        onConfirm={handleSheetConfirm}
-        isLoading={isLoading === "export"}
-      />
     </div>
   )
 }

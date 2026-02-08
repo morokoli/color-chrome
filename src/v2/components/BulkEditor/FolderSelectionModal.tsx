@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useGetFolders, Folder, Color } from "@/v2/api/folders.api"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { axiosInstance } from "@/v2/hooks/useAPI"
-import { Dropdown } from "../FigmaManager/Dropdown"
+import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { CollapsibleBox } from "../CollapsibleBox"
 import * as Tooltip from "@radix-ui/react-tooltip"
 
@@ -29,8 +29,8 @@ function getContrastColor(hex: string): "black" | "white" {
 export interface FolderSelectionModalProps {
   isOpen: boolean
   onClose: () => void
-  /** Called with destination folderId and the colors selected in this modal (may differ from bulk editor selection) */
-  onConfirm: (folderId: string, colorsToOperateOn: SelectedColorItem[]) => void
+  /** Called with destination folder IDs and the colors selected in this modal (may differ from bulk editor selection) */
+  onConfirm: (folderIds: string[], colorsToOperateOn: SelectedColorItem[]) => void
   title: string
   actionType: "copy" | "move"
   isLoading?: boolean
@@ -48,7 +48,7 @@ export const FolderSelectionModal = ({
   selectedColors = [],
 }: FolderSelectionModalProps) => {
   const { state } = useGlobalState()
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
   const [collapsedNonFoldered, setCollapsedNonFoldered] = useState(false)
   /** Modal-local selection (independent of bulk editor); keyed by color._id */
@@ -136,17 +136,17 @@ export const FolderSelectionModal = ({
   }
 
   const handleConfirm = () => {
-    if (selectedFolderId) {
+    if (selectedFolderIds.length > 0) {
       const colorsToOperateOn = Array.from(modalSelection.values())
-      onConfirm(selectedFolderId, colorsToOperateOn)
-      setSelectedFolderId(null)
+      onConfirm(selectedFolderIds, colorsToOperateOn)
+      setSelectedFolderIds([])
     }
   }
 
   const modalSelectedList = Array.from(modalSelection.values())
 
   const handleClose = () => {
-    setSelectedFolderId(null)
+    setSelectedFolderIds([])
     onClose()
   }
 
@@ -362,11 +362,11 @@ export const FolderSelectionModal = ({
             </div>
           </div>
 
-          {/* Right 50%: destination folder dropdown + selected colors (swatches only) */}
+          {/* Right 50%: destination folder(s) multi-select + selected colors (swatches only) */}
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
             <div className="p-3 border-b border-gray-200 flex-shrink-0">
               <label className="block text-[12px] text-gray-700 mb-2">
-                Select folder to {actionType === "copy" ? "copy to" : "move to"}
+                Select folder(s) to {actionType === "copy" ? "copy to" : "move to"}
               </label>
               {foldersLoading ? (
                 <div className="text-center text-gray-500 text-sm py-2">
@@ -377,20 +377,27 @@ export const FolderSelectionModal = ({
                   No folders available. Create a folder first.
                 </div>
               ) : (
-                <Dropdown
-                  selected={selectedFolderId}
+                <MultiSelectDropdown<string>
+                  selected={selectedFolderIds}
                   items={folders.map(f => f._id)}
+                  keyExtractor={(id) => id}
                   renderItem={(folderId) => {
                     const folder = folders.find(f => f._id === folderId)
                     return folder?.name || folderId
                   }}
-                  renderSelected={(folderId) => {
-                    const folder = folders.find(f => f._id === folderId)
-                    return folder?.name || "Select a folder"
+                  renderSelected={(selectedIds) => {
+                    if (selectedIds.length === 0) return "Select folders"
+                    if (selectedIds.length === 1) {
+                      const folder = folders.find(f => f._id === selectedIds[0])
+                      return folder?.name || selectedIds[0]
+                    }
+                    return `${selectedIds.length} folders selected`
                   }}
-                  onSelect={(folderId) => setSelectedFolderId(folderId)}
-                  placeholder="Select a folder"
+                  onSelect={setSelectedFolderIds}
+                  placeholder="Select folders"
                   width="100%"
+                  isSearchable
+                  checkboxAtEnd
                 />
               )}
             </div>
@@ -426,9 +433,9 @@ export const FolderSelectionModal = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!selectedFolderId || modalSelectedList.length === 0 || parentIsLoading || foldersLoading}
+            disabled={selectedFolderIds.length === 0 || modalSelectedList.length === 0 || parentIsLoading || foldersLoading}
             className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-              selectedFolderId && modalSelectedList.length > 0 && !parentIsLoading && !foldersLoading
+              selectedFolderIds.length > 0 && modalSelectedList.length > 0 && !parentIsLoading && !foldersLoading
                 ? "bg-gray-900 text-white hover:bg-gray-800"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}

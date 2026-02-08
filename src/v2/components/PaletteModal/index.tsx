@@ -62,6 +62,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"info" | "create">("create")
   const [activeInfoSubtab, setActiveInfoSubtab] = useState<"palette" | "color">("palette")
+  const [nameFieldError, setNameFieldError] = useState(false)
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
@@ -306,6 +307,9 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     
     if (!formData.name.trim() && colors.length > 1 && !isActuallySingleColor) {
       toast.display("error", "Please enter a palette name")
+      setActiveTab("info")
+      setActiveInfoSubtab("palette")
+      setNameFieldError(true)
       return
     }
 
@@ -539,38 +543,49 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           )
           toast.display("success", isSingleColor ? "Color created!" : "Palette created!")
           
-          // Copy palette colors to selected folders if folders are selected
+          // Move palette colors to the selected folder (move = remove from elsewhere, add to selected folder)
           if (selectedFolderIds && selectedFolderIds.length > 0 && !isEditing) {
             try {
-              // Get all color IDs from the created palette
-              const allColorIds = [
-                ...existingColorIds,
-                ...(response?.data?.data?.createdColors?.map((c: any) => c._id) || []),
-              ]
-              
-              // Copy all colors to all selected folders
+              const data = response?.data?.data ?? response?.data
+              const createdColorList = Array.isArray(data?.createdColors) ? data.createdColors : []
+              const createdIds = createdColorList.map((c: any) => c?._id ?? c).filter(Boolean)
+              const allColorIds = [...existingColorIds, ...createdIds]
+              const paletteIdFromResponse = data?.palette?._id ?? data?.palette?.id
+              const targetFolderId = selectedFolderIds[0]
+
+              // Move all palette colors to the selected folder (one target; move removes from other folders first)
               if (allColorIds.length > 0) {
-                await Promise.all(
-                  selectedFolderIds.flatMap((folderId) =>
-                    allColorIds.map((colorId: string) =>
-                      axiosInstance.post(
-                        `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-                        { colorId },
-                        {
-                          headers: {
-                            Authorization: `Bearer ${state.user?.jwtToken}`,
-                          },
-                        }
-                      ).catch(err => {
-                        console.error(`Error copying color ${colorId} to folder ${folderId}:`, err)
-                        return null
-                      })
-                    )
-                  )
-                )
+                await axiosInstance.post(
+                  `${config.api.endpoints.moveColorsToFolder}/${targetFolderId}/move-colors`,
+                  { colorIds: allColorIds, isNotFoldered: false },
+                  {
+                    headers: {
+                      Authorization: `Bearer ${state.user?.jwtToken}`,
+                    },
+                  }
+                ).catch(err => {
+                  console.error("Error moving colors to folder:", err)
+                  return null
+                })
+              }
+
+              // Add the palette to the same folder (so folder shows the palette)
+              if (paletteIdFromResponse) {
+                await axiosInstance.post(
+                  `${config.api.endpoints.copyColorToFolder}/${targetFolderId}/add-palette`,
+                  { paletteId: paletteIdFromResponse },
+                  {
+                    headers: {
+                      Authorization: `Bearer ${state.user?.jwtToken}`,
+                    },
+                  }
+                ).catch(err => {
+                  console.error("Error adding palette to folder:", err)
+                  return null
+                })
               }
             } catch (folderErr) {
-              console.error("Error copying palette colors to folders:", folderErr)
+              console.error("Error moving palette colors to folder:", folderErr)
             }
           }
         }
@@ -678,7 +693,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               flexDirection: "column",
             }}
           >
-            <h3 style={{ margin: "0 0 16px 0", fontSize: "16px" }}>Import</h3>
+            <h3 style={{ margin: "0 0 16px 0", fontSize: "16px" }}>Library</h3>
             <div style={{ flex: 1, overflow: "hidden" }}>
               <ImportColorsList onAddToPalette={handleAddColorToPalette} />
             </div>
@@ -827,6 +842,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                         setTags={setTags}
                         selectedFolderIds={selectedFolderIds}
                         onFolderChange={setSelectedFolderIds}
+                        nameFieldError={nameFieldError}
+                        onClearNameFieldError={() => setNameFieldError(false)}
                       />
                     ) : (
                       <ColorPropertiesForm

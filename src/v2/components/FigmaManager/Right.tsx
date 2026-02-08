@@ -73,7 +73,6 @@ const Right = ({
     "",
     "",
     "",
-    "",
   ])
   const [activeColors, setActiveColors] = useState<number[]>([])
   const toast = useToast()
@@ -301,7 +300,8 @@ const Right = ({
       const parts = selectedColorsFromFile[colorId]?.slash_naming
         .split("/")
         .map((p) => p.trim())
-        .slice(0, 5)
+        .filter(Boolean)
+        .slice(0, 4)
       return parts
     }
 
@@ -317,11 +317,11 @@ const Right = ({
             ? part
             : "",
         )
-        const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
+        const filled = [...sharedParts, "", "", "", ""].slice(0, 4)
         setslash_nameInputs(filled)
       } else {
         setActiveColors([])
-        setslash_nameInputs(["", "", "", "", ""])
+        setslash_nameInputs(["", "", "", ""])
       }
       return
     }
@@ -331,10 +331,10 @@ const Right = ({
       setActiveColors(filteredColors)
 
       if (filteredColors.length === 0) {
-        setslash_nameInputs(["", "", "", "", ""])
+        setslash_nameInputs(["", "", "", ""])
       } else if (filteredColors.length === 1) {
         const parts = getslash_nameParts(filteredColors[0])
-        const filled = [...parts, "", "", "", "", ""].slice(0, 5)
+        const filled = [...parts, "", "", "", ""].slice(0, 4)
         setslash_nameInputs(filled)
       } else {
         const parts = getslash_nameParts(filteredColors[0])
@@ -347,7 +347,7 @@ const Right = ({
             ? part
             : "",
         )
-        const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
+        const filled = [...sharedParts, "", "", "", ""].slice(0, 4)
         setslash_nameInputs(filled)
       }
     } else {
@@ -359,7 +359,7 @@ const Right = ({
           ? part
           : "",
       )
-      const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
+      const filled = [...sharedParts, "", "", "", ""].slice(0, 4)
       setslash_nameInputs(filled)
       setActiveColors([...activeColors, colorId])
     }
@@ -402,7 +402,7 @@ const Right = ({
 
   const handleChangeslash_naming = () => {
     if (!activeColors.length) return
-    const newslash_naming = slash_nameInputs.filter(Boolean).join(" / ")
+    const newslash_naming = slash_nameInputs.filter(Boolean).slice(0, 4).join(" / ")
     dispatch({
       type: "UPDATE_SELECTED_COLOR_slash_naming",
       payload: { colors: activeColors, slash_naming: newslash_naming },
@@ -574,10 +574,13 @@ const Right = ({
     colorId: number,
     slash_nameInput: string,
   ) => {
-    const newslash_naming = slash_nameInput
+    let newslash_naming = slash_nameInput
       .replace(/\s+/g, "")
       .replace(/ /g, "/")
       .replace(/\//g, " / ")
+    // Max 3 slashes = max 4 parts
+    const parts = newslash_naming.split(/\s*\/\s*/).filter(Boolean).slice(0, 4)
+    newslash_naming = parts.join(" / ")
     dispatch({
       type: "UPDATE_SELECTED_COLOR_slash_naming",
       payload: { colors: [colorId], slash_naming: newslash_naming },
@@ -586,7 +589,7 @@ const Right = ({
 
   const clearColors = () => {
     setActiveColors([])
-    setslash_nameInputs(["", "", "", "", ""])
+    setslash_nameInputs(["", "", "", ""])
     dispatch({ type: "CLEAR_SELECTED_COLORS_FROM_FILE" })
   }
 

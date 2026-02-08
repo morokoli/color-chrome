@@ -3,7 +3,7 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
-import { Sparkles, Loader2, History, Link, Copy } from "lucide-react"
+import { Sparkles, Loader2, History, Copy } from "lucide-react"
 import SectionHeader from "./common/SectionHeader"
 import axios from "axios"
 import { axiosInstance } from "@/v2/hooks/useAPI"
@@ -24,8 +24,7 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
   const lastAddedColorsRef = useRef<string>("")
 
   const { state, dispatch } = useGlobalState()
-  const { selectedFile, files, user } = state
-  const selectedFileData = files.find(file => file.spreadsheetId === selectedFile)
+  const { user } = state
 
   // Open login popup
   const openLogin = () => {
@@ -43,17 +42,16 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
       .filter((c) => /^#[0-9A-Fa-f]{3,6}$/.test(c))
   }, [respColor])
 
-  // Helper to save color to Google Sheets
-  const saveColorToSheet = async (hexColor: string, description: string) => {
-    if (!selectedFile || !user?.jwtToken || !selectedFileData) return
-
+  // Save AI generated color to database (no sheet integration)
+  const saveColorToDatabase = async (hexColor: string, description: string) => {
+    if (!user?.jwtToken) return
     try {
       await axiosInstance.post(
         config.api.endpoints.addColor,
         {
-          spreadsheetId: selectedFile,
-          sheetName: selectedFileData.sheets?.[0]?.name || "",
-          sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
+          spreadsheetId: null,
+          sheetName: null,
+          sheetId: null,
           row: {
             timestamp: new Date().valueOf(),
             url: "AI Generated",
@@ -74,7 +72,7 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
         }
       )
     } catch (error) {
-      console.error("Failed to save AI color to sheet:", error)
+      console.error("Failed to save AI color to database:", error)
     }
   }
 
@@ -83,19 +81,15 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
     if (colorList.length > 0 && respColor !== lastAddedColorsRef.current) {
       lastAddedColorsRef.current = respColor
       colorList.forEach((hex) => {
-        dispatch({ type: "ADD_COLOR_HISTORY", payload: hex })
-        if (selectedFile) {
-          dispatch({
-            type: "ADD_FILE_COLOR_HISTORY",
-            payload: { spreadsheetId: selectedFile, color: hex },
-          })
-          // Also save to Google Sheets
-          saveColorToSheet(hex, colorDescription)
-        }
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: { hex, parsed: { url: "AI Generated", comments: colorDescription } },
+        })
+        saveColorToDatabase(hex, colorDescription)
       })
       toast.display("success", `${colorList.length} color${colorList.length > 1 ? 's' : ''} added to history`)
     }
-  }, [colorList, respColor, dispatch, selectedFile])
+  }, [colorList, respColor, dispatch, colorDescription]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = async () => {
     try {
@@ -136,7 +130,7 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
   }
 
   return (
-    <div className="w-[320px] bg-white rounded-md shadow-sm border border-gray-200">
+    <div className="w-[620px] bg-white rounded-md shadow-sm border border-gray-200">
       <SectionHeader
         title="AI Generator"
         setTab={setTab}
@@ -158,7 +152,7 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
 
       {/* Output section */}
       <div className="p-3 bg-gray-50 border-b border-gray-200">
-        <div className="flex h-16 rounded-lg overflow-hidden border border-gray-200 bg-white">
+        <div className="flex h-16 border border-gray-200 bg-white">
           {colorList.length > 0 ? (
             colorList.map((hex, index) => (
               <div
@@ -174,9 +168,9 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
               />
             ))
           ) : (
-            <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-gray-400 mr-2" />
-              <span className="text-[11px] text-white">Generated colors will appear here</span>
+            <div className="w-full flex items-center px-4 py-1">
+              <Sparkles className="w-4 h-4 text-gray-800 mr-2" />
+              <span className="text-[11px]">Generated colors will appear here</span>
             </div>
           )}
         </div>
@@ -213,7 +207,7 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
           value={colorDescription}
           placeholder="Describe your colors... (e.g., sunset palette, ocean vibes, forest theme)"
           onChange={(e) => setColorDescription(e.target.value)}
-          className="w-full h-20 px-3 py-2 text-[12px] bg-white border border-gray-200 rounded resize-none focus:outline-none focus:border-gray-400 transition-colors"
+          className="w-full h-[200px] max-h-[375px] px-3 py-2 text-[12px] bg-white border border-gray-200 rounded focus:outline-none focus:border-gray-400 transition-colors"
         />
       </div>
 
@@ -223,15 +217,13 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
           onClick={() => {
             if (!user?.jwtToken) {
               openLogin()
-            } else if (!selectedFile) {
-              setTab('ADD_SHEET')
             } else {
               handleGenerate()
             }
           }}
-          disabled={!!user?.jwtToken && !!selectedFile && (colorDescription === "" || loading)}
+          disabled={!!user?.jwtToken && (colorDescription === "" || loading)}
           className={`w-full flex items-center justify-center gap-2 py-2.5 text-[12px] rounded transition-colors ${
-            (!user?.jwtToken || !selectedFile || (colorDescription && !loading))
+            (!user?.jwtToken || (colorDescription && !loading))
               ? 'bg-gray-900 text-white hover:bg-gray-800'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
           }`}
@@ -243,11 +235,6 @@ const AIGenerator: FC<Props> = ({ setTab, copyToClipboard, onPickColor, onPickCo
             </>
           ) : !user?.jwtToken ? (
             'Login to generate'
-          ) : !selectedFile ? (
-            <>
-              <Link className="w-4 h-4" />
-              Link a sheet
-            </>
           ) : (
             <>
               <Sparkles className="w-4 h-4" />

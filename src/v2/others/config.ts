@@ -41,9 +41,12 @@ export const config = {
       paletteDelete: "/api/palettes",
       getColorsAndPalettes: "/api/database-sheets/colors-and-palettes",
       getFolders: "/api/folders",
+      createFolder: "/api/folders/create",
       updateColor: "/api/database-sheets/update-color-by-id",
       copyColorToFolder: "/api/folders",
+      copyColorsToFolders: "/api/folders/copy-colors-to-folders",
       moveColorsToFolder: "/api/folders",
+      moveColorsToFolders: "/api/folders/move-colors-to-folders",
     },
   },
   toast: {
