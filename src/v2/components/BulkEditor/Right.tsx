@@ -4,6 +4,7 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
+import { X } from "lucide-react"
 import { ColorList } from "./ColorList"
 import { SelectedColor } from "@/v2/api/folders.api"
 
@@ -14,7 +15,8 @@ const Right = () => {
   const [selectedColors, setSelectedColors] = useState<SelectedColor[]>([])
   const [activeColors, setActiveColors] = useState<number[]>([])
   const [nameInput, setNameInput] = useState<string>("")
-  const [nameMode, setNameMode] = useState<"hex" | "numerator">("hex")
+  const [nameMode, setNameMode] = useState<"none" | "hex" | "numerator">("none")
+  const [tagsList, setTagsList] = useState<string[]>([])
   const [tagsInput, setTagsInput] = useState<string>("")
   const [isLoading, setIsLoading] = useState<"save" | null>(null)
   const [isDirty, setIsDirty] = useState(false)
@@ -107,9 +109,15 @@ const Right = () => {
   }, [])
 
   const handleCheckboxClick = (colorId: number) => {
-    // Handling the "Select All" checkbox
+    // Handling the "Select All" / "Deselect All" button: select all when not all selected, deselect all when all selected
     if (colorId === selectedColors.length) {
-      if (activeColors.length === 0) {
+      const allSelected = activeColors.length === selectedColors.length && selectedColors.length > 0
+      if (allSelected) {
+        setActiveColors([])
+        setNameInput("")
+        setTagsList([])
+        setTagsInput("")
+      } else {
         setActiveColors(selectedColors.map((_, i) => i))
         if (selectedColors.length > 0) {
           const firstSlashNaming = selectedColors[0]?.color.slash_naming || ""
@@ -121,15 +129,13 @@ const Right = () => {
           if (selectedColors.every(item =>
             JSON.stringify(item.color.tags || []) === JSON.stringify(firstTags)
           )) {
-            setTagsInput(firstTags.join(", "))
+            setTagsList(firstTags)
+            setTagsInput("")
           } else {
+            setTagsList([])
             setTagsInput("")
           }
         }
-      } else {
-        setActiveColors([])
-        setNameInput("")
-        setTagsInput("")
       }
       return
     }
@@ -140,11 +146,13 @@ const Right = () => {
 
       if (filteredColors.length === 0) {
         setNameInput("")
+        setTagsList([])
         setTagsInput("")
       } else if (filteredColors.length === 1) {
         setNameInput(selectedColors[filteredColors[0]]?.color.slash_naming || "")
         const tags = selectedColors[filteredColors[0]]?.color.tags || []
-        setTagsInput(tags.join(", "))
+        setTagsList(tags)
+        setTagsInput("")
       } else {
         const firstSlashNaming = selectedColors[filteredColors[0]]?.color.slash_naming || ""
         const allSameName = filteredColors.every(
@@ -157,7 +165,8 @@ const Right = () => {
       if (newActive.length === 1) {
         setNameInput(selectedColors[colorId]?.color.slash_naming || "")
         const tags = selectedColors[colorId]?.color.tags || []
-        setTagsInput(tags.join(", "))
+        setTagsList(tags)
+        setTagsInput("")
       } else {
         const firstSlashNaming = selectedColors[newActive[0]]?.color.slash_naming || ""
         const allSameName = newActive.every(
@@ -171,30 +180,31 @@ const Right = () => {
 
   const handleUpdate = () => {
     if (!activeColors.length) return
-    const baseParts = nameInput.trim().split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 4)
+    const baseParts = nameInput.trim().split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 5)
     const base = baseParts.join(" / ")
-    const tags = tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean)
+    const tags = tagsList
 
-    const limitToFourParts = (s: string) => {
-      const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 4)
+    const limitToFiveParts = (s: string) => {
+      const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 5)
       return parts.join(" / ")
     }
     const namingByIndex = new Map<number, string>()
-    if (nameMode === "hex") {
+    if (nameMode === "none") {
+      activeColors.forEach((colorIndex) => {
+        namingByIndex.set(colorIndex, base || "")
+      })
+    } else if (nameMode === "hex") {
       activeColors.forEach((colorIndex) => {
         const hex = selectedColors[colorIndex]?.color.hex || ""
         const hexWithHash = hex.startsWith("#") ? hex : `#${hex}`
         const full = base ? `${base} / ${hexWithHash}` : hexWithHash
-        namingByIndex.set(colorIndex, limitToFourParts(full))
+        namingByIndex.set(colorIndex, limitToFiveParts(full))
       })
     } else {
       activeColors.forEach((colorIndex, position) => {
         const lineNum = position + 1
         const full = base ? `${base} / ${lineNum}` : String(lineNum)
-        namingByIndex.set(colorIndex, limitToFourParts(full))
+        namingByIndex.set(colorIndex, limitToFiveParts(full))
       })
     }
 
@@ -227,9 +237,9 @@ const Right = () => {
       .replace(/\s*\/\s*/g, " / ")
     const parts = newslash_naming.split(/\s*\/\s*/).map((p) => p.trim())
     const nonEmpty = parts.filter(Boolean)
-    const limitedParts = nonEmpty.slice(0, 4)
+    const limitedParts = nonEmpty.slice(0, 5)
     newslash_naming = limitedParts.join(" / ")
-    if (hasTrailingSlash && limitedParts.length < 4) newslash_naming += " / "
+    if (hasTrailingSlash && limitedParts.length < 5) newslash_naming += " / "
 
     setSelectedColors(prev => 
       prev.map((item, index) => 
@@ -265,6 +275,7 @@ const Right = () => {
     setSelectedColors([])
     setActiveColors([])
     setNameInput("")
+    setTagsList([])
     setTagsInput("")
     setIsDirty(false)
     localStorage.removeItem('bulk_editor_selected_colors')
@@ -403,12 +414,11 @@ const Right = () => {
         return updated
       })
       
-      // Invalidate and refetch folders to update the left panel with latest data
+      // Invalidate and refetch folders (and non-foldered colors) so when user deselects and selects again, names are up to date
       await queryClient.invalidateQueries({ queryKey: ["folders"] })
+      await queryClient.refetchQueries({ queryKey: ["folders"] })
+      queryClient.invalidateQueries({ queryKey: ["all-color-data"] })
       
-      // Dispatch event to trigger refresh in Left component
-      // The Left component will update the selected colors with the latest data from server
-      window.dispatchEvent(new CustomEvent('bulk-editor-folders-refresh'))
       setIsDirty(false)
     } catch (error: any) {
       console.error("Error saving colors:", error)
@@ -430,66 +440,97 @@ const Right = () => {
         <>
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto p-3">
-            <div className="mb-3">
-              <div className="text-[12px] font-medium text-gray-700 mb-2">
+            {/* X color(s) selected — right: None / Add Hex / Add Index radios */}
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-[12px] font-medium text-gray-700">
                 {selectedColors.length} color{selectedColors.length !== 1 ? "s" : ""} selected
               </div>
-            </div>
-
-            {/* Name input + Hex/Numerator selector */}
-            <div className="mb-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="text"
-                  placeholder="Name (e.g. Brand/Primary/Blue)"
-                  value={nameInput}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    const parts = val.split("/").map((p) => p.trim())
-                    const nonEmpty = parts.filter(Boolean)
-                    const limited = nonEmpty.slice(0, 4)
-                    let next = limited.join("/")
-                    if (val.trim().endsWith("/") && limited.length < 4) next += "/"
-                    setNameInput(next)
-                  }}
-                  className="flex-1 min-w-[120px] px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
-                />
-                <div className="flex rounded overflow-hidden border border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => setNameMode("hex")}
-                    className={`px-3 py-2 text-[12px] transition-colors ${
-                      nameMode === "hex"
-                        ? "bg-gray-900 text-white"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    Hex
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNameMode("numerator")}
-                    className={`px-3 py-2 text-[12px] transition-colors border-l border-gray-200 ${
-                      nameMode === "numerator"
-                        ? "bg-gray-900 text-white"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    Numerator
-                  </button>
-                </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="nameMode"
+                    checked={nameMode === "none"}
+                    onChange={() => setNameMode("none")}
+                    className="w-3.5 h-3.5 accent-black border-gray-400"
+                  />
+                  <span className="text-[12px] text-gray-700">None</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="nameMode"
+                    checked={nameMode === "hex"}
+                    onChange={() => setNameMode("hex")}
+                    className="w-3.5 h-3.5 accent-black border-gray-400"
+                  />
+                  <span className="text-[12px] text-gray-700">Add Hex</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="nameMode"
+                    checked={nameMode === "numerator"}
+                    onChange={() => setNameMode("numerator")}
+                    className="w-3.5 h-3.5 accent-black border-gray-400"
+                  />
+                  <span className="text-[12px] text-gray-700">Add Index</span>
+                </label>
               </div>
             </div>
 
-            {/* Tags - big input */}
+            {/* Full-width name input */}
             <div className="mb-3">
-              <textarea
-                placeholder="Tags (comma separated)"
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-y min-h-[80px]"
+              <input
+                type="text"
+                placeholder="Name (e.g. Brand/Primary/Blue)"
+                value={nameInput}
+                onChange={(e) => {
+                  const val = e.target.value
+                  const parts = val.split("/").map((p) => p.trim())
+                  const nonEmpty = parts.filter(Boolean)
+                  const limited = nonEmpty.slice(0, 5)
+                  let next = limited.join("/")
+                  if (val.trim().endsWith("/") && limited.length < 5) next += "/"
+                  setNameInput(next)
+                }}
+                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
               />
+            </div>
+
+            {/* Tags Chip Input */}
+            <div className="w-full px-3 py-2 border border-gray-200 rounded focus-within:border-gray-400 mb-3">
+              <div className="flex flex-wrap gap-1 items-center">
+                {tagsList.map((tag, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] rounded">
+                    {tag}
+                    <button
+                      onClick={() => setTagsList(tagsList.filter((_, i) => i !== idx))}
+                      className="ml-0.5 text-blue-400 hover:text-blue-600"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+                {tagsList.length < 5 && (
+                  <input
+                    type="text"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ',') && tagsInput.trim()) {
+                        e.preventDefault()
+                        setTagsList([...tagsList, tagsInput.trim()])
+                        setTagsInput('')
+                      } else if (e.key === 'Backspace' && !tagsInput && tagsList.length > 0) {
+                        setTagsList(tagsList.slice(0, -1))
+                      }
+                    }}
+                    placeholder={tagsList.length === 0 ? "Tags (press , or Enter)" : ""}
+                    className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Single Update button - enabled only when (name or tags) and at least one color selected */}
@@ -498,10 +539,10 @@ const Right = () => {
                 onClick={handleUpdate}
                 disabled={
                   activeColors.length === 0 ||
-                  (!nameInput.trim() && !tagsInput.trim())
+                  (!nameInput.trim() && tagsList.length === 0)
                 }
                 className={`w-full px-3 py-2 text-[12px] rounded transition-colors ${
-                  activeColors.length === 0 || (!nameInput.trim() && !tagsInput.trim())
+                  activeColors.length === 0 || (!nameInput.trim() && tagsList.length === 0)
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-gray-900 text-white hover:bg-gray-800"
                 }`}

@@ -19,13 +19,16 @@ const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBro
   const [accounts, setAccounts] = useState<string[]>([])
   const [deletionModalOpen, setDeletionModalOpen] = useState(false)
   const [deletionText, setDeletionText] = useState("")
-  const onConfirmDeletion = useRef<() => void>(() => {})
+  const onConfirmDeletion = useRef<() => void>(() => { })
+
+  console.log('accountsData', accountsData)
+  console.log('isAccountsLoading', isAccountsLoading)
 
   useEffect(() => {
-    if (!isAccountsLoading && accountsData?.data?.accounts) {
+    if (accountsData?.data?.accounts) {
       setAccounts(accountsData.data.accounts)
     }
-  }, [isAccountsLoading, accountsData])
+  }, [accountsData])
 
   const bindAccount = async () => {
     const response = await bindAccountMutation()
@@ -130,7 +133,7 @@ const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBro
         </button>
 
         {/* Accounts List */}
-        {isAccountsLoading ? (
+        {isAccountsLoading || !accountsData ? (
           <div className="text-center text-gray-500 text-sm py-4">
             Loading accounts...
           </div>

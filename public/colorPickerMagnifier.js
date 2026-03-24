@@ -444,18 +444,20 @@
     e.stopPropagation();
 
     const color = currentColor;
-    const x = e.clientX;
-    const y = e.clientY;
     cleanup();
 
-    // Show result panel on page
-    showResultPanel(color, x, y);
-
-    // Also send to extension storage
-    chrome.runtime.sendMessage({
-      type: 'COLOR_PICKED',
-      color: color
-    });
+    // Store color and tell extension to show compact panel in popup (no in-page box)
+    const pickedAt = Date.now();
+    chrome.storage.local.set(
+      { pickedColor: color, pickedAt, openTab: 'PICK_PANEL', magnifierPick: true },
+      () => {
+        chrome.runtime.sendMessage({ type: 'COLOR_PICKED', color: color });
+        // Open popup so user sees the compact panel (Chrome may require user gesture; openPopup is best-effort)
+        setTimeout(() => {
+          chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+        }, 150);
+      }
+    );
   }
 
   // Handle escape - cancel, R - recapture

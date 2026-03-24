@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { useEffect, useState, useCallback } from "react"
+import { X, Plus } from "lucide-react"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
 import { MultiSelectDropdown } from "@/v2/components/FigmaManager/MultiSelectDropdown"
 import { useGetFolders } from "@/v2/api/folders.api"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
+import { useQueryClient } from "@tanstack/react-query"
+import { axiosInstance } from "@/v2/hooks/useAPI"
+import { config } from "@/v2/others/config"
+import { useToast } from "@/v2/hooks/useToast"
 import { Slider } from "@/components/ui/slider"
 
 interface ColorPropertiesFormProps {
@@ -23,7 +27,79 @@ const ColorPropertiesForm = ({
 }: ColorPropertiesFormProps) => {
   const { state } = useGlobalState()
   const { data: foldersData } = useGetFolders(false)
+  const queryClient = useQueryClient()
+  const toast = useToast()
   const [tagsInput, setTagsInput] = useState("")
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [isCreatingLoading, setIsCreatingLoading] = useState(false)
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name || !state.user?.jwtToken) return
+    setIsCreatingLoading(true)
+    try {
+      const response = await axiosInstance.post(
+        config.api.endpoints.createFolder,
+        { name, colorIds: [], paletteIds: [] },
+        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      )
+      const folder = response.data?.folder ?? response.data
+      if (folder?._id) {
+        await queryClient.invalidateQueries({ queryKey: ["folders"] })
+        toast.display("success", "Folder created")
+        setNewFolderName("")
+        setIsCreatingFolder(false)
+      }
+    } catch (err: any) {
+      toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to create folder")
+    } finally {
+      setIsCreatingLoading(false)
+    }
+  }, [newFolderName, state.user?.jwtToken, queryClient, toast])
+
+  const renderFolderFooter = useCallback(() => {
+    if (isCreatingFolder) {
+      return (
+        <div className="p-2 border-t border-gray-100 flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            placeholder="Folder name"
+            className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreateFolder()
+              if (e.key === "Escape") {
+                setIsCreatingFolder(false)
+                setNewFolderName("")
+              }
+            }}
+          />
+          <button
+            onClick={handleCreateFolder}
+            disabled={!newFolderName.trim() || isCreatingLoading}
+            className="px-3 py-1.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCreatingLoading ? "..." : "Save"}
+          </button>
+        </div>
+      )
+    }
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsCreatingFolder(true)
+        }}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 border-t border-gray-100 transition-colors"
+      >
+        <Plus size={14} />
+        Create
+      </button>
+    )
+  }, [isCreatingFolder, newFolderName, isCreatingLoading])
 
   if (colorPickerIndex === null) {
     return (
@@ -46,7 +122,7 @@ const ColorPropertiesForm = ({
       if (url && !url.startsWith("chrome://") && !url.startsWith("chrome-extension://")) {
         onColorChange({ ...colorObject, url })
       }
-    }).catch(() => {})
+    }).catch(() => { })
   }, [colorPickerIndex])
 
   const handlePropertyChange = (property: string, value: any) => {
@@ -58,12 +134,12 @@ const ColorPropertiesForm = ({
   }
 
   const handleNameChange = (value: string) => {
-    // Max 3 slashes = max 4 slash-name parts; preserve trailing slash while typing
+    // Max 4 slashes = max 5 slash-name parts; preserve trailing slash while typing
     const parts = value.split("/").map((p) => p.trim())
     const nonEmpty = parts.filter(Boolean)
-    const limitedParts = nonEmpty.slice(0, 4)
+    const limitedParts = nonEmpty.slice(0, 5)
     let limitedValue = limitedParts.join("/")
-    if (value.endsWith("/") && limitedParts.length < 4) limitedValue += "/"
+    if (value.endsWith("/") && limitedParts.length < 5) limitedValue += "/"
 
     // If name contains slashes, extract first part as name and full string as slash_naming
     if (limitedValue.includes("/")) {
@@ -111,34 +187,29 @@ const ColorPropertiesForm = ({
           <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
             Saving to
           </label>
-          {foldersData?.folders && foldersData.folders.length > 0 ? (
-            <MultiSelectDropdown<string>
-              selected={selectedFolderIds}
-              items={foldersData.folders.map(f => f._id)}
-              keyExtractor={(folderId) => folderId}
-              renderItem={(folderId) => {
-                const folder = foldersData.folders.find(f => f._id === folderId)
-                return folder?.name || folderId
-              }}
-              renderSelected={(selected) => {
-                if (selected.length === 0) return "Select folders"
-                if (selected.length === 1) {
-                  const folder = foldersData.folders.find(f => f._id === selected[0])
-                  return folder?.name || selected[0]
-                }
-                return `${selected.length} folders selected`
-              }}
-              onSelect={(folderIds) => onFolderChange(folderIds)}
-              placeholder="Select folders"
-              width="100%"
-              isSearchable
-              checkboxAtEnd={true}
-            />
-          ) : (
-            <div style={{ fontSize: "12px", color: "#999", padding: "8px 0" }}>
-              No folders available. Create a folder first.
-            </div>
-          )}
+          <MultiSelectDropdown<string>
+            selected={selectedFolderIds}
+            items={(foldersData?.folders || []).map(f => f._id)}
+            keyExtractor={(folderId) => folderId}
+            renderItem={(folderId) => {
+              const folder = foldersData?.folders?.find(f => f._id === folderId)
+              return folder?.name || folderId
+            }}
+            renderSelected={(selected) => {
+              if (selected.length === 0) return "Select folders"
+              if (selected.length === 1) {
+                const folder = foldersData?.folders?.find(f => f._id === selected[0])
+                return folder?.name || selected[0]
+              }
+              return `${selected.length} folders selected`
+            }}
+            onSelect={(folderIds) => onFolderChange(folderIds)}
+            placeholder="Select folders"
+            width="100%"
+            isSearchable
+            checkboxAtEnd={true}
+            renderFooter={renderFolderFooter}
+          />
         </div>
       )}
 
@@ -160,7 +231,7 @@ const ColorPropertiesForm = ({
           }}
         />
         <p style={{ fontSize: "12px", color: "#9B9B9B", marginTop: "4px" }}>
-        Use / to create nested groups (e.g., Colors/Brand/Primary). Max 4 names (3 slashes).
+          Use / to create nested groups (e.g., Colors/Brand/Primary). Max 5 names (4 slashes).
         </p>
       </div>
 

@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react"
 
 interface ImportColorsListProps {
   onAddToPalette: (colorData: any, index: number | null) => void
+  onAddPaletteToPalette?: (colors: any[]) => void
 }
 
 const ITEM_TYPE = "IMPORT_COLOR"
@@ -83,9 +84,152 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
   )
 }
 
+const getColorHex = (color: any) => {
+  if (typeof color === "string") return color
+  return color?.hex || color
+}
+
+const DraggablePaletteColorStrip = ({
+  colorData,
+  onAddColor,
+}: {
+  colorData: any
+  onAddColor: () => void
+}) => {
+  const hex = getColorHex(colorData) || "#ccc"
+  const [{ isDragging }, drag] = useDrag({
+    type: ITEM_TYPE,
+    item: { colorData, type: ITEM_TYPE },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  })
+
+  return (
+    <div
+      ref={drag}
+      role="button"
+      tabIndex={0}
+      style={{
+        flex: 1,
+        backgroundColor: hex,
+        minWidth: 0,
+        cursor: "pointer",
+        opacity: isDragging ? 0.5 : 1,
+        userSelect: "none",
+      }}
+      title={`Click to add, drag to drop ${hex}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        onAddColor()
+      }}
+    />
+  )
+}
+
+const LibraryPaletteCard = ({
+  paletteData,
+  colorById,
+  onAddColor,
+}: {
+  paletteData: any
+  colorById: Map<string, any>
+  onAddColor: (colorData: any) => void
+}) => {
+  const colorIds = paletteData.colorIds || []
+  const colors = colorIds
+    .map((c: any) => {
+      const id = c?._id ?? c
+      const fromMap = id ? colorById.get(String(id)) : null
+      return fromMap ?? (c && (c.hex || c._id) ? c : null)
+    })
+    .filter(Boolean)
+  const hexList = colors.map((c: any) => getColorHex(c) || "#ccc")
+
+  return (
+    <div
+      style={{
+        width: "108px",
+        minWidth: "108px",
+        height: "108px",
+        position: "relative",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        border: "1px solid #e5e5e5",
+        transition: "box-shadow 0.2s, border-color 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"
+        e.currentTarget.style.borderColor = "#999"
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = "none"
+        e.currentTarget.style.borderColor = "#e5e5e5"
+      }}
+    >
+      {/* Color strips: click = add, drag = drop */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "row",
+        }}
+      >
+        {hexList.length > 0 ? (
+          hexList.map((_, i: number) => (
+            <DraggablePaletteColorStrip
+              key={i}
+              colorData={colors[i]}
+              onAddColor={() => onAddColor(colors[i])}
+            />
+          ))
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              backgroundColor: "#f0f0f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "10px",
+              color: "#999",
+            }}
+          >
+            No colors
+          </div>
+        )}
+      </div>
+      {/* Palette name: click = add full palette */}
+      <div
+        role="button"
+        tabIndex={0}
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          padding: "4px 6px",
+          maxWidth: "90%",
+          fontSize: "11px",
+          fontWeight: 600,
+          color: "rgba(255, 255, 255, 0.95)",
+          textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+          textAlign: "center",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          cursor: "pointer",
+          pointerEvents: "none",
+        }}
+      >
+        {paletteData.name || "Untitled palette"}
+      </div>
+    </div>
+  )
+}
+
 const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
-  const [displayedCount, setDisplayedCount] = useState(20)
-  const pageSize = 10
   const [searchQuery, setSearchQuery] = useState("")
   const { state } = useGlobalState()
 
@@ -111,32 +255,55 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     enabled: !!state.user?.jwtToken,
   })
 
-  const allColors = useMemo(() => {
-    try {
-      if (!colorsAndPalettesData?.colors?.["All Colors"]) {
-        return []
+  const rawAll = colorsAndPalettesData?.colors?.["All Colors"] ?? []
+  const colorById = useMemo(() => {
+    const map = new Map<string, any>()
+    rawAll.forEach((item: any) => {
+      if (item && (item.hex || item.type === "color") && item._id) {
+        map.set(String(item._id), item)
       }
-      const colors = colorsAndPalettesData.colors["All Colors"]
-      return colors
-        .filter((color: any) => color && color.hex)
-        .filter((color: any) => {
-          return (
-            searchQuery.length === 0 ||
-            color.hex.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            color?.slash_naming?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            color?.comments?.toLowerCase().includes(searchQuery.toLowerCase())
-          )
-        })
-        .sort((a: any, b: any) => {
-          const dateA = new Date(a.createdAt || a.created_at || 0).getTime()
-          const dateB = new Date(b.createdAt || b.created_at || 0).getTime()
-          return dateB - dateA
-        })
+    })
+    return map
+  }, [rawAll])
+
+  const allItems = useMemo(() => {
+    try {
+      const items = rawAll.filter((item: any) => {
+        if (!item) return false
+        if (item.hex && item.type !== "palette") return true
+        if (item.type === "palette" || (item.colorIds && Array.isArray(item.colorIds))) return true
+        return false
+      })
+      const filtered =
+        searchQuery.length === 0
+          ? items
+          : items.filter((item: any) => {
+              const q = searchQuery.toLowerCase()
+              if (item.hex) {
+                return (
+                  (item.hex && item.hex.toLowerCase().includes(q)) ||
+                  (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
+                  (item.comments && item.comments.toLowerCase().includes(q))
+                )
+              }
+              if (item.type === "palette" || item.colorIds) {
+                return (
+                  (item.name && item.name.toLowerCase().includes(q)) ||
+                  (item.description && item.description.toLowerCase().includes(q))
+                )
+              }
+              return false
+            })
+      return filtered.sort((a: any, b: any) => {
+        const dateA = new Date(a.createdAt || a.created_at || 0).getTime()
+        const dateB = new Date(b.createdAt || b.created_at || 0).getTime()
+        return dateB - dateA
+      })
     } catch (error) {
-      console.error("Error processing colors:", error)
+      console.error("Error processing library items:", error)
       return []
     }
-  }, [colorsAndPalettesData, searchQuery])
+  }, [rawAll, searchQuery])
 
   const DraggableImportItem = ({ colorData }: { colorData: any }) => {
     const [{ isDragging }, drag] = useDrag({
@@ -164,18 +331,13 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     )
   }
 
-  const totalColors = allColors?.length || 0
-  const currentColors = allColors.slice(0, displayedCount)
-
-  const handleLoadMore = () => {
-    setDisplayedCount((prev) => Math.min(prev + pageSize, totalColors))
-  }
+  const currentItems = allItems
 
   if (isLoading) {
     return (
       <div className="text-center py-5 text-gray-500">
         <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
-        <div className="text-sm">Loading colors...</div>
+        <div className="text-sm">Loading colors and palettes...</div>
       </div>
     )
   }
@@ -189,25 +351,25 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     )
   }
 
-  if (!allColors.length) {
+  if (!allItems.length) {
     if (searchQuery.length > 0) {
       return (
         <div className="text-center py-5 text-gray-500">
-          <div className="text-sm mb-2">No colors found</div>
+          <div className="text-sm mb-2">No colors or palettes found</div>
           <input
             type="text"
-            placeholder="Search colors"
+            placeholder="Search colors and palettes"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 px-3 text-sm border border-gray-300"
+            className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md"
           />
         </div>
       )
     }
     return (
       <div className="text-center py-5 text-gray-500">
-        <div className="text-sm">No colors available</div>
-        <div className="text-xs mt-1">Add some colors to your sheets first</div>
+        <div className="text-sm">No colors or palettes available</div>
+        <div className="text-xs mt-1">Add colors or create palettes first</div>
       </div>
     )
   }
@@ -216,37 +378,39 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     <div className="flex flex-col h-full overflow-hidden">
       <input
         type="text"
-        placeholder="Search colors"
+        placeholder="Search colors and palettes"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full h-9 px-3 mb-2 text-[12px]border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+        className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md"
       />
-      <div
-        className="flex-1 overflow-y-auto pr-2 space-y-2"
-        onScroll={(e) => {
-          const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-          if (
-            scrollHeight - scrollTop - clientHeight < 50 &&
-            displayedCount < totalColors
-          ) {
-            handleLoadMore()
+      <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+        {currentItems.map((item: any, idx: number) => {
+          const isPalette = item.type === "palette" || (item.colorIds && Array.isArray(item.colorIds))
+          if (isPalette) {
+            return (
+              <div key={`palette-${item._id}-${idx}`} style={{ marginBottom: "7.2px" }}>
+                <LibraryPaletteCard
+                  paletteData={item}
+                  colorById={colorById}
+                  onAddColor={(colorData) => onAddToPalette(colorData, null)}
+                  // onAddPalette={() => {
+                  //   if (onAddPaletteToPalette && resolved.length > 0) {
+                  //     onAddPaletteToPalette(resolved)
+                  //   }
+                  // }}
+                />
+              </div>
+            )
           }
-        }}
-      >
-        {currentColors.map((colorData: any, idx: number) => (
-          <div key={idx}>
-            <DraggableImportItem colorData={colorData} />
-          </div>
-        ))}
-        {displayedCount < totalColors && (
-          <div className="text-center py-3 text-sm text-gray-500">
-            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1" />
-            Loading more colors...
-          </div>
-        )}
-        {displayedCount >= totalColors && totalColors > 0 && (
+          return (
+            <div key={`color-${item._id}-${idx}`}>
+              <DraggableImportItem colorData={item} />
+            </div>
+          )
+        })}
+        {currentItems.length > 0 && (
           <div className="text-center py-3 text-xs text-gray-500">
-            All {totalColors} colors loaded
+            {currentItems.length} item{currentItems.length !== 1 ? "s" : ""}
           </div>
         )}
       </div>

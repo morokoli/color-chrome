@@ -206,28 +206,6 @@ export const PageColorExtraction = ({
     const selectedFileData = files.find(
       (file) => file.spreadsheetId === selectedFile,
     )
-
-    // Always save colors to local history
-    selectedColors.forEach((color) => {
-      let hexValue = color.hex
-      if (hexValue.includes(' ')) {
-        hexValue = hexValue.split(' ')[0]
-      }
-      dispatch({ type: "ADD_COLOR_HISTORY", payload: hexValue })
-      if (selectedFile) {
-        dispatch({
-          type: "ADD_FILE_COLOR_HISTORY",
-          payload: { spreadsheetId: selectedFile, color: hexValue },
-        })
-      }
-    })
-
-    // If not logged in or no sheet selected, just save locally
-    if (!selectedFile || !user?.jwtToken) {
-      toast.display("success", "Colors saved to local history")
-      setSelectedColors([])
-      return
-    }
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
     const url = tabs[0].url
     const rows = selectedColors.map((color) => {
@@ -238,7 +216,6 @@ export const PageColorExtraction = ({
         "This color is used as: " +
           colorArr?.map((color) => color.name).join(", ") || "No comments"
 
-      // Extract first hex color if multiple are present (e.g., from border-color)
       let hexValue = color.hex
       if (hexValue.includes(' ')) {
         hexValue = hexValue.split(' ')[0]
@@ -255,17 +232,45 @@ export const PageColorExtraction = ({
         ranking: "0",
         comments: comments,
         slash_naming: color.name,
-        tags: "",
         additionalColumns: [],
       }
     })
+
+    // If not logged in, add to history only (no DB)
+    if (!user?.jwtToken) {
+      rows.forEach((row) => {
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: { hex: row.hex, parsed: row },
+        })
+      })
+      toast.display("success", "Colors saved to local history")
+      setSelectedColors([])
+      return
+    }
+
     setSaveStatus("loading")
     try {
-      await addMultipleColorsAsync({
-        spreadsheetId: selectedFile!,
-        sheetName: selectedFileData?.sheets?.[0]?.name || "",
-        sheetId: selectedFileData?.sheets?.[0]?.id ?? 0,
+      const resp = await addMultipleColorsAsync({
+        spreadsheetId: selectedFile || null,
+        sheetName: selectedFileData?.sheets?.[0]?.name || null,
+        sheetId: selectedFileData?.sheets?.[0]?.id ?? null,
         rows: rows,
+      })
+      // Add to history after creation, with DB color IDs so Bulk Editor updates sync to History & Editor
+      const createdColorIds =
+        (resp as any)?.data?.createdColorIds ||
+        (resp as any)?.createdColorIds ||
+        []
+      rows.forEach((row, idx) => {
+        const colorId = Array.isArray(createdColorIds) && createdColorIds[idx] ? createdColorIds[idx] : undefined
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: {
+            hex: row.hex,
+            parsed: colorId ? { ...row, _id: colorId, id: colorId } : row,
+          },
+        })
       })
       setSaveStatus("success")
       setSelectedColors([])

@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useRef } from 'react'
+import { FC, useState, useEffect, useRef, useCallback } from 'react'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
 import { colors } from '@/v2/helpers/colors'
@@ -6,7 +6,7 @@ import { config } from '@/v2/others/config'
 import { axiosInstance } from '@/v2/hooks/useAPI'
 import { useGetFolders } from '@/v2/api/folders.api'
 import { useQueryClient } from '@tanstack/react-query'
-import { Trash2, Copy, Check, X } from 'lucide-react'
+import { Trash2, Copy, Check, X, Plus } from 'lucide-react'
 import SectionHeader from '../common/SectionHeader'
 import { Slider } from '@/components/ui/slider'
 import { HexColorPicker } from 'react-colorful'
@@ -54,6 +54,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [currentTabUrl, setCurrentTabUrl] = useState<string>('Manually created')
   const [comment, setComment] = useState<string>('')
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [isCreatingFolderLoading, setIsCreatingFolderLoading] = useState(false)
   const justSavedRef = useRef(false)
   const lastLoadedDataRef = useRef<string>('')  // Track what data we last loaded
 
@@ -62,6 +65,73 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
 
   const { data: foldersData } = useGetFolders(true)
   const folders = foldersData?.folders ?? []
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name || !state.user?.jwtToken) return
+    setIsCreatingFolderLoading(true)
+    try {
+      const response = await axiosInstance.post(
+        config.api.endpoints.createFolder,
+        { name, colorIds: [], paletteIds: [] },
+        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      )
+      const folder = response.data?.folder ?? response.data
+      if (folder?._id) {
+        await queryClient.invalidateQueries({ queryKey: ['folders'] })
+        toast.display('success', 'Folder created')
+        setNewFolderName('')
+        setIsCreatingFolder(false)
+      }
+    } catch (err: any) {
+      toast.display('error', err?.response?.data?.err || err?.response?.data?.message || 'Failed to create folder')
+    } finally {
+      setIsCreatingFolderLoading(false)
+    }
+  }, [newFolderName, state.user?.jwtToken, queryClient, toast])
+
+  const renderFolderFooter = useCallback(() => {
+    if (isCreatingFolder) {
+      return (
+        <div className="p-2 border-t border-gray-100 flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            placeholder="Folder name"
+            className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreateFolder()
+              if (e.key === 'Escape') {
+                setIsCreatingFolder(false)
+                setNewFolderName('')
+              }
+            }}
+          />
+          <button
+            onClick={handleCreateFolder}
+            disabled={!newFolderName.trim() || isCreatingFolderLoading}
+            className="px-3 py-1.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCreatingFolderLoading ? '...' : 'Save'}
+          </button>
+        </div>
+      )
+    }
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsCreatingFolder(true)
+        }}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 border-t border-gray-100 transition-colors"
+      >
+        <Plus size={14} />
+        Create
+      </button>
+    )
+  }, [isCreatingFolder, newFolderName, isCreatingFolderLoading])
 
   // When user selects a color, show its folder if parsedData has color id (from createdColor when picked)
   // Fallback: when parsedData has no _id (e.g. padded slot), match by hex in folder.colors and store colorId for Update
@@ -139,7 +209,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           setRanking(Number(data.ranking) || 0)
           // Parse slash naming into parts array
           const slashNameStr = data.slash_naming || ''
-          setSlashParts(slashNameStr ? slashNameStr.split('/').filter(Boolean).slice(0, 4) : [])
+          setSlashParts(slashNameStr ? slashNameStr.split('/').filter(Boolean).slice(0, 5) : [])
           setSlashInput('')
           // Parse tags into list array
           const tagsData = (data as any).tags
@@ -238,18 +308,62 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     setIsEditing(false)
   }
 
-  // Confirm editing - add as new color to local history
+  // Confirm editing - add as new color to local history and save to database
   const handleConfirmNewColor = () => {
-    // Add new color to local history (with limit)
     if (colorHistory.length >= MAX_LOCAL_COLORS) {
-      // Remove oldest color if at limit
       dispatch({ type: "REMOVE_OLDEST_COLOR_HISTORY" })
     }
-    dispatch({ type: "ADD_COLOR_HISTORY", payload: editingColor })
+
+    const normalizedHex = colors.expandHex(editingColor)
+
+    // Save to database if logged in
+    if (state.user?.jwtToken) {
+      const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
+      axiosInstance.post(
+        config.api.endpoints.addColor,
+        {
+          spreadsheetId: null,
+          sheetName: null,
+          sheetId: null,
+          row: {
+            timestamp: new Date().valueOf(),
+            url: finalUrl,
+            hex: normalizedHex,
+            hsl: colors.hexToHSL(normalizedHex),
+            rgb: colors.hexToRGB(normalizedHex),
+            comments: comment,
+            ranking: String(ranking || 0),
+            slash_naming: slashParts.join('/'),
+            tags: tagsList,
+            additionalColumns: [],
+          },
+          folderIds: selectedFolderId ? [selectedFolderId] : [],
+        },
+        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      ).then((response) => {
+        const apiResponse = response?.data?.data ?? response?.data
+        const createdColor = apiResponse?.createdColor
+        if (createdColor) {
+          dispatch({
+            type: "ADD_COLOR_HISTORY",
+            payload: { hex: normalizedHex, parsed: createdColor },
+          })
+        } else {
+          dispatch({ type: "ADD_COLOR_HISTORY", payload: normalizedHex })
+        }
+        toast.display("success", "Color saved successfully")
+        queryClient.invalidateQueries({ queryKey: ["folders"] })
+      }).catch(() => {
+        dispatch({ type: "ADD_COLOR_HISTORY", payload: normalizedHex })
+        toast.display("error", "Color added locally but failed to save to database")
+      })
+    } else {
+      dispatch({ type: "ADD_COLOR_HISTORY", payload: editingColor })
+      toast.display("success", "Color added to history")
+    }
 
     setOriginalColor(editingColor)
     setIsEditing(false)
-    toast.display("success", "Color added to history")
   }
 
   // Open login popup
@@ -343,10 +457,37 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const handleDelete = async () => {
     if (selectedColorIndices.length === 0) return
 
-    const confirmed = window.confirm(`Remove ${selectedColorIndices.length} color${selectedColorIndices.length > 1 ? 's' : ''} from history?`)
+    const confirmed = window.confirm(
+      state.user?.jwtToken
+        ? `Remove ${selectedColorIndices.length} color${selectedColorIndices.length > 1 ? 's' : ''} from history and from the database?`
+        : `Remove ${selectedColorIndices.length} color${selectedColorIndices.length > 1 ? 's' : ''} from history?`
+    )
     if (!confirmed) return
 
-    // Remove from local state
+    const colorIdsToDelete: string[] = []
+    console.log('selectedColorIndices', selectedColorIndices)
+    console.log('parsedData', parsedData)
+    selectedColorIndices.forEach((idx) => {
+      const p = parsedData[idx] as any
+      const id = p?._id ?? p?.id
+      if (id && typeof id === 'string') colorIdsToDelete.push(id)
+    })
+
+    if (state.user?.jwtToken && colorIdsToDelete.length > 0) {
+      try {
+        await axiosInstance.post(
+          config.api.endpoints.deleteColors,
+          { colorIds: colorIdsToDelete },
+          { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+        )
+      } catch (err: any) {
+        toast.display("error", err.response?.data?.error || "Failed to remove from database")
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ["folders"] })
+      queryClient.invalidateQueries({ queryKey: ["all-color-data"] })
+    }
+
     const newHistory = colorHistory.filter((_, i) => !selectedColorIndices.includes(i))
     const newParsedData = parsedData.filter((_, i) => !selectedColorIndices.includes(i))
     dispatch({ type: "CLEAR_COLOR_HISTORY" })
@@ -570,6 +711,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                 onSelect={(folderId) => setSelectedFolderId(folderId)}
                 placeholder="Select a folder"
                 width="100%"
+                renderFooter={renderFolderFooter}
+                footerExpanded={isCreatingFolder}
               />
             </div>
           </div>
@@ -606,19 +749,19 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                       )}
                     </span>
                   ))}
-                  {slashParts.length < 4 && (
+                  {slashParts.length < 5 && (
                     <input
                       type="text"
                       value={slashInput}
                       onChange={(e) => {
                         const val = e.target.value
-                        const parts = val.split('/').map((p) => p.trim()).filter(Boolean).slice(0, 4)
+                        const parts = val.split('/').map((p) => p.trim()).filter(Boolean).slice(0, 5)
                         setSlashInput(parts.join('/'))
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === '/') {
                           const newParts = slashInput.split('/').map((p) => p.trim()).filter(Boolean)
-                          const remaining = 4 - slashParts.length
+                          const remaining = 5 - slashParts.length
                           const toAdd = newParts.slice(0, remaining)
                           if (toAdd.length > 0) {
                             e.preventDefault()
@@ -629,7 +772,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                           setSlashParts(slashParts.slice(0, -1))
                         }
                       }}
-                      placeholder={slashParts.length === 0 ? "Slash Naming (e.g. Brand/Primary/Blue, max 4 names)" : ""}
+                      placeholder={slashParts.length === 0 ? "Slash Naming (e.g. Brand/Primary/Blue, max 5 names)" : ""}
                       className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
                     />
                   )}
@@ -650,7 +793,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                       </button>
                     </span>
                   ))}
-                  {tagsList.length < 4 && (
+                  {tagsList.length < 5 && (
                     <input
                       type="text"
                       value={tagsInput}

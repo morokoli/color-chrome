@@ -2,13 +2,18 @@ import { useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useGlobalState } from '@/v2/hooks/useGlobalState';
 import { useToast } from '@/v2/hooks/useToast';
 import { colors } from '@/v2/helpers/colors';
+import { Pipette, Monitor } from 'lucide-react';
 
 import pickIcon from '@/v2/assets/images/icons/menu/pick.svg';
+
+type PickMode = 'page' | 'browser';
 
 interface Props {
   copyToClipboard?: (text: string, selection: null | string) => void;
   onSuccess?: () => void;
   onClick?: () => void;
+  /** When set, shows Pipette (page) or Monitor (browser) icon instead of default */
+  pickMode?: PickMode;
 }
 
 export interface PickBtnRef {
@@ -16,7 +21,7 @@ export interface PickBtnRef {
 }
 
 // Використовуємо forwardRef із RefAttributes<Props>
-const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onClick }, ref) => {
+const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onClick, pickMode }, ref) => {
   const toast = useToast();
   const { state } = useGlobalState();
   const { color } = state;
@@ -54,15 +59,24 @@ const PickBtn = forwardRef<PickBtnRef, Props>(({ copyToClipboard, onClick }, ref
     pickColor,
   }));
 
+  const iconClass = `h-[35px] w-[35px] ${isIconInvert && 'filter invert'}`;
+
   return (
     <div
       id="pickBtn"
       onClick={onCLickHandler}
       className={`flex items-center cursor-pointer border-2 justify-center ${btnClassnames}`}
       style={{ backgroundColor: color! }}
+      title={pickMode === 'page' ? 'Pick color' : pickMode === 'browser' ? 'Pick color outside browser' : 'Pick color'}
     >
-      <div className={`h-[35px] w-[35px] ${isIconInvert && 'filter invert'}`}>
-        <img src={pickIcon} alt="pick" className="h-full w-full" />
+      <div className={iconClass}>
+        {pickMode === 'page' ? (
+          <Pipette className="h-full w-full" strokeWidth={2} />
+        ) : pickMode === 'browser' ? (
+          <Monitor className="h-full w-full" strokeWidth={2} />
+        ) : (
+          <img src={pickIcon} alt="pick" className="h-full w-full" />
+        )}
       </div>
     </div>
   );

@@ -133,7 +133,7 @@ export const ColorList = ({
                       {item.color.tags.map((tag, tagIdx) => (
                         <span
                           key={tagIdx}
-                          className="px-1.5 py-0.5 text-[10px] bg-blue-100 text-blue-700 rounded"
+                          className="px-2 py-0.5 text-[11px] bg-blue-50 text-blue-700 rounded"
                         >
                           {tag}
                         </span>

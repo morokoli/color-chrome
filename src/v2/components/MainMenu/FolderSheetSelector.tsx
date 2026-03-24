@@ -189,7 +189,7 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
                     renderItem={renderItem}
                     renderSelected={renderSelected}
                     onSelect={handleSelect}
-                    placeholder="Select folders"
+                    placeholder="Folders"
                     isSearchable
                     width="100%"
                     checkboxAtEnd={true}

@@ -82,9 +82,9 @@ export type AddColorRequest = {
 }
 
 export type AddMultipleColorsRequest = {
-  spreadsheetId: string
-  sheetName: string
-  sheetId: number
+  spreadsheetId: string | null
+  sheetName: string | null
+  sheetId: number | null
   rows: {
     timestamp: number
     url: string
@@ -94,7 +94,7 @@ export type AddMultipleColorsRequest = {
     ranking?: string | number
     comments?: string | undefined
     slash_naming: string
-    tags: string
+    tags?: string
     additionalColumns: Omit<Column, "id">[]
   }[]
 }

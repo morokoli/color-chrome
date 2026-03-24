@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { useGetFolders, Folder, Color } from "@/v2/api/folders.api"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
@@ -8,7 +8,7 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { CollapsibleBox } from "../CollapsibleBox"
 import { FolderSelectionModal, type SelectedColorItem } from "./FolderSelectionModal"
-import { ChevronDown, Check } from "lucide-react"
+import { ChevronDown, Check, Plus } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
 
 /** Returns "black" or "white" for contrast on the given hex background */
@@ -48,6 +48,9 @@ const Left: React.FC = () => {
   const [folderModalOpen, setFolderModalOpen] = useState(false)
   const [folderActionType, setFolderActionType] = useState<"copy" | "move" | null>(null)
   const [actionLoading, setActionLoading] = useState<"copy" | "move" | null>(null)
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [isCreatingLoading, setIsCreatingLoading] = useState(false)
 
   // Fetch non-foldered colors using all-color-data endpoint which returns full color objects
   const { data: allColorData, isLoading: isLoadingNonFoldered } = useQuery({
@@ -208,13 +211,27 @@ const Left: React.FC = () => {
     })
   }
 
-  // Dispatch selected colors to global state or parent component
+  // Merge a selected color with latest from folders/nonFoldered so Right always sees updated names after save
+  const getLatestColor = (item: SelectedColor): Color => {
+    const folders = foldersData?.folders || []
+    if (item.folderId === "non-foldered") {
+      const fresh = nonFolderedColors.find((c) => c._id === item.color._id)
+      if (fresh) return { ...item.color, ...fresh }
+      return item.color
+    }
+    const folder = folders.find((f) => f._id === item.folderId)
+    const fresh = folder?.colors?.find((c) => c._id === item.color._id)
+    if (fresh) return { ...item.color, ...fresh }
+    return item.color
+  }
+
+  // Dispatch selected colors to Right; use latest from foldersData so names stay updated after save/deselect
   useEffect(() => {
-    // Store in localStorage for Right component to access
-    const colorsArray = Array.from(selectedColors.values())
+    const colorsArray: SelectedColor[] = Array.from(selectedColors.values()).map((item) => {
+      const latestColor = getLatestColor(item)
+      return { ...item, color: latestColor }
+    })
     localStorage.setItem('bulk_editor_selected_colors', JSON.stringify(colorsArray))
-    
-    // Dispatch custom event for Right component
     window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
       detail: { colors: colorsArray }
     }))
@@ -370,6 +387,83 @@ const Left: React.FC = () => {
     }
   }, [refetch, selectedFolders])
 
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name || !state.user?.jwtToken) return
+    setIsCreatingLoading(true)
+    try {
+      const response = await axiosInstance.post(
+        config.api.endpoints.createFolder,
+        { name, colorIds: [], paletteIds: [] },
+        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      )
+      const folder = response.data?.folder ?? response.data
+      if (folder?._id) {
+        // Save new folder ID to localStorage before refetch so the
+        // useEffect([foldersData]) picks it up and keeps it selected
+        try {
+          const saved = localStorage.getItem('bulk_editor_selected_folders')
+          const ids: string[] = saved ? JSON.parse(saved) : []
+          if (!ids.includes(folder._id)) {
+            ids.push(folder._id)
+            localStorage.setItem('bulk_editor_selected_folders', JSON.stringify(ids))
+          }
+        } catch (_) {}
+        await queryClient.invalidateQueries({ queryKey: ["folders"] })
+        toast.display("success", "Folder created")
+        setNewFolderName("")
+        setIsCreatingFolder(false)
+      }
+    } catch (err: any) {
+      toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to create folder")
+    } finally {
+      setIsCreatingLoading(false)
+    }
+  }, [newFolderName, state.user?.jwtToken, queryClient, toast])
+
+  const renderDropdownFooter = useCallback(() => {
+    if (isCreatingFolder) {
+      return (
+        <div className="p-2 border-t border-gray-100 flex gap-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            placeholder="Folder name"
+            className="flex-1 px-2 py-1.5 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreateFolder()
+              if (e.key === "Escape") {
+                setIsCreatingFolder(false)
+                setNewFolderName("")
+              }
+            }}
+          />
+          <button
+            onClick={handleCreateFolder}
+            disabled={!newFolderName.trim() || isCreatingLoading}
+            className="px-3 py-1.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isCreatingLoading ? "..." : "Save"}
+          </button>
+        </div>
+      )
+    }
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsCreatingFolder(true)
+        }}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 border-t border-gray-100 transition-colors"
+      >
+        <Plus size={14} />
+        Create
+      </button>
+    )
+  }, [isCreatingFolder, newFolderName, isCreatingLoading])
+
   const handleCopyToFolder = () => {
     const colorsArray = Array.from(selectedColors.values())
     if (colorsArray.length === 0) {
@@ -475,10 +569,10 @@ const Left: React.FC = () => {
 
   const folders = foldersData?.folders || []
 
-  // Create dropdown items: folders + non-foldered option
+  // Create dropdown items: non-foldered option at top, then folders
   const dropdownItems: SelectableItem[] = [
+    { _id: NON_FOLDERED_ID, name: "Non-foldered colors", isNonFoldered: true } as SelectableItem,
     ...folders,
-    { _id: NON_FOLDERED_ID, name: "Non-foldered colors", isNonFoldered: true } as SelectableItem
   ]
 
   // Get selected items for dropdown (folders + non-foldered if selected)
@@ -496,15 +590,7 @@ const Left: React.FC = () => {
     setIncludeNonFoldered(hasNonFoldered)
   }
 
-  if (folders.length === 0) {
-    return (
-      <div className="p-4 text-center text-gray-400 text-sm">
-        <div className="mb-2">No folders found</div>
-        <div className="text-[11px] text-gray-300">Create folders in your account to use bulk editor</div>
-      </div>
-    )
-  }
-
+  // When 0 folders: still render UI with non-foldered colors by default (includeNonFoldered is already true from useEffect)
   return (
     <div className="flex flex-col h-full overflow-hidden w-[400px]">
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">
@@ -527,7 +613,7 @@ const Left: React.FC = () => {
             const hasNonFoldered = selected.some((item) => 'isNonFoldered' in item && item.isNonFoldered)
             
             if (folderCount === folders.length && hasNonFoldered) {
-              return "All Folders + Non-foldered"
+              return "All Folders"
             }
             if (folderCount === folders.length) {
               return "All Folders"
@@ -540,8 +626,83 @@ const Left: React.FC = () => {
           onSelect={handleDropdownSelect}
           width="100%"
           checkboxAtEnd={true}
+          renderFooter={renderDropdownFooter}
         />
       </div>
+
+      {/* Select/Deselect All + Collapse/Expand All */}
+      {(selectedFolders.length > 0 || includeNonFoldered) && (() => {
+        const allColors: { color: Color; folder: Folder | null }[] = []
+        if (includeNonFoldered) {
+          nonFolderedColors.forEach(c => allColors.push({ color: c, folder: null }))
+        }
+        selectedFolders.forEach(f => (f.colors || []).forEach(c => allColors.push({ color: c, folder: f })))
+        const allSelected = allColors.length > 0 && allColors.every(({ color, folder }) =>
+          isColorSelected(color._id, folder?._id ?? null)
+        )
+        const allCollapsed = selectedFolders.length > 0
+          && selectedFolders.every(f => collapsedFolders.has(f._id))
+          && (!includeNonFoldered || collapsedNonFoldered)
+        return (
+          <div className="flex items-center gap-2 p-2 mb-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (allSelected) {
+                  setSelectedColors(new Map())
+                } else {
+                  setSelectedColors(prev => {
+                    const next = new Map(prev)
+                    allColors.forEach(({ color, folder }) => {
+                      const key = folder ? `${folder._id}_${color._id}` : `non-foldered_${color._id}`
+                      next.set(key, {
+                        color,
+                        folderId: folder ? folder._id : "non-foldered",
+                        folderName: folder ? folder.name : "Non-foldered",
+                        originalColorId: color._id,
+                      })
+                    })
+                    return next
+                  })
+                }
+              }}
+              className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                allSelected
+                  ? "bg-gray-900 border-gray-900"
+                  : "border-gray-300 hover:border-gray-400"
+              }`}
+              title={allSelected ? "Deselect all" : "Select all"}
+            >
+              {allSelected && <Check size={12} className="text-white" />}
+            </button>
+            <div className="flex-grow min-w-0">
+              
+            </div>
+            <button
+              onClick={() => {
+                if (allCollapsed) {
+                  setCollapsedFolders(new Set())
+                  setCollapsedNonFoldered(false)
+                } else {
+                  setCollapsedFolders(new Set(selectedFolders.map(f => f._id)))
+                  if (includeNonFoldered) setCollapsedNonFoldered(true)
+                }
+              }}
+              className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+              title={allCollapsed ? "Expand all" : "Collapse all"}
+            >
+              <ChevronDown
+                size={14}
+                style={{
+                  transformOrigin: "center",
+                  transform: `rotate(${allCollapsed ? -90 : 0}deg)`,
+                  transition: "transform 0.2s ease-in-out",
+                }}
+              />
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Non-foldered Colors Section */}
       {includeNonFoldered && (
@@ -580,6 +741,7 @@ const Left: React.FC = () => {
             <button
               onClick={() => setCollapsedNonFoldered(!collapsedNonFoldered)}
               className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+              title={collapsedNonFoldered ? "Expand" : "Collapse"}
             >
               <ChevronDown
                 size={14}
@@ -716,6 +878,7 @@ const Left: React.FC = () => {
                   <button
                     onClick={() => handleFolderToggle(folder._id)}
                     className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                    title={isCollapsed ? "Expand" : "Collapse"}
                   >
                     <ChevronDown
                       size={14}

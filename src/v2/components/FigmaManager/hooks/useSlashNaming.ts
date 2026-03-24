@@ -5,7 +5,7 @@ export function useSlashNaming() {
   const { state, dispatch } = useGlobalState()
   const { selectedColorsFromFile } = state
 
-  const [slashNameInputs, setSlashNameInputs] = useState<string[]>(["", "", "", ""])
+  const [slashNameInputs, setSlashNameInputs] = useState<string[]>(["", "", "", "", ""])
   const [activeColors, setActiveColors] = useState<number[]>([])
 
   const getSlashNameParts = useCallback(
@@ -14,7 +14,7 @@ export function useSlashNaming() {
         .split("/")
         .map((p) => p.trim())
         .filter(Boolean)
-        .slice(0, 4)
+        .slice(0, 5)
       return parts || []
     },
     [selectedColorsFromFile]
@@ -34,11 +34,11 @@ export function useSlashNaming() {
               ? part
               : ""
           )
-          const filled = [...sharedParts, "", "", "", ""].slice(0, 4)
+          const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
           setSlashNameInputs(filled)
         } else {
           setActiveColors([])
-          setSlashNameInputs(["", "", "", ""])
+          setSlashNameInputs(["", "", "", "", ""])
         }
         return
       }
@@ -48,10 +48,10 @@ export function useSlashNaming() {
         setActiveColors(filteredColors)
 
         if (filteredColors.length === 0) {
-          setSlashNameInputs(["", "", "", ""])
+          setSlashNameInputs(["", "", "", "", ""])
         } else if (filteredColors.length === 1) {
           const parts = getSlashNameParts(filteredColors[0])
-          const filled = [...parts, "", "", "", ""].slice(0, 4)
+          const filled = [...parts, "", "", "", "", ""].slice(0, 5)
           setSlashNameInputs(filled)
         } else {
           const parts = getSlashNameParts(filteredColors[0])
@@ -64,7 +64,7 @@ export function useSlashNaming() {
               ? part
               : ""
           )
-          const filled = [...sharedParts, "", "", "", ""].slice(0, 4)
+          const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
           setSlashNameInputs(filled)
         }
       } else {
@@ -76,7 +76,7 @@ export function useSlashNaming() {
             ? part
             : ""
         )
-        const filled = [...sharedParts, "", "", "", ""].slice(0, 4)
+        const filled = [...sharedParts, "", "", "", "", ""].slice(0, 5)
         setSlashNameInputs(filled)
         setActiveColors([...activeColors, colorId])
       }
@@ -86,7 +86,7 @@ export function useSlashNaming() {
 
   const handleChangeSlashNaming = useCallback(() => {
     if (!activeColors.length) return
-    const newSlashNaming = slashNameInputs.filter(Boolean).slice(0, 4).join(" / ")
+    const newSlashNaming = slashNameInputs.filter(Boolean).slice(0, 5).join(" / ")
     dispatch({
       type: "UPDATE_SELECTED_COLOR_slash_naming",
       payload: { colors: activeColors, slash_naming: newSlashNaming },
@@ -99,7 +99,7 @@ export function useSlashNaming() {
         .replace(/\s+/g, "")
         .replace(/ /g, "/")
         .replace(/\//g, " / ")
-      const parts = newSlashNaming.split(/\s*\/\s*/).filter(Boolean).slice(0, 4)
+      const parts = newSlashNaming.split(/\s*\/\s*/).filter(Boolean).slice(0, 5)
       newSlashNaming = parts.join(" / ")
       dispatch({
         type: "UPDATE_SELECTED_COLOR_slash_naming",
@@ -111,7 +111,7 @@ export function useSlashNaming() {
 
   const clearColors = useCallback(() => {
     setActiveColors([])
-    setSlashNameInputs(["", "", "", ""])
+    setSlashNameInputs(["", "", "", "", ""])
     dispatch({ type: "CLEAR_SELECTED_COLORS_FROM_FILE" })
   }, [dispatch])
 

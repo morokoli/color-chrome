@@ -120,14 +120,27 @@ const App = () => {
 
   // Handle picked color from custom magnifier
   const handlePickedColor = useCallback((pickedColor: string, pickedAt?: number, createdColor?: any) => {
+    // If we already have this color in history and this call has createdColor, just backfill (no duplicate add)
+    if (createdColor && (createdColor._id || createdColor.id)) {
+      const s = stateRef.current
+      const lastIdx = s.colorHistory.length - 1
+      if (lastIdx >= 0 && s.colorHistory[lastIdx] === pickedColor) {
+        const lastParsed = s.parsedData[lastIdx] as any
+        if (!lastParsed?._id && !lastParsed?.id) {
+          dispatch({ type: "UPDATE_PARSED_AT", payload: { index: lastIdx, parsed: createdColor } })
+          queryClient.invalidateQueries({ queryKey: ["folders"] })
+        }
+        return
+      }
+    }
+
     // Use the pickedAt timestamp if provided, otherwise use current time
     const timestamp = pickedAt || Date.now()
     // Create a unique key using color + exact timestamp to prevent duplicates
     const colorKey = `${pickedColor}-${timestamp}`
-    
+
     // Check in-memory cache first (fast)
     if (processedColorsRef.current.has(colorKey)) {
-      // Backfill: if we already processed but now have createdColor and last parsed is empty, update it
       if (createdColor && (createdColor._id || createdColor.id)) {
         const s = stateRef.current
         const lastIdx = s.colorHistory.length - 1
@@ -148,7 +161,6 @@ const App = () => {
       if (processedStr) {
         const processed: string[] = JSON.parse(processedStr)
         if (processed.includes(colorKey)) {
-          // Backfill: same as above when createdColor arrives late
           if (createdColor && (createdColor._id || createdColor.id)) {
             const s = stateRef.current
             const lastIdx = s.colorHistory.length - 1
@@ -166,9 +178,8 @@ const App = () => {
     } catch (e) {
       console.error('Error reading processed colors from localStorage:', e)
     }
-    
+
     // Mark as processed in both in-memory and localStorage
-    processedColorsRef.current.add(colorKey)
     try {
       const processedStr = localStorage.getItem('processed_colors')
       const processed: string[] = processedStr ? JSON.parse(processedStr) : []
@@ -202,6 +213,11 @@ const App = () => {
       payload: hasCreatedColor ? { hex: pickedColor, parsed: createdColor } : pickedColor,
     })
 
+    // Auto-copy picked color to clipboard (HEX)
+    if (document.hasFocus()) {
+      navigator.clipboard.writeText(pickedColor).then(() => setSelected("HEX")).catch(() => {})
+    }
+
     // Invalidate folders so Comment gets fresh folder data with the new color in colorIds
     if (hasCreatedColor) {
       queryClient.invalidateQueries({ queryKey: ["folders"] })
@@ -230,16 +246,26 @@ const App = () => {
   useEffect(() => {
     const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.pickedColor?.newValue) {
-        // Use values from changes directly (avoids race with get) - they're set together by background
+        // Show compact panel when openTab was set (e.g. magnifier pick)
+        if (changes.openTab?.newValue === 'PICK_PANEL') {
+          setTab('PICK_PANEL')
+          chrome.storage.local.remove(['openTab'])
+        }
+        // Use values from changes directly (avoids race with get)
         const pickedColor = changes.pickedColor.newValue
         const pickedAt = changes.pickedAt?.newValue ?? Date.now()
         const createdColor = changes.createdColor?.newValue ?? null
-        chrome.storage.local.get(['eyedropperPick', 'generatorPickingState', 'generatorPickingActive'], (storageResult) => {
+        chrome.storage.local.get(['eyedropperPick', 'magnifierPick', 'generatorPickingState', 'generatorPickingActive'], (storageResult) => {
           if (storageResult.generatorPickingState || storageResult.generatorPickingActive) return
           handlePickedColor(pickedColor, pickedAt, createdColor)
-          if (storageResult.eyedropperPick) {
+          if (storageResult.magnifierPick) {
+            setLastPickSource("magnifier")
+            chrome.storage.local.remove(['magnifierPick'])
+          } else if (storageResult.eyedropperPick) {
             setLastPickSource("eyedropper")
             chrome.storage.local.remove(['eyedropperPick'])
+          } else {
+            setLastPickSource("magnifier")
           }
         })
       }
@@ -252,41 +278,23 @@ const App = () => {
     chrome.storage.onChanged.addListener(handleStorageChange)
 
     // Check for pending color on mount (30 second window)
-    chrome.storage.local.get(['pickedColor', 'pickedAt', 'createdColor', 'openTab', 'eyedropperPick'], (result) => {
+    chrome.storage.local.get(['pickedColor', 'pickedAt', 'createdColor', 'openTab', 'eyedropperPick', 'magnifierPick'], (result) => {
       if (result.pickedColor && result.pickedAt && Date.now() - result.pickedAt < 30000) {
-        // Background sets storage async after save - retry get if createdColor missing (handles mount-before-save race)
+        // Process immediately so the compact panel shows the color right away (don't wait for createdColor)
         const process = (r: typeof result) => {
           handlePickedColor(r.pickedColor!, r.pickedAt!, r.createdColor)
-          if (r.eyedropperPick) {
+          if (r.magnifierPick) {
+            setLastPickSource("magnifier")
+            chrome.storage.local.remove(['magnifierPick'])
+          } else if (r.eyedropperPick) {
             setLastPickSource("eyedropper")
             chrome.storage.local.remove(['eyedropperPick'])
+          } else {
+            setLastPickSource("magnifier")
           }
           chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'])
         }
-        if (result.createdColor) {
-          process(result)
-        } else {
-          // Background sets storage async after save - retry up to 3x (popup may open before save completes)
-          const retry = (attempt: number) => {
-            const delay = [800, 1600, 2400][attempt] ?? 2400
-            setTimeout(() => {
-              chrome.storage.local.get(['pickedColor', 'pickedAt', 'createdColor', 'eyedropperPick'], (retryResult) => {
-                if (retryResult.pickedColor && retryResult.pickedAt && Date.now() - retryResult.pickedAt < 30000) {
-                  if (retryResult.createdColor) {
-                    process({ ...result, ...retryResult })
-                  } else if (attempt < 2) {
-                    retry(attempt + 1)
-                  } else {
-                    process({ ...result, ...retryResult })
-                  }
-                } else {
-                  chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'])
-                }
-              })
-            }, delay)
-          }
-          retry(0)
-        }
+        process(result)
       } else if (result.pickedColor && result.pickedAt) {
         chrome.storage.local.remove(['pickedColor', 'pickedAt', 'createdColor'])
       }
@@ -313,6 +321,8 @@ const App = () => {
 
   const handlePickColor = () => {
     syncColorPickerStateForBackground()
+    // Clear eyedropperPick so incoming color is correctly attributed to magnifier (avoids stale value after mode switch)
+    chrome.storage.local.remove(["eyedropperPick"])
     chrome.runtime.sendMessage({ type: "START_COLOR_PICKER" }, (response) => {
       if (response?.error) {
         console.error("Picker error:", response.error)
@@ -330,7 +340,9 @@ const App = () => {
     setLastPickSource("eyedropper")
     dispatch({ type: "SET_COLOR", payload: hex })
     dispatch({ type: "ADD_COLOR_HISTORY", payload: hex })
-    chrome.storage.local.set({ eyedropperPick: true }, () => {
+    copyToClipboard(hex, "HEX")
+    setTab("PICK_PANEL")
+    chrome.storage.local.set({ openTab: "PICK_PANEL", eyedropperPick: true }, () => {
       chrome.runtime.sendMessage({ type: "COLOR_PICKED", color: hex })
     })
   }
@@ -340,7 +352,9 @@ const App = () => {
     const hex = await openEyeDropper()
     if (!hex) return
     dispatch({ type: "SET_COLOR", payload: hex })
-    chrome.storage.local.set({ eyedropperPick: true }, () => {
+    copyToClipboard(hex, "HEX")
+    setTab("PICK_PANEL")
+    chrome.storage.local.set({ openTab: "PICK_PANEL", eyedropperPick: true }, () => {
       chrome.runtime.sendMessage({ type: "COLOR_PICKED", color: hex })
     })
   }
@@ -423,6 +437,7 @@ const App = () => {
               setTab={setTab}
               selected={selected}
               copyToClipboard={copyToClipboard}
+              lastPickSource={lastPickSource}
               onPickAgain={lastPickSource === "eyedropper" ? handlePickAgainEyedropper : undefined}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}

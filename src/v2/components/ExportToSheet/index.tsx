@@ -15,7 +15,7 @@ import SectionHeader from "../common/SectionHeader"
 import { CollapsibleBox } from "../CollapsibleBox"
 import { SheetSelectionModal } from "../BulkEditor/SheetSelectionModal"
 import DualThumbSlider from "../FigmaManager/DualThumbSlider"
-import { Loader2, Check, Filter, ArrowUpDown, ChevronDown } from "lucide-react"
+import { Loader2, Check, Filter, ArrowUpDown, ChevronDown, ChevronUp } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
 
 const SORT_OPTIONS: { value: string; label: string; sortBy: string; sortOrder: "asc" | "desc" }[] = [
@@ -42,6 +42,13 @@ function parseHsl(c: any): { h: number; s: number; l: number } | null {
     if (match) return { h: Number(match[1]), s: Number(match[2]), l: Number(match[3]) }
   }
   return null
+}
+
+/** Unique key for a color instance (same color in different folders = different keys).
+ * Uses groupKey (folder name) since backend pushes same item to multiple groups. */
+function getItemKey(c: any, groupKey?: string): string {
+  const key = groupKey ?? c._folderGroupKey ?? c.sheetId
+  return key ? `${c._id}_${key}` : c._id
 }
 
 function getContrastColor(hex: string): "white" | "black" {
@@ -141,9 +148,9 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
 
   const filteredColors = useMemo(() => {
     const list: any[] = []
-    Object.values(groupedColors).forEach((items) => {
+    Object.entries(groupedColors).forEach(([groupKey, items]) => {
       items.forEach((c: any) => {
-        if (c.type !== "palette" && c._id) list.push(c)
+        if (c.type !== "palette" && c._id) list.push({ ...c, _folderGroupKey: groupKey })
       })
     })
     return list
@@ -162,15 +169,19 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
     if (selectedIds.size === filteredColors.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(filteredColors.map((c) => c._id)))
+      setSelectedIds(new Set(filteredColors.map((c) => getItemKey(c))))
     }
   }, [filteredColors, selectedIds.size])
 
   const handleSheetConfirm = useCallback(
-    async (spreadsheetId: string, sheetId: number, sheetName: string) => {
-      const selectedColors = filteredColors.filter((c) => selectedIds.has(c._id))
+    async (sheets: { spreadsheetId: string; sheetId: number; sheetName: string }[]) => {
+      const selectedColors = filteredColors.filter((c) => selectedIds.has(getItemKey(c)))
       if (selectedColors.length === 0) {
         toast.display("error", "No colors selected")
+        return
+      }
+      if (sheets.length === 0) {
+        toast.display("error", "No sheets selected")
         return
       }
       setExporting(true)
@@ -186,6 +197,9 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
           else if (c.hsl && typeof c.hsl === "object" && "h" in c.hsl)
             hslVal = `hsl(${c.hsl.h}, ${c.hsl.s}%, ${c.hsl.l}%)`
           else hslVal = colors.hexToHSL(c.hex)
+          const folderName =
+            c._folderGroupKey ||
+            (c.sheetName?.startsWith("Folder: ") ? c.sheetName.slice(8) : (c.sheetName || ""))
           return {
             timestamp: Date.now(),
             url: c.url || "Export to Sheet",
@@ -197,18 +211,23 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
             slash_naming: c.slash_naming || "",
             tags: Array.isArray(c.tags) ? c.tags : [],
             additionalColumns: c.additionalColumns || [],
+            folder: folderName,
           }
         })
-        await axiosInstance.post(
-          config.api.endpoints.addMultipleColors,
-          { spreadsheetId, sheetName, sheetId, rows },
-          {
-            headers: {
-              Authorization: `Bearer ${state.user?.jwtToken}`,
-            },
-          }
+        const authHeader = { headers: { Authorization: `Bearer ${state.user?.jwtToken}` } }
+        for (const { spreadsheetId, sheetId, sheetName } of sheets) {
+          await axiosInstance.post(
+            config.api.endpoints.addMultipleColors,
+            { spreadsheetId, sheetName, sheetId, rows },
+            authHeader
+          )
+        }
+        toast.display(
+          "success",
+          sheets.length > 1
+            ? `Exported ${rows.length} color(s) to ${sheets.length} sheets`
+            : `Exported ${rows.length} color(s) to sheet`
         )
-        toast.display("success", `Exported ${rows.length} color(s) to sheet`)
         setSheetModalOpen(false)
         setSelectedIds(new Set())
       } catch (err: any) {
@@ -237,20 +256,30 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
     })
   }
 
-  const handleSelectAllInFolder = useCallback((items: any[]) => {
+  const handleSelectAllInFolder = useCallback((items: any[], groupKey: string) => {
     const colorItems = items.filter((c: any) => c.type !== "palette" && c._id)
-    const colorIds = colorItems.map((c: any) => c._id)
-    const allSelected = colorIds.length > 0 && colorIds.every((id) => selectedIds.has(id))
+    const itemKeys = colorItems.map((c: any) => getItemKey(c, groupKey))
+    const allSelected = itemKeys.length > 0 && itemKeys.every((key) => selectedIds.has(key))
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (allSelected) {
-        colorIds.forEach((id) => next.delete(id))
+        itemKeys.forEach((key) => next.delete(key))
       } else {
-        colorIds.forEach((id) => next.add(id))
+        itemKeys.forEach((key) => next.add(key))
       }
       return next
     })
   }, [selectedIds])
+
+  // Fold / unfold all folder groups
+  const collapseAllGroups = useCallback(() => {
+    const allKeys = Object.keys(groupedColors || {})
+    setCollapsedGroups(new Set(allKeys))
+  }, [groupedColors])
+
+  const expandAllGroups = useCallback(() => {
+    setCollapsedGroups(new Set())
+  }, [])
 
   return (
     <div
@@ -393,12 +422,43 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+            {/* Single toggle: collapse all when all expanded, else expand all */}
+            {Object.keys(groupedColors).length > 0 && (() => {
+              const allExpanded = collapsedGroups.size === 0
+              return (
+                <div className="flex justify-end items-center mb-1">
+                  <Tooltip.Provider>
+                    <Tooltip.Root>
+                      <Tooltip.Trigger asChild>
+                        <button
+                          type="button"
+                          className="p-1.5 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
+                          onClick={allExpanded ? collapseAllGroups : expandAllGroups}
+                          aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                        >
+                          {allExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-gray-600" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                          )}
+                        </button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Portal>
+                        <Tooltip.Content className="bg-gray-900 text-white text-xs px-2 py-1 rounded">
+                          {allExpanded ? "Collapse all" : "Expand all"}
+                        </Tooltip.Content>
+                      </Tooltip.Portal>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+                </div>
+              )
+            })()}
             {Object.entries(groupedColors).map(([groupKey, items]) => {
               const isCollapsed = collapsedGroups.has(groupKey)
               const displayKey = groupKey.replace(/^(folder|group)_\d+_/, "")
               const colorItems = items.filter((c: any) => c.type !== "palette" && c._id)
-              const selectedCount = colorItems.filter((c: any) => selectedIds.has(c._id)).length
-              const allSelectedInFolder = colorItems.length > 0 && colorItems.every((c: any) => selectedIds.has(c._id))
+              const selectedCount = colorItems.filter((c: any) => selectedIds.has(getItemKey(c, groupKey))).length
+              const allSelectedInFolder = colorItems.length > 0 && colorItems.every((c: any) => selectedIds.has(getItemKey(c, groupKey)))
               return (
                 <div key={groupKey} className="border border-gray-200 rounded">
                   {/* Folder Header – same as Bulk Editor: checkbox, name + count, chevron */}
@@ -407,7 +467,7 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleSelectAllInFolder(items)
+                        handleSelectAllInFolder(items, groupKey)
                       }}
                       className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                         allSelectedInFolder ? "bg-gray-900 border-gray-900" : "border-gray-300 hover:border-gray-400"
@@ -471,15 +531,16 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                                 </Tooltip.Root>
                               )
                             }
-                            const isSelected = selectedIds.has(c._id)
+                            const itemKey = getItemKey(c, groupKey)
+                            const isSelected = selectedIds.has(itemKey)
                             const contrast = getContrastColor(c.hex)
                             return (
-                              <Tooltip.Root key={c._id}>
+                              <Tooltip.Root key={itemKey}>
                                 <Tooltip.Trigger asChild>
                                   <div
                                     style={{ backgroundColor: c.hex }}
                                     className="relative w-[32px] h-[32px] cursor-pointer border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center"
-                                    onClick={() => toggleSelection(c._id)}
+                                    onClick={() => toggleSelection(itemKey)}
                                   >
                                     {isSelected && (
                                       <Check

@@ -41,6 +41,8 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
     chrome.tabs.create({ url })
   }
 
+  const firstSectionWithHeading = 0
+
   return (
     <div className="w-[300px] p-4 bg-white rounded-md shadow-sm border border-gray-200">
       {/* Menu Sections */}
@@ -48,10 +50,24 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
         {menuSections.map((section, sectionIndex) => (
           <div key={sectionIndex}>
             {section.title && (
-              <div className="mb-[4px] px-4">
-                <p className="text-[15px] text-[#7D7D7D]">
-                  {section.title}
-                </p>
+              <div
+                className={`mb-[4px] px-4 ${
+                  sectionIndex === firstSectionWithHeading
+                    ? "flex items-center justify-between gap-2"
+                    : ""
+                }`}
+              >
+                <p className="text-[15px] text-[#7D7D7D]">{section.title}</p>
+                {sectionIndex === firstSectionWithHeading && (
+                  <a
+                    href="https://app.colorswithyou.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 rounded px-3 py-1 text-[12px] font-medium bg-black text-white hover:bg-gray-900 transition-colors"
+                  >
+                    Go to app
+                  </a>
+                )}
               </div>
             )}
             <div className="flex flex-col">

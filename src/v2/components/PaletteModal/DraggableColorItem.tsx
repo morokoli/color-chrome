@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { X, Plus } from "lucide-react"
 import { useDrag, useDrop } from "react-dnd"
+import { colors } from "@/v2/helpers/colors"
 
 const getColorHex = (color: any) => {
     if (typeof color === "string") return color
@@ -45,6 +46,7 @@ const DraggableColorItem = ({
     const [isReplacing, setIsReplacing] = useState(false)
 
     const colorHex = getColorHex(color)
+    const isDarkSwatch = colors.isDark(colorHex)
 
     // Use react-dnd's useDrag for reordering colors (same as web app)
     const [{ isDragging }, drag] = useDrag({
@@ -175,9 +177,9 @@ const DraggableColorItem = ({
                             top: "2px",
                             right: "2px",
                             fontSize: "12px",
-                            color: "#888",
-              borderRadius: "0",
-              padding: "0",
+                            color: isDarkSwatch ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.75)",
+                            borderRadius: "0",
+                            padding: "0",
                             display: "block",
                             background: "transparent",
                             border: "none",

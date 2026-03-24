@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Search } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { CollapsibleBox } from "../CollapsibleBox"
 
 interface MultiSelectDropdownProps<T> {
@@ -16,6 +17,8 @@ interface MultiSelectDropdownProps<T> {
   isVisible?: boolean
   checkboxAtEnd?: boolean // If true, shows checkbox at end instead of check icon at beginning
   openUpward?: boolean // If true, opens dropdown upward instead of downward
+  usePortal?: boolean // If true, render menu in portal (fixed position) so it floats above modals
+  emptyMessage?: string // Custom message when no items are available
 }
 
 export const MultiSelectDropdown = <T,>({
@@ -32,10 +35,14 @@ export const MultiSelectDropdown = <T,>({
   isVisible = true,
   checkboxAtEnd = false,
   openUpward = false,
+  usePortal = false,
+  emptyMessage = "No items found",
 }: MultiSelectDropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const isItemSelected = (item: T) => {
     if (keyExtractor) {
@@ -46,19 +53,48 @@ export const MultiSelectDropdown = <T,>({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false)
+      if (usePortal) {
+        if (
+          dropdownRef.current &&
+          !dropdownRef.current.contains(event.target as Node) &&
+          menuRef.current &&
+          !menuRef.current.contains(event.target as Node)
+        ) {
+          setIsOpen(false)
+          setMenuPosition(null)
+        }
+      } else {
+        if (
+          dropdownRef.current &&
+          !dropdownRef.current.contains(event.target as Node)
+        ) {
+          setIsOpen(false)
+        }
       }
     }
 
-    document.addEventListener("mousedown", handleClickOutside)
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [])
+  }, [isOpen, usePortal])
+
+  useEffect(() => {
+    if (isOpen && dropdownRef.current && usePortal) {
+      const rect = dropdownRef.current.getBoundingClientRect()
+      setMenuPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      })
+    } else if (!usePortal) {
+      setMenuPosition(null)
+    } else if (!isOpen) {
+      setMenuPosition(null)
+    }
+  }, [isOpen, usePortal])
 
   const handleItemClick = (item: T) => {
     const isSelected = isItemSelected(item)
@@ -73,6 +109,109 @@ export const MultiSelectDropdown = <T,>({
     const itemString = String(renderItem(item)).toLowerCase()
     return itemString.includes(searchTerm.toLowerCase())
   })
+
+  const menuContent = (
+    <>
+      <div className={`overflow-y-auto overscroll-contain ${renderFooter ? "max-h-[140px]" : ""}`}>
+        {filteredItems.map((item, i) => {
+          const isSelected = isItemSelected(item)
+          return (
+            <div
+              key={keyExtractor ? String(keyExtractor(item)) : i}
+              onClick={() => handleItemClick(item)}
+              className={`px-3 py-2 hover:bg-gray-50 cursor-pointer text-ellipsis overflow-hidden flex items-center gap-2 text-gray-700 transition-colors ${checkboxAtEnd ? "justify-between" : ""}`}
+            >
+              {!checkboxAtEnd && (
+                <div className="w-4 h-4 flex items-center justify-center">
+                  {isSelected && <Check size={14} className="text-emerald-600" />}
+                </div>
+              )}
+              <div className={checkboxAtEnd ? "flex-1 min-w-0" : ""}>{renderItem(item)}</div>
+              {checkboxAtEnd && (
+                <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => handleItemClick(item)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="cursor-pointer"
+                    style={{
+                      appearance: "none",
+                      WebkitAppearance: "none",
+                      MozAppearance: "none",
+                      width: "16px",
+                      height: "16px",
+                      minWidth: "16px",
+                      minHeight: "16px",
+                      border: isSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                      borderRadius: "3px",
+                      backgroundColor: isSelected ? "#000000" : "#ffffff",
+                      transition: "all 0.15s ease-in-out",
+                      outline: "none",
+                      position: "relative",
+                      flexShrink: 0,
+                      margin: 0,
+                      padding: 0,
+                      boxSizing: "border-box",
+                      imageRendering: "crisp-edges",
+                      WebkitFontSmoothing: "antialiased",
+                      MozOsxFontSmoothing: "grayscale",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) e.currentTarget.style.borderColor = "#9ca3af"
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) e.currentTarget.style.borderColor = "#d1d5db"
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.1)"
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.boxShadow = "none"
+                    }}
+                  />
+                  {isSelected && (
+                    <svg
+                      className="absolute pointer-events-none"
+                      style={{
+                        width: "10px",
+                        height: "10px",
+                        left: "50%",
+                        top: "50%",
+                        transform: "translate(-50%, -50%)",
+                        strokeWidth: "2.5",
+                        imageRendering: "crisp-edges",
+                        shapeRendering: "geometricPrecision",
+                      }}
+                      viewBox="0 0 10 10"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M8 2.5L4 6.5L2.5 5"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </svg>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {filteredItems.length === 0 && emptyMessage && (
+          <div className="px-3 py-2 text-gray-400 text-[11px] text-center">{emptyMessage}</div>
+        )}
+      </div>
+      {renderFooter && <div className="border-t border-gray-200 flex-shrink-0">{renderFooter()}</div>}
+    </>
+  )
+
+  const menuClass = `border border-gray-200 bg-white z-[100] rounded shadow-lg flex flex-col ${renderFooter ? "max-h-[280px]" : "max-h-48 overflow-y-auto"
+    }`
 
   return (
     <div
@@ -101,15 +240,13 @@ export const MultiSelectDropdown = <T,>({
                 {selected.length > 0 ? (
                   <span className="text-gray-800">{renderSelected(selected)}</span>
                 ) : (
-                  <span className="text-gray-400 text-ellipsis overflow-hidden">
-                    {placeholder}
-                  </span>
+                  <span className="text-gray-400 text-ellipsis overflow-hidden">{placeholder}</span>
                 )}
               </div>
             )}
             <button
               onClick={() => setIsOpen(false)}
-              className={`px-2 py-2 flex items-center`}
+              className="px-2 py-2 flex items-center"
             >
               <ChevronDown size={16} className="text-gray-400 rotate-180 transition-transform" />
             </button>
@@ -129,111 +266,30 @@ export const MultiSelectDropdown = <T,>({
         )}
       </CollapsibleBox>
 
-      {isOpen && (
-        <div className={`absolute w-full border border-gray-200 bg-white z-50 max-h-48 overflow-y-auto rounded shadow-lg ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-          {filteredItems.map((item, i) => {
-            const isSelected = isItemSelected(item)
-            return (
-              <div
-                key={keyExtractor ? String(keyExtractor(item)) : i}
-                onClick={() => handleItemClick(item)}
-                className={`px-3 py-2 hover:bg-gray-50 cursor-pointer text-ellipsis overflow-hidden flex items-center gap-2 text-gray-700 transition-colors ${checkboxAtEnd ? 'justify-between' : ''}`}
-              >
-                {!checkboxAtEnd && (
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    {isSelected && <Check size={14} className="text-emerald-600" />}
-                  </div>
-                )}
-                <div className={checkboxAtEnd ? "flex-1 min-w-0" : ""}>
-                  {renderItem(item)}
-                </div>
-                {checkboxAtEnd && (
-                  <div className="relative flex-shrink-0" style={{ width: '16px', height: '16px' }}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleItemClick(item)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="cursor-pointer"
-                      style={{
-                        appearance: 'none',
-                        WebkitAppearance: 'none',
-                        MozAppearance: 'none',
-                        width: '16px',
-                        height: '16px',
-                        minWidth: '16px',
-                        minHeight: '16px',
-                        border: isSelected ? '1.5px solid #000000' : '1.5px solid #d1d5db',
-                        borderRadius: '3px',
-                        backgroundColor: isSelected ? '#000000' : '#ffffff',
-                        transition: 'all 0.15s ease-in-out',
-                        outline: 'none',
-                        position: 'relative',
-                        flexShrink: 0,
-                        margin: 0,
-                        padding: 0,
-                        boxSizing: 'border-box',
-                        imageRendering: 'crisp-edges',
-                        WebkitFontSmoothing: 'antialiased',
-                        MozOsxFontSmoothing: 'grayscale',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.borderColor = '#9ca3af'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.borderColor = '#d1d5db'
-                        }
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 0, 0, 0.1)'
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.boxShadow = 'none'
-                      }}
-                    />
-                    {isSelected && (
-                      <svg
-                        className="absolute pointer-events-none"
-                        style={{
-                          width: '10px',
-                          height: '10px',
-                          left: '50%',
-                          top: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          strokeWidth: '2.5',
-                          imageRendering: 'crisp-edges',
-                          shapeRendering: 'geometricPrecision',
-                        }}
-                        viewBox="0 0 10 10"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M8 2.5L4 6.5L2.5 5"
-                          stroke="white"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      </svg>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-          {filteredItems.length === 0 && (
-            <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
-              No items found
-            </div>
-          )}
-          {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
-        </div>
-      )}
+      {isOpen &&
+        (usePortal && menuPosition ? (
+          createPortal(
+            <div
+              ref={menuRef}
+              className={menuClass}
+              style={{
+                position: "fixed",
+                top: `${menuPosition.top}px`,
+                left: `${menuPosition.left}px`,
+                width: `${menuPosition.width}px`,
+              }}
+            >
+              {menuContent}
+            </div>,
+            document.body
+          )
+        ) : (
+          <div
+            className={`absolute w-full ${menuClass} ${openUpward ? "bottom-full mb-1" : "top-full mt-1"}`}
+          >
+            {menuContent}
+          </div>
+        ))}
     </div>
   )
 }

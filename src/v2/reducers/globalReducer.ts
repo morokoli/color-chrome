@@ -45,6 +45,7 @@ export type Action =
   | { type: "RESET_STATE" }
   | { type: "CLEAR_NEW_COLUMNS"; payload: string }  // payload is spreadsheetId
   | { type: "ADD_FILES"; payload: File }
+  | { type: "MERGE_FILES"; payload: File[] }
   | { type: "REMOVE_FILES"; payload: string }
   | { type: "SET_COLOR"; payload: string }
   | { type: "ADD_COLOR_HISTORY"; payload: string | { hex: string; parsed?: any } }
@@ -144,6 +145,19 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         })
       })
 
+    case "MERGE_FILES":
+      return produce(state, (draft) => {
+        const existingIds = new Set(draft.files.map((f) => f.spreadsheetId))
+        for (const file of action.payload) {
+          if (!existingIds.has(file.spreadsheetId)) {
+            draft.files.push({
+              ...file,
+              colorHistory: file.colorHistory ?? [],
+            })
+          }
+        }
+      })
+
     case "REMOVE_FILES":
       return produce(state, (draft) => {
         draft.files = draft.files.filter(
@@ -211,13 +225,16 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
 
     case "RESET_STATE":
       return produce(state, (draft) => {
-        // Preserve files, selectedFile, and colorHistory on logout
-        // Only clear user auth and temporary data
         draft.user = null
+        draft.files = []
+        draft.selectedFile = null
+        draft.selectedSheets = []
         draft.parsedData = []
         draft.color = null
+        draft.colorHistory = []
+        draft.newColumns = {}
         draft.selectedColorsFromFile = []
-        // Keep: files, selectedFile, newColumns, colorHistory
+        draft.selectedFolders = []
       })
 
     case "ADD_FILE_COLOR_HISTORY": {

@@ -53,7 +53,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     onSaveSelectedColorMetaChange,
     onStateChange,
   } = props
-  const { state } = useGlobalState()
+  const { state, dispatch } = useGlobalState()
   const toast = useToast()
   const [colors, setColors] = useState(initialColors ? initialColors : [createDefaultColorObject(), createDefaultColorObject()])
   const [originalColors, setOriginalColors] = useState(initialColors ? initialColors : [createDefaultColorObject(), createDefaultColorObject()])
@@ -187,6 +187,14 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         setColors([...colors, colorObject])
       }
     }
+  }
+
+  const handleAddPaletteToPalette = (paletteColors: any[]) => {
+    if (paletteColors.length === 0) return
+    const colorObjects = paletteColors.map((c) =>
+      typeof c === "string" ? createDefaultColorObject(c) : c
+    )
+    setColors((prev) => [...prev, ...colorObjects].slice(0, 10))
   }
 
   const handleReplaceColor = (colorData: any, index: number) => {
@@ -545,14 +553,15 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           
           // Move palette colors to the selected folder (move = remove from elsewhere, add to selected folder)
           if (selectedFolderIds && selectedFolderIds.length > 0 && !isEditing) {
-            try {
-              const data = response?.data?.data ?? response?.data
-              const createdColorList = Array.isArray(data?.createdColors) ? data.createdColors : []
-              const createdIds = createdColorList.map((c: any) => c?._id ?? c).filter(Boolean)
-              const allColorIds = [...existingColorIds, ...createdIds]
-              const paletteIdFromResponse = data?.palette?._id ?? data?.palette?.id
-              const targetFolderId = selectedFolderIds[0]
+            const data = response?.data?.data ?? response?.data
+            const createdColorList = Array.isArray(data?.createdColors) ? data.createdColors : []
+            const createdIds = createdColorList.map((c: any) => c?._id ?? c).filter(Boolean)
+            const allColorIds = [...existingColorIds, ...createdIds].map(String)
+            const paletteIdFromResponse = data?.palette?._id ?? data?.palette?.id
+            const paletteIdStr = paletteIdFromResponse != null ? String(paletteIdFromResponse) : null
+            const targetFolderId = String(selectedFolderIds[0])
 
+            try {
               // Move all palette colors to the selected folder (one target; move removes from other folders first)
               if (allColorIds.length > 0) {
                 await axiosInstance.post(
@@ -563,29 +572,24 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                       Authorization: `Bearer ${state.user?.jwtToken}`,
                     },
                   }
-                ).catch(err => {
-                  console.error("Error moving colors to folder:", err)
-                  return null
-                })
+                )
               }
 
-              // Add the palette to the same folder (so folder shows the palette)
-              if (paletteIdFromResponse) {
+              // Add the palette to the same folder (so it shows in colorappfrontend and Generator Library)
+              if (paletteIdStr) {
                 await axiosInstance.post(
                   `${config.api.endpoints.copyColorToFolder}/${targetFolderId}/add-palette`,
-                  { paletteId: paletteIdFromResponse },
+                  { paletteId: paletteIdStr },
                   {
                     headers: {
                       Authorization: `Bearer ${state.user?.jwtToken}`,
                     },
                   }
-                ).catch(err => {
-                  console.error("Error adding palette to folder:", err)
-                  return null
-                })
+                )
               }
             } catch (folderErr) {
-              console.error("Error moving palette colors to folder:", folderErr)
+              console.error("Error moving palette/colors to folder:", folderErr)
+              toast.display("error", "Palette created but failed to add to folder. You can add it from the web app.")
             }
           }
         }
@@ -621,12 +625,15 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       const timestamp = Math.floor(Date.now() / 1000)
       // Don't use sheetUrl when generating - always set to null
 
-      await axiosInstance.post(
+      const response = await axiosInstance.post(
         config.api.endpoints.addColor,
         {
           spreadsheetId: null,
           sheetName: null,
           sheetId: null,
+          // When saving a single generated color, also respect selectedFolderIds
+          // so the color is created directly inside those folders (not as non-foldered).
+          folderIds: Array.isArray(selectedFolderIds) ? selectedFolderIds : [],
           row: {
             timestamp,
             hex: colorData.hex,
@@ -647,6 +654,26 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           },
         }
       )
+
+      const result = response?.data?.data ?? response?.data
+      const created = result?.createdColor
+      if (created?.hex) {
+        const parsed = {
+          _id: created._id,
+          id: created._id,
+          hex: created.hex,
+          url: created.url ?? colorData.url,
+          slash_naming: created.slash_naming ?? colorData.slash_naming ?? "",
+          comments: created.comments ?? colorData.comments ?? "",
+          ranking: created.ranking ?? colorData.ranking ?? 0,
+          tags: created.tags ?? parseTags(colorData.tags) ?? [],
+          additionalColumns: created.additionalColumns ?? colorData.additionalColumns ?? [],
+          rgb: created.rgb ?? colorData.rgb,
+          hsl: created.hsl ?? colorData.hsl,
+          timestamp,
+        }
+        dispatch({ type: "ADD_COLOR_HISTORY", payload: { hex: created.hex, parsed } })
+      }
 
       toast.display("success", "Color saved successfully!")
     } catch (err: any) {
@@ -695,7 +722,10 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           >
             <h3 style={{ margin: "0 0 16px 0", fontSize: "16px" }}>Library</h3>
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <ImportColorsList onAddToPalette={handleAddColorToPalette} />
+              <ImportColorsList
+              onAddToPalette={handleAddColorToPalette}
+              onAddPaletteToPalette={handleAddPaletteToPalette}
+            />
             </div>
           </div>
         </CollapsibleBoxHorizontal>

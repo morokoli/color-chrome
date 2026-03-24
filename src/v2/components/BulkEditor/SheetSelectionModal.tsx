@@ -1,13 +1,14 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { X, Plus } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
-import { Dropdown } from "../FigmaManager/Dropdown"
+import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useAPI } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import type { DriveFileCreateRequest, DriveFileCreateResponse } from "@/v2/types/api"
 import { useToast } from "@/v2/hooks/useToast"
+import { useGetUserSheets } from "@/v2/api/sheet.api"
 
-type SheetOption = {
+export type SheetOption = {
   id: string
   spreadsheetId: string
   sheetId: number
@@ -15,10 +16,16 @@ type SheetOption = {
   displayName: string
 }
 
+export type SheetSelection = {
+  spreadsheetId: string
+  sheetId: number
+  sheetName: string
+}
+
 interface SheetSelectionModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (spreadsheetId: string, sheetId: number, sheetName: string) => void
+  onConfirm: (sheets: SheetSelection[]) => void
   isLoading?: boolean
 }
 
@@ -31,10 +38,18 @@ export const SheetSelectionModal = ({
   const toast = useToast()
   const { state, dispatch } = useGlobalState()
   const { files, user } = state
-  const [selectedSheet, setSelectedSheet] = useState<SheetOption | null>(null)
+  const [selectedSheets, setSelectedSheets] = useState<SheetOption[]>([])
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [fileName, setFileName] = useState("")
   const [sheetName, setSheetName] = useState("")
+
+  const { data: userSheetsData, isLoading: isLoadingUserSheets } = useGetUserSheets()
+
+  useEffect(() => {
+    if (userSheetsData?.data && Array.isArray(userSheetsData.data)) {
+      dispatch({ type: "MERGE_FILES", payload: userSheetsData.data })
+    }
+  }, [userSheetsData])
 
   const { call: callCreateSheet, isStatusLoading: isCreatingSheet } = useAPI<
     DriveFileCreateRequest,
@@ -61,18 +76,24 @@ export const SheetSelectionModal = ({
   if (!isOpen) return null
 
   const handleConfirm = () => {
-    if (selectedSheet) {
-      onConfirm(selectedSheet.spreadsheetId, selectedSheet.sheetId, selectedSheet.sheetName)
+    if (selectedSheets.length > 0) {
+      onConfirm(
+        selectedSheets.map((s) => ({
+          spreadsheetId: s.spreadsheetId,
+          sheetId: s.sheetId,
+          sheetName: s.sheetName,
+        }))
+      )
       handleClose()
     }
   }
 
   const handleClose = () => {
-    setSelectedSheet(null)
+    setSelectedSheets([])
     onClose()
   }
 
-  const canConfirm = selectedSheet !== null
+  const canConfirm = selectedSheets.length > 0
 
   const handleCreateSheet = async () => {
     const trimmedFile = fileName.trim()
@@ -107,13 +128,14 @@ export const SheetSelectionModal = ({
       })
       dispatch({ type: "SET_SELECTED_FILE", payload: data.spreadsheetId })
 
-      setSelectedSheet({
+      const newSheet: SheetOption = {
         id: `${data.spreadsheetId}-${data.sheetId}`,
         spreadsheetId: data.spreadsheetId,
         sheetId: data.sheetId,
         sheetName: trimmedTab,
         displayName: `${trimmedFile} - ${trimmedTab}`,
-      })
+      }
+      setSelectedSheets((prev) => (prev.some((s) => s.id === newSheet.id) ? prev : [...prev, newSheet]))
 
       toast.display("success", "Spreadsheet created successfully")
       setFileName("")
@@ -138,95 +160,95 @@ export const SheetSelectionModal = ({
           </button>
         </div>
 
-        {/* Content - dropdown to select sheet, with Add sheet in footer */}
-        <div className="p-4 overflow-y-auto flex-1">
+        {/* Content - multi-select sheets (same pattern as folders dropdown) */}
+        <div className="p-4 overflow-y-auto flex-1 min-h-0">
           <label className="block text-[12px] text-gray-700 mb-2">
-            Select sheet
+            Select sheet(s)
           </label>
-          {allSheets.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm py-4">
-              No sheets available. Create one below.
-            </div>
-          ) : (
-            <Dropdown<SheetOption>
-              selected={selectedSheet}
-              items={allSheets}
-              renderItem={(sheet) => (
-                <span className="text-[12px] truncate">{sheet.displayName}</span>
-              )}
-              renderSelected={(sheet) => sheet.displayName}
-              onSelect={(sheet) => setSelectedSheet(sheet)}
-              placeholder="Select a sheet"
-              width="100%"
-              isSearchable
-              usePortal
-              renderFooter={
-                () => (
-                  <div className="border-t border-gray-100">
-                    {!isCreateOpen ? (
+          <MultiSelectDropdown<SheetOption>
+            selected={selectedSheets}
+            items={allSheets}
+            keyExtractor={(sheet) => sheet.id}
+            renderItem={(sheet) => (
+              <span className="text-[12px] truncate">{sheet.displayName}</span>
+            )}
+            renderSelected={(selected) => {
+              if (isLoadingUserSheets) return "Loading your sheets..."
+              if (selected.length === 0) return "Select a sheet"
+              if (selected.length === 1) return selected[0].displayName
+              return `${selected.length} sheets selected`
+            }}
+            onSelect={setSelectedSheets}
+            placeholder="Select a sheet"
+            width="100%"
+            isSearchable
+            checkboxAtEnd
+            usePortal
+            emptyMessage={isLoadingUserSheets ? "" : "No sheets yet. Create one below."}
+            renderFooter={() => (
+              <div className="border-t border-gray-100 p-2">
+                {!isCreateOpen ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsCreateOpen(true)
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 text-[12px] text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <Plus size={14} />
+                    Add sheet
+                  </button>
+                ) : (
+                  <div
+                    className="space-y-2"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex gap-2">
+                      <input
+                        value={fileName}
+                        onChange={(e) => setFileName(e.target.value)}
+                        placeholder="Sheet name"
+                        className="flex-1 h-8 px-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                      />
+                      <input
+                        value={sheetName}
+                        onChange={(e) => setSheetName(e.target.value)}
+                        placeholder="Tab name"
+                        className="flex-1 h-8 px-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                      />
+                    </div>
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setIsCreateOpen(true)
+                        onClick={() => {
+                          setIsCreateOpen(false)
+                          setFileName("")
+                          setSheetName("")
                         }}
-                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50 transition-colors"
+                        className="flex-1 h-8 text-[12px] border border-gray-200 rounded bg-white hover:bg-gray-50 text-gray-700 transition-colors"
                       >
-                        <Plus size={14} />
-                        Add sheet
+                        Cancel
                       </button>
-                    ) : (
-                      <div
-                        className="px-3 py-2"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
+                      <button
+                        type="button"
+                        onClick={handleCreateSheet}
+                        disabled={isCreatingSheet}
+                        className={`flex-1 h-8 text-[12px] rounded transition-colors ${
+                          !isCreatingSheet
+                            ? "bg-gray-900 text-white hover:bg-gray-800"
+                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        }`}
                       >
-                        <div className="flex gap-2">
-                          <input
-                            value={fileName}
-                            onChange={(e) => setFileName(e.target.value)}
-                            placeholder="Sheet name"
-                            className="flex-1 h-8 px-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
-                          />
-                          <input
-                            value={sheetName}
-                            onChange={(e) => setSheetName(e.target.value)}
-                            placeholder="Tab name"
-                            className="flex-1 h-8 px-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
-                          />
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsCreateOpen(false)
-                              setFileName("")
-                              setSheetName("")
-                            }}
-                            className="flex-1 h-8 text-[12px] border border-gray-200 rounded bg-white hover:bg-gray-50 text-gray-700 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleCreateSheet}
-                            disabled={isCreatingSheet}
-                            className={`flex-1 h-8 text-[12px] rounded transition-colors ${
-                              !isCreatingSheet
-                                ? "bg-gray-900 text-white hover:bg-gray-800"
-                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            }`}
-                          >
-                            {isCreatingSheet ? "Creating..." : "Create"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                        {isCreatingSheet ? "Creating..." : "Create"}
+                      </button>
+                    </div>
                   </div>
-                )
-              }
-            />
-          )}
+                )}
+              </div>
+            )}
+          />
         </div>
 
         {/* Footer */}
@@ -246,7 +268,11 @@ export const SheetSelectionModal = ({
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}
           >
-            {parentIsLoading ? "Exporting..." : "Export"}
+            {parentIsLoading
+              ? "Exporting..."
+              : selectedSheets.length > 1
+                ? `Export to ${selectedSheets.length} sheets`
+                : "Export"}
           </button>
         </div>
       </div>

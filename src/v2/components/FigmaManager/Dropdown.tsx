@@ -11,6 +11,8 @@ interface DropdownProps<T> {
   onSelect: (item: T) => void
   width?: string
   renderFooter?: () => React.ReactNode
+  /** When true (e.g. "Add sheet" form open), dropdown scrolls so footer is in view */
+  footerExpanded?: boolean
   isSearchable?: boolean
   placeholder?: string
   isVisible?: boolean
@@ -25,6 +27,7 @@ export const Dropdown = <T,>({
   onSelect,
   width = "100%",
   renderFooter,
+  footerExpanded = false,
   isSearchable = false,
   placeholder = "Select an option",
   isVisible = true,
@@ -35,6 +38,17 @@ export const Dropdown = <T,>({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null)
+
+  // When footer expands (e.g. "Add sheet" form), scroll so it's visible
+  useEffect(() => {
+    if (footerExpanded && menuRef.current && renderFooter) {
+      requestAnimationFrame(() => {
+        if (menuRef.current) {
+          menuRef.current.scrollTop = menuRef.current.scrollHeight
+        }
+      })
+    }
+  }, [footerExpanded, renderFooter])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -145,20 +159,46 @@ export const Dropdown = <T,>({
           createPortal(
             <div
               ref={menuRef}
-              className="fixed border border-gray-200 bg-white z-[100] max-h-48 overflow-y-auto rounded shadow-lg"
+              className={`fixed border border-gray-200 bg-white z-[100] overflow-y-auto rounded shadow-lg ${renderFooter ? "max-h-80" : "max-h-48"}`}
               style={{
                 top: `${menuPosition.top}px`,
                 left: `${menuPosition.left}px`,
                 width: `${menuPosition.width}px`,
               }}
             >
+              <div className="overflow-y-auto overscroll-contain flex-1">
+                {filteredItems.map((item, i) => (
+                  <div
+                    key={i}
+                    onClick={() => {
+                      onSelect(item)
+                      setIsOpen(false)
+                      setMenuPosition(null)
+                    }}
+                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-700 text-ellipsis overflow-hidden transition-colors"
+                  >
+                    {renderItem(item)}
+                  </div>
+                ))}
+                {filteredItems.length === 0 && (
+                  <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
+                    No items found
+                  </div>
+                )}
+              </div>
+              {renderFooter && <div className="border-t border-gray-200 flex-shrink-0">{renderFooter()}</div>}
+            </div>,
+            document.body
+          )
+        ) : (
+          <div className={`absolute w-full border border-gray-200 mt-1 bg-white z-[60] rounded shadow-lg flex flex-col max-h-48`}>
+            <div className="overflow-y-auto overscroll-contain flex-1">
               {filteredItems.map((item, i) => (
                 <div
                   key={i}
                   onClick={() => {
                     onSelect(item)
                     setIsOpen(false)
-                    setMenuPosition(null)
                   }}
                   className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-700 text-ellipsis overflow-hidden transition-colors"
                 >
@@ -170,30 +210,8 @@ export const Dropdown = <T,>({
                   No items found
                 </div>
               )}
-              {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
-            </div>,
-            document.body
-          )
-        ) : (
-          <div className="absolute w-full border border-gray-200 mt-1 bg-white z-[60] max-h-48 overflow-y-auto rounded shadow-lg">
-            {filteredItems.map((item, i) => (
-              <div
-                key={i}
-                onClick={() => {
-                  onSelect(item)
-                  setIsOpen(false)
-                }}
-                className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-700 text-ellipsis overflow-hidden transition-colors"
-              >
-                {renderItem(item)}
-              </div>
-            ))}
-            {filteredItems.length === 0 && (
-              <div className="px-3 py-2 text-gray-400 text-[11px] text-center">
-                No items found
-              </div>
-            )}
-            {renderFooter && <div className="border-t border-gray-200">{renderFooter()}</div>}
+            </div>
+            {renderFooter && <div className="border-t border-gray-200 flex-shrink-0">{renderFooter()}</div>}
           </div>
         )
       )}
