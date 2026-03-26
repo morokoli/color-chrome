@@ -1,6 +1,6 @@
 import {
   Pipette,
-  Sparkles,
+  // Sparkles,
   History,
   Copy,
   FileSpreadsheet,
@@ -28,7 +28,7 @@ export const SECTION_MENU_ITEMS: SectionMenuItem[] = [
   { title: "Pick Color Outside Browser", Icon: Monitor, actionKey: "pickFromBrowser", section: "Color Actions" },
   { title: "Website Colors", Icon: PanelTop, menuName: "COLOR_EXTRACTION", section: "Color Actions" },
   { title: "Generator", Icon: Palette, menuName: "GENERATOR", section: "Color Actions" },
-  { title: "AI Generator", Icon: Sparkles, menuName: "AI_GENERATOR", section: "Color Actions" },
+  // { title: "AI Generator", Icon: Sparkles, menuName: "AI_GENERATOR", section: "Color Actions" },
   { title: "Copy", Icon: Copy, menuName: "COPY", section: null },
   { title: "History & Editor", Icon: History, menuName: "COMMENT", section: null },
   { title: "Bulk Editor", Icon: Edit3, menuName: "BULK_EDITOR", section: null },

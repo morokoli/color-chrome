@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { useGetFolders, Folder, Color } from "@/v2/api/folders.api"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
@@ -10,6 +10,11 @@ import { CollapsibleBox } from "../CollapsibleBox"
 import { FolderSelectionModal, type SelectedColorItem } from "./FolderSelectionModal"
 import { ChevronDown, Check, Plus } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
+import {
+  buildParentIdByChildId,
+  getFolderLabelWithParent,
+  flattenFoldersHierarchyOrder,
+} from "@/v2/utils/folderDisplayName"
 
 /** Returns "black" or "white" for contrast on the given hex background */
 function getContrastColor(hex: string): "black" | "white" {
@@ -90,6 +95,14 @@ const Left: React.FC = () => {
 
   const nonFolderedColors: Color[] = allColorData?.colorsWithoutFolders || []
 
+  const foldersFlat = foldersData?.folders || []
+  const parentByChildId = useMemo(() => buildParentIdByChildId(foldersFlat), [foldersFlat])
+  const folderSelectionLabel = useCallback(
+    (folder: Folder | null) =>
+      !folder ? "Non-foldered" : getFolderLabelWithParent(folder, foldersFlat, parentByChildId),
+    [foldersFlat, parentByChildId]
+  )
+
   // Load saved folder selection from localStorage, or default to all folders + non-foldered selected
   useEffect(() => {
     try {
@@ -158,7 +171,7 @@ const Left: React.FC = () => {
         next.set(colorKey, {
           color,
           folderId: folder ? folder._id : "non-foldered",
-          folderName: folder ? folder.name : "Non-foldered",
+          folderName: folderSelectionLabel(folder),
           originalColorId: color._id,
         })
       } else if (next.has(colorKey)) {
@@ -169,7 +182,7 @@ const Left: React.FC = () => {
         next.set(colorKey, {
           color,
           folderId: folder ? folder._id : "non-foldered",
-          folderName: folder ? folder.name : "Non-foldered",
+          folderName: folderSelectionLabel(folder),
           originalColorId: color._id,
         })
       }
@@ -197,7 +210,7 @@ const Left: React.FC = () => {
         colorsInFolder.forEach((c) => {
           const key = folder ? `${folder._id}_${c._id}` : `non-foldered_${c._id}`
           const folderId = folder ? folder._id : "non-foldered"
-          const folderName = folder ? folder.name : "Non-foldered"
+          const folderName = folderSelectionLabel(folder)
           next.delete(key)
           next.set(key, {
             color: c,
@@ -334,7 +347,7 @@ const Left: React.FC = () => {
                   additionalColumns: color.additionalColumns ?? existing?.color.additionalColumns ?? [],
                 },
                 folderId: folder._id,
-                folderName: folder.name,
+                folderName: getFolderLabelWithParent(folder, updatedFolders),
                 originalColorId: color._id,
               })
             })
@@ -362,7 +375,7 @@ const Left: React.FC = () => {
                       additionalColumns: serverColor.additionalColumns ?? existing.color.additionalColumns ?? [],
                     },
                     folderId: folder._id,
-                    folderName: folder.name,
+                    folderName: getFolderLabelWithParent(folder, updatedFolders),
                   })
                 }
               })
@@ -567,9 +580,9 @@ const Left: React.FC = () => {
     )
   }
 
-  const folders = foldersData?.folders || []
+  const folders = flattenFoldersHierarchyOrder(foldersData?.folders || [])
 
-  // Create dropdown items: non-foldered option at top, then folders
+  // Create dropdown items: non-foldered option at top, then folders (hierarchy order)
   const dropdownItems: SelectableItem[] = [
     { _id: NON_FOLDERED_ID, name: "Non-foldered colors", isNonFoldered: true } as SelectableItem,
     ...folders,
@@ -606,7 +619,11 @@ const Left: React.FC = () => {
             if ('isNonFoldered' in item && item.isNonFoldered) {
               return <span className="text-[12px]">{item.name}</span>
             }
-            return <span className="text-[12px]">{(item as Folder).name}</span>
+            return (
+              <span className="text-[12px]">
+                {getFolderLabelWithParent(item as Folder, foldersFlat, parentByChildId)}
+              </span>
+            )
           }}
           renderSelected={(selected) => {
             const folderCount = selected.filter((item): item is Folder => !('isNonFoldered' in item && item.isNonFoldered)).length
@@ -658,7 +675,7 @@ const Left: React.FC = () => {
                       next.set(key, {
                         color,
                         folderId: folder ? folder._id : "non-foldered",
-                        folderName: folder ? folder.name : "Non-foldered",
+                        folderName: folderSelectionLabel(folder),
                         originalColorId: color._id,
                       })
                     })
@@ -868,7 +885,7 @@ const Left: React.FC = () => {
                   </button>
                   <div className="flex-grow min-w-0">
                     <div className="text-[12px] font-medium text-gray-800 truncate">
-                      {folder.name}
+                      {getFolderLabelWithParent(folder, foldersFlat, parentByChildId)}
                     </div>
                     <div className="text-[10px] text-gray-500">
                       {colors.length} color{colors.length !== 1 ? "s" : ""}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { X, Plus } from "lucide-react"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
 import { MultiSelectDropdown } from "@/v2/components/FigmaManager/MultiSelectDropdown"
@@ -9,6 +9,11 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { useToast } from "@/v2/hooks/useToast"
 import { Slider } from "@/components/ui/slider"
+import {
+  buildParentIdByChildId,
+  getFolderLabelWithParent,
+  flattenFoldersHierarchyOrder,
+} from "@/v2/utils/folderDisplayName"
 
 interface ColorPropertiesFormProps {
   selectedColor: any
@@ -27,6 +32,11 @@ const ColorPropertiesForm = ({
 }: ColorPropertiesFormProps) => {
   const { state } = useGlobalState()
   const { data: foldersData } = useGetFolders(false)
+  const foldersList = useMemo(
+    () => flattenFoldersHierarchyOrder(foldersData?.folders || []),
+    [foldersData?.folders]
+  )
+  const parentByChildId = useMemo(() => buildParentIdByChildId(foldersList), [foldersList])
   const queryClient = useQueryClient()
   const toast = useToast()
   const [tagsInput, setTagsInput] = useState("")
@@ -189,17 +199,21 @@ const ColorPropertiesForm = ({
           </label>
           <MultiSelectDropdown<string>
             selected={selectedFolderIds}
-            items={(foldersData?.folders || []).map(f => f._id)}
+            items={foldersList.map(f => f._id)}
             keyExtractor={(folderId) => folderId}
             renderItem={(folderId) => {
-              const folder = foldersData?.folders?.find(f => f._id === folderId)
-              return folder?.name || folderId
+              const folder = foldersList.find(f => f._id === folderId)
+              return folder
+                ? getFolderLabelWithParent(folder, foldersList, parentByChildId)
+                : folderId
             }}
             renderSelected={(selected) => {
               if (selected.length === 0) return "Select folders"
               if (selected.length === 1) {
-                const folder = foldersData?.folders?.find(f => f._id === selected[0])
-                return folder?.name || selected[0]
+                const folder = foldersList.find(f => f._id === selected[0])
+                return folder
+                  ? getFolderLabelWithParent(folder, foldersList, parentByChildId)
+                  : selected[0]
               }
               return `${selected.length} folders selected`
             }}

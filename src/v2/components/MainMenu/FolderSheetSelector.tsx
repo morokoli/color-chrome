@@ -1,4 +1,9 @@
 import { FC, useMemo, useState, useCallback } from "react"
+import {
+  buildParentIdByChildId,
+  getFolderLabelWithParent,
+  flattenFoldersHierarchyOrder,
+} from "@/v2/utils/folderDisplayName"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useGetFolders } from "@/v2/api/folders.api"
 import { Folder } from "@/v2/api/folders.api"
@@ -61,26 +66,21 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
         }
     }, [newFolderName, userToken, queryClient, toast])
 
+    const folderList = useMemo(
+        () => flattenFoldersHierarchyOrder(foldersData?.folders ?? []),
+        [foldersData?.folders],
+    )
+
     // Build flat list of all selectable items (folders only - sheets removed)
     const allItems = useMemo<SelectableItem[]>(() => {
-        const items: SelectableItem[] = []
-
-        // Add folders only (sheets removed per user request)
-        if (foldersData?.folders) {
-            foldersData.folders.forEach(folder => {
-                items.push({
-                    type: 'folder',
-                    id: folder._id,
-                    name: folder.name,
-                    folder,
-                })
-            })
-        }
-
-        // Sheets removed - only showing folders now
-
-        return items
-    }, [foldersData])
+        return folderList.map(folder => ({
+            type: 'folder' as const,
+            id: folder._id,
+            name: folder.name,
+            folder,
+        }))
+    }, [folderList])
+    const parentByChildId = useMemo(() => buildParentIdByChildId(folderList), [folderList])
 
     // Get selected items
     const selectedItems = useMemo(() => {
@@ -110,7 +110,15 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     }
 
     const renderItem = (item: SelectableItem) => {
-        // Only folders are shown now (sheets removed)
+        if (item.type === "folder") {
+            const label = getFolderLabelWithParent(item.folder, folderList, parentByChildId)
+            return (
+                <div className="flex items-center gap-2">
+                    <FolderIcon className="w-3.5 h-3.5 text-gray-500" />
+                    <span className="text-[12px]">{label}</span>
+                </div>
+            )
+        }
         return (
             <div className="flex items-center gap-2">
                 <FolderIcon className="w-3.5 h-3.5 text-gray-500" />
@@ -124,7 +132,11 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
             return "Select folders"
         }
         if (selected.length === 1) {
-            return selected[0].name
+            const first = selected[0]
+            if (first.type === "folder") {
+                return getFolderLabelWithParent(first.folder, folderList, parentByChildId)
+            }
+            return first.name
         }
         // Only folders now - sheets removed
         const folderCount = selected.filter(s => s.type === 'folder').length

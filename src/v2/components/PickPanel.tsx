@@ -129,7 +129,7 @@ const PickPanel: FC<Props> = ({
                 className="w-full px-3 py-2 text-left text-[11px] text-gray-700 hover:bg-gray-100"
                 role="menuitem"
               >
-                {pickMode === 'page' ? 'Pick Color Outside Browser' : 'Pick Color'}
+                {pickMode === 'page' ? 'Pick from browser' : 'Pick from desktop'}
               </button>
             </div>
           )}

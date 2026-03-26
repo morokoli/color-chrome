@@ -1,10 +1,23 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, type CSSProperties } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useDrag } from "react-dnd"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { config } from "@/v2/others/config"
 import { Loader2 } from "lucide-react"
+import colorIcon from "@/v2/assets/images/icons/library/color.svg"
+import paletteIcon from "@/v2/assets/images/icons/library/palette.svg"
+
+/** Chrome generator library tiles — larger than original 108px; scales inset/type with size. */
+const LIBRARY_SWATCH_PX = 134
+const LIBRARY_K = LIBRARY_SWATCH_PX / 108
+const LIBRARY_INSET = 3.6 * LIBRARY_K
+const LIBRARY_GAP = 3.6 * LIBRARY_K
+const LIBRARY_ITEM_MB = 7.2 * LIBRARY_K
+const LIBRARY_FONT_HEX = Math.round(13 * LIBRARY_K)
+const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_K)
+
+const swPx = `${LIBRARY_SWATCH_PX}px`
 
 interface ImportColorsListProps {
   onAddToPalette: (colorData: any, index: number | null) => void
@@ -12,6 +25,9 @@ interface ImportColorsListProps {
 }
 
 const ITEM_TYPE = "IMPORT_COLOR"
+
+const isPaletteEntry = (item: any) =>
+  item?.type === "palette" || (item?.colorIds && Array.isArray(item.colorIds))
 
 const SimpleColorBox = ({ colorData }: { colorData: any }) => {
   if (!colorData?.hex) return null
@@ -29,14 +45,14 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-end",
-        gap: "3.6px",
-        width: "108px",
+        gap: `${LIBRARY_GAP}px`,
+        width: swPx,
       }}
     >
       <div
         style={{
-          minWidth: "108px",
-          height: "108px",
+          minWidth: swPx,
+          height: swPx,
           position: "relative",
           overflow: "hidden",
           boxSizing: "border-box",
@@ -48,16 +64,16 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
         <div
           style={{
             position: "absolute",
-            top: "3.6px",
-            left: "3.6px",
-            right: "3.6px",
-            bottom: "3.6px",
+            top: `${LIBRARY_INSET}px`,
+            left: `${LIBRARY_INSET}px`,
+            right: `${LIBRARY_INSET}px`,
+            bottom: `${LIBRARY_INSET}px`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
             color: textColor,
-            fontSize: "13px",
+            fontSize: `${LIBRARY_FONT_HEX}px`,
             fontWeight: "600",
             textShadow: isDark
               ? "0 1px 2px rgba(0,0,0,0.5)"
@@ -68,7 +84,7 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
           <br />
           <span
             style={{
-              fontSize: "11px",
+              fontSize: `${LIBRARY_FONT_NAME}px`,
               color: "inherit",
               maxWidth: "100%",
               overflow: "hidden",
@@ -149,14 +165,15 @@ const LibraryPaletteCard = ({
   return (
     <div
       style={{
-        width: "108px",
-        minWidth: "108px",
-        height: "108px",
+        width: swPx,
+        minWidth: swPx,
+        height: swPx,
         position: "relative",
         overflow: "hidden",
         boxSizing: "border-box",
         border: "1px solid #e5e5e5",
         transition: "box-shadow 0.2s, border-color 0.2s",
+        marginBottom: `${LIBRARY_ITEM_MB}px`,
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"
@@ -167,7 +184,6 @@ const LibraryPaletteCard = ({
         e.currentTarget.style.borderColor = "#e5e5e5"
       }}
     >
-      {/* Color strips: click = add, drag = drop */}
       <div
         style={{
           position: "absolute",
@@ -200,7 +216,6 @@ const LibraryPaletteCard = ({
           </div>
         )}
       </div>
-      {/* Palette name: click = add full palette */}
       <div
         role="button"
         tabIndex={0}
@@ -229,8 +244,32 @@ const LibraryPaletteCard = ({
   )
 }
 
+const filterBtnBase: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 32,
+  height: 32,
+  padding: 0,
+  border: "1px solid transparent",
+  borderRadius: 4,
+  background: "transparent",
+  cursor: "pointer",
+  lineHeight: 0,
+  opacity: 0.45,
+  transition: "opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease",
+}
+
+const filterBtnActive: CSSProperties = {
+  opacity: 1,
+  backgroundColor: "rgba(0, 0, 0, 0.06)",
+  borderColor: "rgba(0, 0, 0, 0.08)",
+}
+
 const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   const [searchQuery, setSearchQuery] = useState("")
+  const [showColors, setShowColors] = useState(true)
+  const [showPalettes, setShowPalettes] = useState(true)
   const { state } = useGlobalState()
 
   const { data: colorsAndPalettesData, isLoading, error } = useQuery({
@@ -248,7 +287,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           headers: {
             Authorization: `Bearer ${state.user?.jwtToken}`,
           },
-        }
+        },
       )
       return response.data.data
     },
@@ -274,12 +313,12 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         if (item.type === "palette" || (item.colorIds && Array.isArray(item.colorIds))) return true
         return false
       })
-      const filtered =
+      const searchFiltered =
         searchQuery.length === 0
           ? items
           : items.filter((item: any) => {
               const q = searchQuery.toLowerCase()
-              if (item.hex) {
+              if (item.hex && item.type !== "palette") {
                 return (
                   (item.hex && item.hex.toLowerCase().includes(q)) ||
                   (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
@@ -294,16 +333,61 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
               }
               return false
             })
-      return filtered.sort((a: any, b: any) => {
+
+      const typeFiltered = searchFiltered.filter((item: any) => {
+        if (isPaletteEntry(item)) return showPalettes
+        return showColors
+      })
+
+      return typeFiltered.sort((a: any, b: any) => {
         const dateA = new Date(a.createdAt || a.created_at || 0).getTime()
         const dateB = new Date(b.createdAt || b.created_at || 0).getTime()
         return dateB - dateA
       })
-    } catch (error) {
-      console.error("Error processing library items:", error)
+    } catch (err) {
+      console.error("Error processing library items:", err)
       return []
     }
-  }, [rawAll, searchQuery])
+  }, [rawAll, searchQuery, showColors, showPalettes])
+
+  const libraryHeader = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        marginBottom: 16,
+        flexShrink: 0,
+      }}
+    >
+      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, flex: 1, minWidth: 0 }}>
+        Library
+      </h3>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        <button
+          type="button"
+          style={{ ...filterBtnBase, ...(showColors ? filterBtnActive : {}) }}
+          aria-pressed={showColors}
+          aria-label="Show colors in library"
+          title="Colors"
+          onClick={() => setShowColors((v) => !v)}
+        >
+          <img src={colorIcon} alt="" width={18} height={18} style={{ display: "block", pointerEvents: "none" }} />
+        </button>
+        <button
+          type="button"
+          style={{ ...filterBtnBase, ...(showPalettes ? filterBtnActive : {}) }}
+          aria-pressed={showPalettes}
+          aria-label="Show palettes in library"
+          title="Palettes"
+          onClick={() => setShowPalettes((v) => !v)}
+        >
+          <img src={paletteIcon} alt="" width={18} height={18} style={{ display: "block", pointerEvents: "none" }} />
+        </button>
+      </div>
+    </div>
+  )
 
   const DraggableImportItem = ({ colorData }: { colorData: any }) => {
     const [{ isDragging }, drag] = useDrag({
@@ -320,7 +404,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         style={{
           opacity: isDragging ? 0.5 : 1,
           cursor: "grab",
-          marginBottom: "7.2px",
+          marginBottom: `${LIBRARY_ITEM_MB}px`,
           transform: isDragging ? "rotate(5deg)" : "none",
           transition: "opacity 0.2s, transform 0.2s",
         }}
@@ -332,84 +416,126 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   }
 
   const currentItems = allItems
+  const bothTypesOff = !showColors && !showPalettes
 
   if (isLoading) {
     return (
-      <div className="text-center py-5 text-gray-500">
-        <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
-        <div className="text-sm">Loading colors and palettes...</div>
+      <div className="flex flex-col h-full overflow-hidden min-h-0">
+        {libraryHeader}
+        <div className="text-center py-5 text-gray-500 flex-1 flex flex-col justify-center">
+          <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+          <div className="text-sm">Loading colors and palettes...</div>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="text-center py-5 text-red-500">
-        <div className="text-sm mb-1">Error loading colors</div>
-        <div className="text-xs">{String(error)}</div>
+      <div className="flex flex-col h-full overflow-hidden min-h-0">
+        {libraryHeader}
+        <div className="text-center py-5 text-red-500 flex-1">
+          <div className="text-sm mb-1">Error loading colors</div>
+          <div className="text-xs">{String(error)}</div>
+        </div>
       </div>
     )
   }
 
-  if (!allItems.length) {
+  const hasSourceItems = rawAll.some((item: any) => {
+    if (!item) return false
+    if (item.hex && item.type !== "palette") return true
+    return isPaletteEntry(item)
+  })
+
+  if (bothTypesOff) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden min-h-0">
+        {libraryHeader}
+        <div className="text-center py-5 text-gray-500 text-sm flex-1">
+          Turn on colors or palettes
+          <div className="text-xs mt-1">Use the icons next to Library</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentItems.length) {
     if (searchQuery.length > 0) {
       return (
-        <div className="text-center py-5 text-gray-500">
-          <div className="text-sm mb-2">No colors or palettes found</div>
+        <div className="flex flex-col h-full overflow-hidden min-h-0">
+          {libraryHeader}
           <input
             type="text"
             placeholder="Search colors and palettes"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md"
+            className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md mb-2"
           />
+          <div className="text-center py-5 text-gray-500 flex-1">
+            <div className="text-sm mb-2">No colors or palettes found</div>
+          </div>
+        </div>
+      )
+    }
+    if (hasSourceItems) {
+      return (
+        <div className="flex flex-col h-full overflow-hidden min-h-0">
+          {libraryHeader}
+          <input
+            type="text"
+            placeholder="Search colors and palettes"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md"
+          />
+          <div className="text-center py-5 text-gray-500 text-sm flex-1">Nothing matches the current filters</div>
         </div>
       )
     }
     return (
-      <div className="text-center py-5 text-gray-500">
-        <div className="text-sm">No colors or palettes available</div>
-        <div className="text-xs mt-1">Add colors or create palettes first</div>
+      <div className="flex flex-col h-full overflow-hidden min-h-0">
+        {libraryHeader}
+        <div className="text-center py-5 text-gray-500 flex-1">
+          <div className="text-sm">No colors or palettes available</div>
+          <div className="text-xs mt-1">Add colors or create palettes first</div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden min-h-0">
+      {libraryHeader}
       <input
         type="text"
         placeholder="Search colors and palettes"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md"
+        className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md flex-shrink-0"
       />
-      <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+      <div className="flex-1 overflow-y-auto pr-2 flex flex-col items-center min-h-0">
         {currentItems.map((item: any, idx: number) => {
-          const isPalette = item.type === "palette" || (item.colorIds && Array.isArray(item.colorIds))
+          const isPalette = isPaletteEntry(item)
           if (isPalette) {
             return (
-              <div key={`palette-${item._id}-${idx}`} style={{ marginBottom: "7.2px" }}>
+              <div key={`palette-${item._id}-${idx}`} className="w-full flex justify-center">
                 <LibraryPaletteCard
                   paletteData={item}
                   colorById={colorById}
                   onAddColor={(colorData) => onAddToPalette(colorData, null)}
-                  // onAddPalette={() => {
-                  //   if (onAddPaletteToPalette && resolved.length > 0) {
-                  //     onAddPaletteToPalette(resolved)
-                  //   }
-                  // }}
                 />
               </div>
             )
           }
           return (
-            <div key={`color-${item._id}-${idx}`}>
+            <div key={`color-${item._id}-${idx}`} className="w-full flex justify-center">
               <DraggableImportItem colorData={item} />
             </div>
           )
         })}
         {currentItems.length > 0 && (
-          <div className="text-center py-3 text-xs text-gray-500">
+          <div className="text-center py-3 text-xs text-gray-500 w-full">
             {currentItems.length} item{currentItems.length !== 1 ? "s" : ""}
           </div>
         )}

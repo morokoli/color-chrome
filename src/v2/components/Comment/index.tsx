@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useRef, useCallback } from 'react'
+import { FC, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useGlobalState } from '@/v2/hooks/useGlobalState'
 import { useToast } from '@/v2/hooks/useToast'
 import { colors } from '@/v2/helpers/colors'
@@ -11,6 +11,11 @@ import SectionHeader from '../common/SectionHeader'
 import { Slider } from '@/components/ui/slider'
 import { HexColorPicker } from 'react-colorful'
 import { Dropdown } from '../FigmaManager/Dropdown'
+import {
+  buildParentIdByChildId,
+  getFolderLabelWithParent,
+  flattenFoldersHierarchyOrder,
+} from '@/v2/utils/folderDisplayName'
 
 const MAX_LOCAL_COLORS = 30
 
@@ -64,7 +69,11 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const selectedColorIndex = selectedColorIndices.length > 0 ? selectedColorIndices[0] : null
 
   const { data: foldersData } = useGetFolders(true)
-  const folders = foldersData?.folders ?? []
+  const folders = useMemo(
+    () => flattenFoldersHierarchyOrder(foldersData?.folders ?? []),
+    [foldersData?.folders],
+  )
+  const parentByChildId = useMemo(() => buildParentIdByChildId(folders), [folders])
 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
@@ -702,11 +711,15 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                 items={folders.map((f) => f._id)}
                 renderItem={(folderId) => {
                   const folder = folders.find((f) => f._id === folderId)
-                  return folder?.name ?? folderId
+                  return folder
+                    ? getFolderLabelWithParent(folder, folders, parentByChildId)
+                    : folderId
                 }}
                 renderSelected={(folderId) => {
                   const folder = folders.find((f) => f._id === folderId)
-                  return folder?.name ?? 'Select a folder'
+                  return folder
+                    ? getFolderLabelWithParent(folder, folders, parentByChildId)
+                    : 'Select a folder'
                 }}
                 onSelect={(folderId) => setSelectedFolderId(folderId)}
                 placeholder="Select a folder"

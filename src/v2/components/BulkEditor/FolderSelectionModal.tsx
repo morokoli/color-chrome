@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { X, ChevronDown, Check } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useGetFolders, Folder, Color } from "@/v2/api/folders.api"
@@ -7,6 +7,11 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { CollapsibleBox } from "../CollapsibleBox"
 import * as Tooltip from "@radix-ui/react-tooltip"
+import {
+  buildParentIdByChildId,
+  getFolderLabelWithParent,
+  flattenFoldersHierarchyOrder,
+} from "@/v2/utils/folderDisplayName"
 
 export interface SelectedColorItem {
   color: Color
@@ -103,9 +108,15 @@ export const FolderSelectionModal = ({
     enabled: isOpen && !!state.user?.jwtToken,
   })
 
+  const foldersFlat = foldersData?.folders || []
+  const foldersOrdered = useMemo(
+    () => flattenFoldersHierarchyOrder(foldersFlat),
+    [foldersFlat],
+  )
+  const parentByChildId = useMemo(() => buildParentIdByChildId(foldersFlat), [foldersFlat])
+
   if (!isOpen) return null
 
-  const folders = foldersData?.folders || []
   const nonFolderedColors: Color[] = allColorData?.colorsWithoutFolders || []
   const actionLabel = actionType === "copy" ? "Copy to" : "Move to"
 
@@ -127,7 +138,9 @@ export const FolderSelectionModal = ({
         next.set(color._id, {
           color,
           folderId: folder?._id ?? "non-foldered",
-          folderName: folder?.name ?? "Non-foldered",
+          folderName: folder
+            ? getFolderLabelWithParent(folder, foldersFlat, parentByChildId)
+            : "Non-foldered",
           originalColorId: color._id,
         })
       }
@@ -260,9 +273,9 @@ export const FolderSelectionModal = ({
               )}
 
               {/* Folders with Colors */}
-              {folders.length > 0 && (
+              {foldersOrdered.length > 0 && (
                 <div className="space-y-2">
-                  {folders.map((folder: Folder) => {
+                  {foldersOrdered.map((folder: Folder) => {
                     const colors = folder.colors || []
                     const isCollapsed = collapsedFolders.has(folder._id)
                     return (
@@ -284,7 +297,7 @@ export const FolderSelectionModal = ({
                           </button>
                           <div className="flex-grow">
                             <div className="text-[12px] font-medium text-gray-800 truncate">
-                              {folder.name}
+                              {getFolderLabelWithParent(folder, foldersFlat, parentByChildId)}
                             </div>
                             <div className="text-[10px] text-gray-500">
                               {colors.length} color{colors.length !== 1 ? "s" : ""}
@@ -372,24 +385,28 @@ export const FolderSelectionModal = ({
                 <div className="text-center text-gray-500 text-sm py-2">
                   Loading folders...
                 </div>
-              ) : folders.length === 0 ? (
+              ) : foldersFlat.length === 0 ? (
                 <div className="text-center text-gray-400 text-sm py-2">
                   No folders available. Create a folder first.
                 </div>
               ) : (
                 <MultiSelectDropdown<string>
                   selected={selectedFolderIds}
-                  items={folders.map(f => f._id)}
+                  items={foldersOrdered.map(f => f._id)}
                   keyExtractor={(id) => id}
                   renderItem={(folderId) => {
-                    const folder = folders.find(f => f._id === folderId)
-                    return folder?.name || folderId
+                    const folder = foldersFlat.find(f => f._id === folderId)
+                    return folder
+                      ? getFolderLabelWithParent(folder, foldersFlat, parentByChildId)
+                      : folderId
                   }}
                   renderSelected={(selectedIds) => {
                     if (selectedIds.length === 0) return "Select folders"
                     if (selectedIds.length === 1) {
-                      const folder = folders.find(f => f._id === selectedIds[0])
-                      return folder?.name || selectedIds[0]
+                      const folder = foldersFlat.find(f => f._id === selectedIds[0])
+                      return folder
+                        ? getFolderLabelWithParent(folder, foldersFlat, parentByChildId)
+                        : selectedIds[0]
                     }
                     return `${selectedIds.length} folders selected`
                   }}

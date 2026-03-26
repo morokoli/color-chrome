@@ -708,7 +708,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         {/* Left Side Section - Import */}
         <CollapsibleBoxHorizontal
           isOpen={activeTab === "create"}
-          maxWidth="154px"
+          maxWidth="190px"
           className="import-colors-scrollbar"
         >
           <div
@@ -718,14 +718,15 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               backgroundColor: "#fafafa",
               display: "flex",
               flexDirection: "column",
+              minHeight: 0,
+              flex: 1,
             }}
           >
-            <h3 style={{ margin: "0 0 16px 0", fontSize: "16px" }}>Library</h3>
-            <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ flex: 1, overflow: "hidden", minHeight: 0, display: "flex", flexDirection: "column" }}>
               <ImportColorsList
-              onAddToPalette={handleAddColorToPalette}
-              onAddPaletteToPalette={handleAddPaletteToPalette}
-            />
+                onAddToPalette={handleAddColorToPalette}
+                onAddPaletteToPalette={handleAddPaletteToPalette}
+              />
             </div>
           </div>
         </CollapsibleBoxHorizontal>

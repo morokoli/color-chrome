@@ -65,7 +65,7 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
                     rel="noopener noreferrer"
                     className="shrink-0 rounded px-3 py-1 text-[12px] font-medium bg-black text-white hover:bg-gray-900 transition-colors"
                   >
-                    Go to app
+                    Go to library
                   </a>
                 )}
               </div>
