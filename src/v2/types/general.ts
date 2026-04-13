@@ -6,6 +6,8 @@ export type GlobalState = {
   colorHistory: string[]
   newColumns: Record<string, NewColumn[]>  // keyed by spreadsheetId
   selectedFile: string | null
+  selectedFolders: string[] // Array of folder IDs
+  selectedSheets: string[] // Array of sheet IDs (spreadsheetId)
   selectedColorsFromFile: {
     color: {
       hex: string

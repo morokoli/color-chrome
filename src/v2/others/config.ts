@@ -1,4 +1,10 @@
 export const config = {
+  webApp: {
+    baseURL: (import.meta.env.VITE_WEB_APP_URL || "https://app.colorswithyou.com").replace(
+      /\/$/,
+      ""
+    ),
+  },
   spreadsheet: {
     baseURL: import.meta.env.VITE_SPREADSHEET_URL || "https://docs.google.com/spreadsheets/d/",
   },
@@ -9,11 +15,12 @@ export const config = {
   },
   api: {
     baseURL: import.meta.env.VITE_API_URL,
-    timeout: 10_000,
+    timeout: 30_000,
     endpoints: {
       auth: "/auth",
       refreshAccessToken: "/api/auth/refresh",
       sheetCreate: "/api/sheets/create",
+      sheetList: "/api/sheets/list",
       sheetGetByURL: "/api/sheets/get-by-url",
       checkSheetValid: "/api/sheets/check-sheet-valid",
       addColor: "/api/database-sheets/add-color",
@@ -21,6 +28,7 @@ export const config = {
       upsertColors: "/api/database-sheets/upsert-colors",
       updateRow: "/api/database-sheets/update-row",
       deleteRow: "/api/database-sheets/delete-row",
+      deleteColors: "/api/database-sheets/delete-colors",
       checkAddOrUpdate: "/api/sheets/check-add-or-update",
       addColumn: "/api/sheets/add-column",
       removeColumn: "/api/sheets/remove-column",
@@ -35,6 +43,18 @@ export const config = {
       figmaAddColors: "/figma/add-colors",
       figmaDeleteAccount: "/figma/delete-account",
       figmaDeleteTeam: "/figma/delete-team",
+      paletteCreate: "/api/palettes/create",
+      paletteGet: "/api/palettes",
+      paletteUpdate: "/api/palettes",
+      paletteDelete: "/api/palettes",
+      getColorsAndPalettes: "/api/database-sheets/colors-and-palettes",
+      getFolders: "/api/folders",
+      createFolder: "/api/folders/create",
+      updateColor: "/api/database-sheets/update-color-by-id",
+      copyColorToFolder: "/api/folders",
+      copyColorsToFolders: "/api/folders/copy-colors-to-folders",
+      moveColorsToFolder: "/api/folders",
+      moveColorsToFolders: "/api/folders/move-colors-to-folders",
     },
   },
   toast: {

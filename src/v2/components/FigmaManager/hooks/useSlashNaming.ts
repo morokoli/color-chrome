@@ -13,6 +13,7 @@ export function useSlashNaming() {
       const parts = selectedColorsFromFile[colorId]?.slash_naming
         .split("/")
         .map((p) => p.trim())
+        .filter(Boolean)
         .slice(0, 5)
       return parts || []
     },
@@ -85,7 +86,7 @@ export function useSlashNaming() {
 
   const handleChangeSlashNaming = useCallback(() => {
     if (!activeColors.length) return
-    const newSlashNaming = slashNameInputs.filter(Boolean).join(" / ")
+    const newSlashNaming = slashNameInputs.filter(Boolean).slice(0, 5).join(" / ")
     dispatch({
       type: "UPDATE_SELECTED_COLOR_slash_naming",
       payload: { colors: activeColors, slash_naming: newSlashNaming },
@@ -94,10 +95,12 @@ export function useSlashNaming() {
 
   const handleManualSlashNamingChange = useCallback(
     (colorId: number, slashNameInput: string) => {
-      const newSlashNaming = slashNameInput
+      let newSlashNaming = slashNameInput
         .replace(/\s+/g, "")
         .replace(/ /g, "/")
         .replace(/\//g, " / ")
+      const parts = newSlashNaming.split(/\s*\/\s*/).filter(Boolean).slice(0, 5)
+      newSlashNaming = parts.join(" / ")
       dispatch({
         type: "UPDATE_SELECTED_COLOR_slash_naming",
         payload: { colors: [colorId], slash_naming: newSlashNaming },

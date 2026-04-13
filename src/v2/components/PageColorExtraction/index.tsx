@@ -5,7 +5,8 @@ import * as Tooltip from "@radix-ui/react-tooltip"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useAddMultipleColors } from "@/v2/api/sheet.api"
 import { useToast } from "@/v2/hooks/useToast"
-import { Check, ArrowLeft, Loader2, History } from "lucide-react"
+import { Check, Loader2, History } from "lucide-react"
+import SectionHeader from "../common/SectionHeader"
 
 export type ColorType = {
   color: string
@@ -22,8 +23,12 @@ export type ImportedColor = {
 
 export const PageColorExtraction = ({
   setTab,
+  onPickColor,
+  onPickColorFromBrowser,
 }: {
   setTab: React.Dispatch<React.SetStateAction<string | null>>
+  onPickColor?: () => void
+  onPickColorFromBrowser?: () => void
 }) => {
   const [colorArray, setColorArray] = useState<ColorType[][]>([])
   const [selectedColors, setSelectedColors] = useState<ColorType[]>([])
@@ -201,28 +206,6 @@ export const PageColorExtraction = ({
     const selectedFileData = files.find(
       (file) => file.spreadsheetId === selectedFile,
     )
-
-    // Always save colors to local history
-    selectedColors.forEach((color) => {
-      let hexValue = color.hex
-      if (hexValue.includes(' ')) {
-        hexValue = hexValue.split(' ')[0]
-      }
-      dispatch({ type: "ADD_COLOR_HISTORY", payload: hexValue })
-      if (selectedFile) {
-        dispatch({
-          type: "ADD_FILE_COLOR_HISTORY",
-          payload: { spreadsheetId: selectedFile, color: hexValue },
-        })
-      }
-    })
-
-    // If not logged in or no sheet selected, just save locally
-    if (!selectedFile || !user?.jwtToken) {
-      toast.display("success", "Colors saved to local history")
-      setSelectedColors([])
-      return
-    }
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
     const url = tabs[0].url
     const rows = selectedColors.map((color) => {
@@ -233,7 +216,6 @@ export const PageColorExtraction = ({
         "This color is used as: " +
           colorArr?.map((color) => color.name).join(", ") || "No comments"
 
-      // Extract first hex color if multiple are present (e.g., from border-color)
       let hexValue = color.hex
       if (hexValue.includes(' ')) {
         hexValue = hexValue.split(' ')[0]
@@ -250,17 +232,45 @@ export const PageColorExtraction = ({
         ranking: "0",
         comments: comments,
         slash_naming: color.name,
-        tags: "",
         additionalColumns: [],
       }
     })
+
+    // If not logged in, add to history only (no DB)
+    if (!user?.jwtToken) {
+      rows.forEach((row) => {
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: { hex: row.hex, parsed: row },
+        })
+      })
+      toast.display("success", "Colors saved to local history")
+      setSelectedColors([])
+      return
+    }
+
     setSaveStatus("loading")
     try {
-      await addMultipleColorsAsync({
-        spreadsheetId: selectedFile!,
-        sheetName: selectedFileData?.sheets?.[0]?.name || "",
-        sheetId: selectedFileData?.sheets?.[0]?.id ?? 0,
+      const resp = await addMultipleColorsAsync({
+        spreadsheetId: selectedFile || null,
+        sheetName: selectedFileData?.sheets?.[0]?.name || null,
+        sheetId: selectedFileData?.sheets?.[0]?.id ?? null,
         rows: rows,
+      })
+      // Add to history after creation, with DB color IDs so Bulk Editor updates sync to History & Editor
+      const createdColorIds =
+        (resp as any)?.data?.createdColorIds ||
+        (resp as any)?.createdColorIds ||
+        []
+      rows.forEach((row, idx) => {
+        const colorId = Array.isArray(createdColorIds) && createdColorIds[idx] ? createdColorIds[idx] : undefined
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: {
+            hex: row.hex,
+            parsed: colorId ? { ...row, _id: colorId, id: colorId } : row,
+          },
+        })
       })
       setSaveStatus("success")
       setSelectedColors([])
@@ -298,30 +308,26 @@ export const PageColorExtraction = ({
   return (
     <Tooltip.Provider>
       <div className="w-[360px] bg-white rounded-md shadow-sm border border-gray-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTab(null)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 text-gray-600" />
-            </button>
-            <span className="text-[13px] font-medium text-gray-800">Website Colors</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-500">
-              {selectedColors.length} / {colorArray.length}
-            </span>
-            <button
-              onClick={() => setTab('COMMENT')}
-              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-              title="History & Editor"
-            >
-              <History className="w-4 h-4 text-gray-500" />
-            </button>
-          </div>
-        </div>
+        <SectionHeader
+          title="Website Colors"
+          setTab={setTab}
+          onPickColor={onPickColor}
+          onPickColorFromBrowser={onPickColorFromBrowser}
+          extraRight={
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-500">
+                {selectedColors.length} / {colorArray.length}
+              </span>
+              <button
+                onClick={() => setTab("COMMENT")}
+                className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                title="History & Editor"
+              >
+                <History className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+          }
+        />
 
         {/* Select/Deselect All */}
         <div className="px-3 py-2 border-b border-gray-200">

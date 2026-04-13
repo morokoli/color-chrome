@@ -1,25 +1,18 @@
-import { FC } from "react"
+import { FC, useMemo } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { eraseAllCookies } from "@/v2/helpers/cookie"
-import {
-  Pipette,
-  Sparkles,
-  History,
-  Copy,
-  FileSpreadsheet,
-  LogOut,
-  LogIn,
-  ExternalLink,
-  Figma,
-  PanelTop,
-} from "lucide-react"
+import { LogIn } from "lucide-react"
+import { SECTION_MENU_ITEMS } from "@/v2/constants/sectionMenu"
+import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
+import { config } from "@/v2/others/config"
 
 interface Props {
   setTab: (tab: string | null) => void
   onPickColor: () => void
+  onPickColorFromBrowser: () => void
 }
 
-const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
+const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const { state, dispatch } = useGlobalState()
 
   const logOutHandler = async () => {
@@ -27,83 +20,120 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor }) => {
     dispatch({ type: "RESET_STATE" })
   }
 
-  const menuItems = [
-    { title: "Pick Color", icon: Pipette, menuName: null, action: onPickColor },
-    { title: "Website Colors", icon: PanelTop, menuName: "COLOR_EXTRACTION" },
-    { title: "AI Generator", icon: Sparkles, menuName: "AI_GENERATOR" },
-    { title: "History & Editor", icon: History, menuName: "COMMENT" },
-    { title: "Figma", icon: Figma, menuName: "FIGMA_MANAGER" },
-    { title: "Copy", icon: Copy, menuName: "COPY" },
-    { title: "Sheet Manager", icon: FileSpreadsheet, menuName: "ADD_SHEET" },
-  ]
+  const menuSections = useMemo(() => {
+    const sections: { title: string | null; items: typeof SECTION_MENU_ITEMS }[] = []
+    const bySection = new Map<string | null, (typeof SECTION_MENU_ITEMS)[number][]>()
+    SECTION_MENU_ITEMS.forEach((item) => {
+      const key = item.section
+      if (!bySection.has(key)) bySection.set(key, [])
+      bySection.get(key)!.push(item)
+    })
+    const order: (string | null)[] = ["Color Actions", null, "Integration", "Export to"]
+    order.forEach((sectionTitle) => {
+      const items = bySection.get(sectionTitle) ?? []
+      if (items.length > 0) sections.push({ title: sectionTitle, items })
+    })
+    return sections
+  }, [])
 
   const logInHandler = () => {
-    setTab("ADD_SHEET")
+    const url = config.api.baseURL + config.api.endpoints.auth
+    chrome.tabs.create({ url })
   }
 
-  const openFileHandler = () => {
-    const fileUrl =
-      "https://docs.google.com/spreadsheets/d/" + state.selectedFile
-    window.open(fileUrl, "_blank")
+  const openWebApp = () => {
+    const jwt = state.user?.jwtToken
+    if (!jwt) {
+      logInHandler()
+      return
+    }
+    const url = `${config.webApp.baseURL}/chrome-handoff#token=${encodeURIComponent(jwt)}`
+    chrome.tabs.create({ url })
   }
 
-  // Get selected file name
-  const selectedFileName = state.files.find(
-    (f) => f.spreadsheetId === state.selectedFile
-  )?.fileName
+  const firstSectionWithHeading = 0
 
   return (
-    <div className="w-[200px] bg-white rounded-md shadow-sm border border-gray-200">
-      {/* Menu Items */}
-      <div className="py-1">
-        {menuItems.map((item) => {
-          const Icon = item.icon
-          return (
-            <button
-              key={item.title}
-              onClick={() => item.action ? item.action() : setTab(item.menuName!)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-100 transition-colors cursor-pointer"
-            >
-              {Icon && <Icon className="w-4 h-4 text-gray-600" />}
-              <span className="text-[13px] text-gray-800">{item.title}</span>
-            </button>
-          )
-        })}
+    <div className="w-[300px] p-4 bg-white rounded-md shadow-sm border border-gray-200">
+      {/* Menu Sections */}
+      <div className="py-1 mb-2">
+        {menuSections.map((section, sectionIndex) => (
+          <div key={sectionIndex}>
+            {section.title && (
+              <div
+                className={`mb-[4px] px-4 ${
+                  sectionIndex === firstSectionWithHeading
+                    ? "flex items-center justify-between gap-2"
+                    : ""
+                }`}
+              >
+                <p className="text-[15px] text-[#7D7D7D]">{section.title}</p>
+                {sectionIndex === firstSectionWithHeading && (
+                  <button
+                    type="button"
+                    onClick={openWebApp}
+                    className="shrink-0 rounded px-3 py-1 text-[12px] font-medium bg-black text-white hover:bg-gray-900 transition-colors"
+                  >
+                    Go to library
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="flex flex-col">
+              {section.items.map((item) => {
+                const Icon = item.Icon
+                const handleClick = () => {
+                  if (item.actionKey === "pickColor") onPickColor()
+                  else if (item.actionKey === "pickFromBrowser") onPickColorFromBrowser()
+                  else if (item.menuName != null) setTab(item.menuName)
+                }
+                return (
+                  <button
+                    key={item.title}
+                    onClick={handleClick}
+                    className="w-full flex items-center px-4 gap-2.5 py-1.5 text-left hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    {Icon && <Icon className="w-4 h-4 text-gray-600" />}
+                    <span className="text-[13px] text-gray-800">{item.title}</span>
+                  </button>
+                )
+              })}
+            </div>
+            {sectionIndex < menuSections.length - 1 && (
+              <div className="h-px bg-[#9B9B9B] my-2 mx-4" />
+            )}
+          </div>
+        ))}
       </div>
 
-      {/* Selected Sheet Display */}
-      {state.selectedFile && (
-        <>
-          <div className="h-px bg-gray-200" />
-          <div className="px-3 py-2">
-            <p className="text-[10px] text-gray-400 mb-1">Saving to</p>
-            <button
-              onClick={openFileHandler}
-              className="w-full flex items-center justify-between text-left group"
-            >
-              <span className="text-[12px] text-gray-700 truncate max-w-[150px]">
-                {selectedFileName || "Sheet"}
-              </span>
-              <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-gray-600" />
-            </button>
-          </div>
-        </>
+      {/* Folder/Sheet Selector */}
+      {state.user && (
+        <FolderSheetSelector
+          selectedFolders={state.selectedFolders || []}
+          selectedSheets={state.selectedSheets || []}
+          files={state.files}
+          onFoldersChange={(folderIds) => {
+            dispatch({ type: "SET_SELECTED_FOLDERS", payload: folderIds })
+          }}
+          onSheetsChange={(sheetIds) => {
+            dispatch({ type: "SET_SELECTED_SHEETS", payload: sheetIds })
+          }}
+          userToken={state.user?.jwtToken}
+        />
       )}
 
       {/* Auth Button */}
-      <div className="h-px bg-gray-200" />
       {state.user ? (
         <button
           onClick={logOutHandler}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] text-gray-500 hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[16px] text-[#CC0000] transition-colors"
         >
-          <LogOut className="w-3 h-3" />
           Log Out
         </button>
       ) : (
         <button
           onClick={logInHandler}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] text-gray-700 hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[16px] text-gray-700 hover:bg-gray-50 transition-colors"
         >
           <LogIn className="w-3 h-3" />
           Log In

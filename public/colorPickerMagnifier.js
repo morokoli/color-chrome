@@ -334,21 +334,21 @@
           <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 6px;">
               <span style="width: 28px; font-size: 10px; color: #888;">HEX</span>
-              <div style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: monospace; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; text-transform: uppercase;">${color}</div>
+              <div style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: monospace; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; text-transform: uppercase; color: #000;">${color}</div>
               <button class="copy-btn" data-value="${color}" style="padding: 4px; background: none; border: none; cursor: pointer; border-radius: 4px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
               </button>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <span style="width: 28px; font-size: 10px; color: #888;">RGB</span>
-              <div style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: monospace; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px;">${rgb}</div>
+              <div style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: monospace; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; color: #000;">${rgb}</div>
               <button class="copy-btn" data-value="${rgb}" style="padding: 4px; background: none; border: none; cursor: pointer; border-radius: 4px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
               </button>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <span style="width: 28px; font-size: 10px; color: #888;">HSL</span>
-              <div style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: monospace; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px;">${hsl}</div>
+              <div style="flex: 1; padding: 4px 8px; font-size: 11px; font-family: monospace; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 4px; color: #000;">${hsl}</div>
               <button class="copy-btn" data-value="${hsl}" style="padding: 4px; background: none; border: none; cursor: pointer; border-radius: 4px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
               </button>
@@ -405,23 +405,37 @@
       btn.addEventListener('mouseout', () => btn.style.background = 'none');
     });
 
-    // Close on click outside
-    const closePanel = (e) => {
-      if (!panel.contains(e.target)) {
+    // Helper function to clean up all event listeners and remove panel
+    const cleanupPanel = () => {
+      if (panel && panel.parentNode) {
         panel.remove();
-        document.removeEventListener('click', closePanel);
       }
+      document.removeEventListener('mousedown', closePanel, true);
+      document.removeEventListener('click', closePanel, true);
+      document.removeEventListener('keydown', closeOnEsc);
     };
-    setTimeout(() => document.addEventListener('click', closePanel), 100);
 
     // Close on escape
     const closeOnEsc = (e) => {
       if (e.key === 'Escape') {
-        panel.remove();
-        document.removeEventListener('keydown', closeOnEsc);
+        cleanupPanel();
       }
     };
     document.addEventListener('keydown', closeOnEsc);
+
+    // Close on click outside
+    const closePanel = (e) => {
+      // Check if click is outside the panel
+      if (panel && panel.parentNode && !panel.contains(e.target)) {
+        cleanupPanel();
+      }
+    };
+    // Use both mousedown and click with capture phase for better reliability
+    // Small delay to avoid immediate closure from the click that opened the panel
+    setTimeout(() => {
+      document.addEventListener('mousedown', closePanel, true);
+      document.addEventListener('click', closePanel, true);
+    }, 100);
   }
 
   // Handle click - pick color
@@ -430,18 +444,20 @@
     e.stopPropagation();
 
     const color = currentColor;
-    const x = e.clientX;
-    const y = e.clientY;
     cleanup();
 
-    // Show result panel on page
-    showResultPanel(color, x, y);
-
-    // Also send to extension storage
-    chrome.runtime.sendMessage({
-      type: 'COLOR_PICKED',
-      color: color
-    });
+    // Store color and tell extension to show compact panel in popup (no in-page box)
+    const pickedAt = Date.now();
+    chrome.storage.local.set(
+      { pickedColor: color, pickedAt, openTab: 'PICK_PANEL', magnifierPick: true },
+      () => {
+        chrome.runtime.sendMessage({ type: 'COLOR_PICKED', color: color });
+        // Open popup so user sees the compact panel (Chrome may require user gesture; openPopup is best-effort)
+        setTimeout(() => {
+          chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+        }, 150);
+      }
+    );
   }
 
   // Handle escape - cancel, R - recapture

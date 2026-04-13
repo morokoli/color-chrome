@@ -1,8 +1,24 @@
 import { axiosInstance } from "../hooks/useAPI"
 import { useGlobalState } from "../hooks/useGlobalState"
 import { config } from "../others/config"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { AddMultipleColorsRequest, AddColorRequest } from "../types/api"
+
+export const useGetUserSheets = () => {
+  const { state } = useGlobalState()
+  return useQuery({
+    queryKey: ["userSheets"],
+    queryFn: async () => {
+      const result = await axiosInstance.get(config.api.endpoints.sheetList, {
+        headers: {
+          Authorization: `Bearer ${state.user?.jwtToken}`,
+        },
+      })
+      return result.data
+    },
+    enabled: !!state.user?.jwtToken,
+  })
+}
 
 export const useGetSheet = (sheetId: string) => {
   const { state } = useGlobalState()

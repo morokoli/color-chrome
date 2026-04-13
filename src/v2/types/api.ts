@@ -64,9 +64,9 @@ export type RemoveAdditionalColumnResponse = {
 }
 
 export type AddColorRequest = {
-  spreadsheetId: string
-  sheetName: string
-  sheetId: number
+  spreadsheetId?: string | null
+  sheetName?: string | null
+  sheetId?: number | null
   row: {
     timestamp: number
     url: string
@@ -82,9 +82,9 @@ export type AddColorRequest = {
 }
 
 export type AddMultipleColorsRequest = {
-  spreadsheetId: string
-  sheetName: string
-  sheetId: number
+  spreadsheetId: string | null
+  sheetName: string | null
+  sheetId: number | null
   rows: {
     timestamp: number
     url: string
@@ -94,7 +94,7 @@ export type AddMultipleColorsRequest = {
     ranking?: string | number
     comments?: string | undefined
     slash_naming: string
-    tags: string
+    tags?: string
     additionalColumns: Omit<Column, "id">[]
   }[]
 }
@@ -146,6 +146,22 @@ export type FigmaGetFilesResponse = {
 export type AddColorResponse = {
   done: boolean
   updatedRange: string
+  createdColor?: {
+    _id: string
+    url: string
+    hex: string
+    name: string
+    hsl: { h: number; s: number; l: number }
+    rgb: { r: number; g: number; b: number }
+    added_by: string
+    ranking: number
+    comments: string
+    slash_naming: string
+    tags: string[]
+    additionalColumns: Array<{ name: string; value: string }>
+    createdAt: Date
+    updatedAt: Date
+  }
 }
 
 export type UpdateRowRequest = {

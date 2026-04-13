@@ -1,0 +1,354 @@
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { List, Collapse } from "antd"
+import SimplePaletteBox from "./SimplePaletteBox"
+
+const { Panel } = Collapse
+
+const MAX_SNAPSHOTS = 1000
+
+const deepCloneColors = (colors: any[]) => {
+  return colors.map((color) => {
+    if (typeof color === "string") return color
+    return {
+      hex: color.hex,
+      rgb: { ...color.rgb },
+      hsl: { ...color.hsl },
+      url: color.url,
+      ranking: color.ranking,
+      comments: color.comments,
+      slash_naming: color.slash_naming,
+      tags: [...(color.tags || [])],
+      additionalColumns: (color.additionalColumns || []).map((col: any) => ({ ...col })),
+    }
+  })
+}
+
+const colorsHaveChanged = (colors1: any[], colors2: any[]) => {
+  if (!Array.isArray(colors1) || !Array.isArray(colors2)) return colors1 !== colors2
+  if (colors1.length !== colors2.length) return true
+
+  for (let i = 0; i < colors1.length; i++) {
+    const c1 = colors1[i]
+    const c2 = colors2[i]
+    if (typeof c1 === "string" && typeof c2 === "string") {
+      if (c1 !== c2) return true
+    } else if (typeof c1 === "string" || typeof c2 === "string") {
+      return true
+    } else {
+      if (c1.hex !== c2.hex) return true
+      if (c1.url !== c2.url) return true
+      if (c1.ranking !== c2.ranking) return true
+      if (c1.comments !== c2.comments) return true
+      if (c1.slash_naming !== c2.slash_naming) return true
+      if (JSON.stringify(c1.rgb) !== JSON.stringify(c2.rgb)) return true
+      if (JSON.stringify(c1.hsl) !== JSON.stringify(c2.hsl)) return true
+      if (JSON.stringify(c1.tags || []) !== JSON.stringify(c2.tags || [])) return true
+      if (JSON.stringify(c1.additionalColumns || []) !== JSON.stringify(c2.additionalColumns || []))
+        return true
+    }
+  }
+
+  return false
+}
+
+/** Within a list of snapshots (newest first), keep one per run of consecutive same colors. */
+const collapseConsecutiveSameColors = (snapshots: any[]) => {
+  if (snapshots.length === 0) return []
+  const out = [snapshots[0]]
+  for (let i = 1; i < snapshots.length; i++) {
+    if (colorsHaveChanged(snapshots[i].colors, out[out.length - 1].colors)) {
+      out.push(snapshots[i])
+    }
+  }
+  return out
+}
+
+interface PaletteHistoryProps {
+  currentColors: any[]
+  paletteId: string | null
+  onApplySnapshot: (snapshotColors: any[]) => void
+  onUndoStateChange: (canUndo: boolean, canRedo: boolean) => void
+  onUndoRef: React.MutableRefObject<(() => void) | null>
+  onRedoRef: React.MutableRefObject<(() => void) | null>
+}
+
+const PaletteHistory = ({
+  currentColors,
+  paletteId,
+  onApplySnapshot,
+  onUndoStateChange,
+  onUndoRef,
+  onRedoRef,
+}: PaletteHistoryProps) => {
+  const [snapshots, setSnapshots] = useState<any[]>([])
+  const [currentIndex, setCurrentIndex] = useState(-1)
+  const lastUndoRedoTimestamp = useRef<number>(0)
+  const todayKey = useMemo(() => new Date().toDateString(), [])
+
+  const uniquePaletteId = useMemo(() => {
+    return paletteId || `palette_${Date.now()}`
+  }, [paletteId])
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(`palette_history_${uniquePaletteId}`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        const loaded = Array.isArray(parsed) ? parsed : []
+        setSnapshots(loaded)
+        if (loaded.length > 0) {
+          setCurrentIndex(0)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading palette history:", error)
+      setSnapshots([])
+    }
+  }, [uniquePaletteId])
+
+  const saveSnapshots = (newSnapshots: any[]) => {
+    try {
+      sessionStorage.setItem(
+        `palette_history_${uniquePaletteId}`,
+        JSON.stringify(newSnapshots)
+      )
+    } catch (error) {
+      console.error("Error saving palette history:", error)
+    }
+  }
+
+  const createSnapshot = useCallback(
+    (colors: any[], name: string | null = null, options?: { fromUserEdit?: boolean }) => {
+      const clonedColors = deepCloneColors(colors)
+      const snapshot = {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        colors: clonedColors,
+        name: name || new Date().toDateString(),
+      }
+      let newSnapshots: any[]
+      if (options?.fromUserEdit && currentIndex > 0) {
+        // User made a new edit while "in the past" - truncate redo stack (standard undo behavior)
+        newSnapshots = [snapshot, ...snapshots.slice(currentIndex)].slice(0, MAX_SNAPSHOTS)
+        setCurrentIndex(0)
+      } else {
+        newSnapshots = [snapshot, ...snapshots].slice(0, MAX_SNAPSHOTS)
+      }
+      setSnapshots(newSnapshots)
+      saveSnapshots(newSnapshots)
+    },
+    [snapshots, currentIndex]
+  )
+
+  const groupedSnapshots = useMemo(() => {
+    const groups: Record<string, any[]> = {}
+    snapshots.forEach((snapshot) => {
+      const date = new Date(snapshot.timestamp)
+      const dateKey = date.toDateString()
+      if (!groups[dateKey]) {
+        groups[dateKey] = []
+      }
+      groups[dateKey].push(snapshot)
+    })
+    return Object.entries(groups).map(([dateKey, daySnapshots]) => ({
+      dateKey,
+      date: new Date(dateKey),
+      snapshots: daySnapshots,
+      displaySnapshots: collapseConsecutiveSameColors(daySnapshots),
+    }))
+  }, [snapshots])
+
+  const handleUndo = useCallback(() => {
+    if (currentIndex < snapshots.length - 1) {
+      const nextIndex = currentIndex + 1
+      const snapshot = snapshots[nextIndex]
+      if (snapshot) {
+        lastUndoRedoTimestamp.current = Date.now()
+        setCurrentIndex(nextIndex)
+        onApplySnapshot(snapshot.colors)
+      }
+    }
+  }, [currentIndex, snapshots, onApplySnapshot])
+
+  const handleRedo = useCallback(() => {
+    if (currentIndex > 0) {
+      const prevIndex = currentIndex - 1
+      const snapshot = snapshots[prevIndex]
+      if (snapshot) {
+        lastUndoRedoTimestamp.current = Date.now()
+        setCurrentIndex(prevIndex)
+        onApplySnapshot(snapshot.colors)
+      }
+    }
+  }, [currentIndex, snapshots, onApplySnapshot])
+
+  const handleApplySnapshot = useCallback(
+    (snapshot: any) => {
+      const snapshotIndex = snapshots.findIndex(
+        (s) => s.timestamp === snapshot.timestamp
+      )
+      if (snapshotIndex !== -1) {
+        lastUndoRedoTimestamp.current = Date.now()
+        // Save current state before navigating away (enables redo back to here)
+        createSnapshot(currentColors)
+        // After adding current at front, clicked snapshot is at snapshotIndex + 1
+        setCurrentIndex(snapshotIndex + 1)
+      }
+      onApplySnapshot(snapshot.colors)
+    },
+    [snapshots, currentColors, createSnapshot, onApplySnapshot]
+  )
+
+  useEffect(() => {
+    if (onUndoRef) {
+      onUndoRef.current = handleUndo
+    }
+    if (onRedoRef) {
+      onRedoRef.current = handleRedo
+    }
+  }, [handleUndo, handleRedo, onUndoRef, onRedoRef])
+
+  useEffect(() => {
+    if (onUndoStateChange) {
+      const canUndo = currentIndex < snapshots.length - 1
+      const canRedo = currentIndex > 0
+      onUndoStateChange(canUndo, canRedo)
+    }
+  }, [currentIndex, snapshots.length, onUndoStateChange])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      const isInputFocused =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      if (isInputFocused) return
+
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === "z" && !event.shiftKey) {
+          event.preventDefault()
+          handleUndo()
+        } else if (event.key === "Z" && event.shiftKey) {
+          event.preventDefault()
+          handleRedo()
+        }
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [handleUndo, handleRedo])
+
+  useEffect(() => {
+    if (currentColors.length > 0) {
+      const effectRunAt = Date.now()
+      const timeoutId = setTimeout(() => {
+        // Skip only if this effect run was triggered by undo/redo (ran within 400ms of it)
+        const triggeredByUndoRedo = effectRunAt - lastUndoRedoTimestamp.current < 400
+        if (triggeredByUndoRedo) {
+          return
+        }
+        const lastSnapshot = snapshots[0]
+        const colorsChanged = !lastSnapshot || colorsHaveChanged(lastSnapshot.colors, currentColors)
+        if (colorsChanged) {
+          createSnapshot(currentColors, null, { fromUserEdit: true })
+        }
+      }, 800)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [currentColors, snapshots, createSnapshot])
+
+  if (snapshots.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "10px", color: "#999" }}>
+        <div style={{ fontSize: "11px" }}>No history yet</div>
+        <div style={{ fontSize: "9px", marginTop: "3px" }}>
+          Changes will be saved automatically
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        <Collapse defaultActiveKey={[todayKey]} ghost>
+          {groupedSnapshots.map((group) => (
+            <Panel
+              key={group.dateKey}
+              header={
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "500" }}>
+                    {group.date.toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+              }
+            >
+              <List
+                dataSource={group.displaySnapshots}
+                style={{ padding: "0px 1px" }}
+                renderItem={(snapshot: any) => (
+                  <List.Item
+                    style={{
+                      border: "none",
+                      cursor: "pointer",
+                      borderRadius: "2px",
+                      transition: "background-color 0.2s",
+                      marginBottom: "2px",
+                      padding: "0px 1px",
+                    }}
+                    onMouseEnter={(e) => {
+                      ;(e.currentTarget as HTMLDivElement).style.backgroundColor = "#f5f5f5"
+                    }}
+                    onMouseLeave={(e) => {
+                      ;(e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent"
+                    }}
+                    onClick={() => handleApplySnapshot(snapshot)}
+                  >
+                    <div style={{ width: "100%" }}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: "2px" }}>
+                        <span style={{ fontSize: "8px", color: "#999" }}>
+                          {new Date(snapshot.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <SimplePaletteBox colors={snapshot.colors} style={{ height: "95px" }} />
+                    </div>
+                  </List.Item>
+                )}
+                locale={{ emptyText: "No snapshots for this date" }}
+              />
+            </Panel>
+          ))}
+        </Collapse>
+      </div>
+
+      {snapshots.length > 0 && (
+        <div
+          style={{
+            borderTop: "1px solid #f0f0f0",
+            fontSize: "9px",
+            color: "#666",
+            textAlign: "center",
+            padding: "6px 3px",
+          }}
+        >
+          <div>
+            {snapshots.length} of {MAX_SNAPSHOTS} snapshots across {groupedSnapshots.length} day
+            {groupedSnapshots.length !== 1 ? "s" : ""}
+          </div>
+          <div style={{ marginTop: "2px", fontSize: "8px", color: "#999" }}>
+            {currentIndex < snapshots.length - 1 ? "Ctrl+Z to undo" : ""}
+            {currentIndex < snapshots.length - 1 && currentIndex > 0 ? " • " : ""}
+            {currentIndex > 0 ? "Ctrl+Shift+Z to redo" : ""}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default PaletteHistory
