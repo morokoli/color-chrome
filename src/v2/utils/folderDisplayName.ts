@@ -66,3 +66,69 @@ export function getFolderLabelWithParent(
   if (!parent?.name) return folder.name
   return `${folder.name} (Child of: ${parent.name})`
 }
+
+/** Depth in the folder tree (root = 0). */
+export function getFolderDepthById(
+  folderId: string,
+  parentByChildId: Record<string, string>
+): number {
+  let depth = 0
+  let cur = folderId
+  // Guard against cycles / bad data
+  for (let i = 0; i < 50; i++) {
+    const parent = parentByChildId[cur]
+    if (!parent) break
+    depth++
+    cur = parent
+  }
+  return depth
+}
+
+/** True if this folder lists at least one child that exists in the same folder list. */
+export function folderHasChildrenInList(
+  folder: { _id: string; childFolders?: string[] },
+  existingIds: Set<string>,
+): boolean {
+  for (const cid of folder.childFolders || []) {
+    if (cid && existingIds.has(cid)) return true
+  }
+  return false
+}
+
+/**
+ * Pre-order folder ids respecting expand/collapse (like Figma folder tree).
+ * `expandedIds`: folder id is expanded iff it is in the set (leaves may be omitted).
+ */
+export function flattenVisibleFolderIdsInOrder<T extends { _id: string; childFolders?: string[] }>(
+  folders: T[],
+  expandedIds: Set<string>,
+): string[] {
+  const roots = buildFolderTreeFromFlat(folders)
+  const out: string[] = []
+  const walk = (node: T & { children?: unknown[] }) => {
+    out.push(node._id)
+    const children = (node.children || []) as (T & { children?: unknown[] })[]
+    if (expandedIds.has(node._id) && children.length > 0) {
+      children.forEach(walk)
+    }
+  }
+  roots.forEach(walk)
+  return out
+}
+
+/** "Parent / Child / Grandchild" label for selected display/search. */
+export function getFolderPathLabelById(
+  folderId: string,
+  folders: { _id: string; name: string }[],
+  parentByChildId: Record<string, string>
+): string {
+  const byId = new Map(folders.map((f) => [f._id, f.name]))
+  const parts: string[] = []
+  let cur: string | undefined = folderId
+  for (let i = 0; i < 50 && cur; i++) {
+    const name = byId.get(cur)
+    if (name) parts.push(name)
+    cur = parentByChildId[cur]
+  }
+  return parts.reverse().join(" / ")
+}

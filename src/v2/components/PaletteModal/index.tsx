@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import tinycolor from "tinycolor2"
 import { Undo2, Redo2 } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { config } from "@/v2/others/config"
@@ -12,6 +14,88 @@ import FormInputs from "./FormInputs"
 import ColorPropertiesForm from "./ColorPropertiesForm"
 import ImportColorsList from "./ImportColorsList"
 import PaletteHistory from "./PaletteHistory"
+import { useGetFolders } from "@/v2/api/folders.api"
+
+/** Folder IDs that contain this color (by id or populated `colors` hex), for Color Info multi-select. */
+function collectFolderIdsForColor(color: any, folders: any[] | undefined): string[] {
+  if (!color || !Array.isArray(folders) || folders.length === 0) return []
+  const colorIdStr =
+    color._id != null ? String(color._id) : color.id != null ? String(color.id) : null
+  const hexNorm =
+    color.hex != null ? String(color.hex).toLowerCase().replace(/\s/g, "") : ""
+  const found = new Set<string>()
+  if (colorIdStr) {
+    for (const f of folders) {
+      if (!f?._id) continue
+      if ((f.colorIds ?? []).some((cid: any) => String(cid) === colorIdStr)) {
+        found.add(String(f._id))
+      }
+    }
+  }
+  if (found.size === 0 && hexNorm && folders.some((x) => Array.isArray(x?.colors))) {
+    for (const f of folders) {
+      if (!f?._id) continue
+      if (
+        (f.colors ?? []).some((c: any) => {
+          const h = c?.hex != null ? String(c.hex).toLowerCase().replace(/\s/g, "") : ""
+          return h === hexNorm
+        })
+      ) {
+        found.add(String(f._id))
+      }
+    }
+  }
+  return Array.from(found)
+}
+
+/** Matches handleFinish single-color path: library/API rows may use string rgb or object. */
+function parseRgbTriplet(colorData: any): { r: number; g: number; b: number } {
+  let r = 0
+  let g = 0
+  let b = 0
+  if (typeof colorData.rgb === "string") {
+    const m = colorData.rgb.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/)
+    if (m) {
+      r = parseInt(m[1], 10)
+      g = parseInt(m[2], 10)
+      b = parseInt(m[3], 10)
+    }
+  } else if (colorData.rgb && typeof colorData.rgb === "object" && "r" in colorData.rgb) {
+    r = Number(colorData.rgb.r) || 0
+    g = Number(colorData.rgb.g) || 0
+    b = Number(colorData.rgb.b) || 0
+  }
+  if (r === 0 && g === 0 && b === 0 && colorData.hex) {
+    const tc = tinycolor(colorData.hex)
+    if (tc.isValid()) {
+      const rgb = tc.toRgb()
+      r = rgb.r
+      g = rgb.g
+      b = rgb.b
+    }
+  }
+  return { r, g, b }
+}
+
+function formatHslForApiRow(colorData: any): string {
+  if (typeof colorData.hsl === "string") return colorData.hsl
+  if (
+    colorData.hsl &&
+    typeof colorData.hsl === "object" &&
+    "h" in colorData.hsl &&
+    "s" in colorData.hsl &&
+    "l" in colorData.hsl
+  ) {
+    return `hsl(${colorData.hsl.h}, ${colorData.hsl.s}%, ${colorData.hsl.l}%)`
+  }
+  const { r, g, b } = parseRgbTriplet(colorData)
+  const tc = tinycolor({ r, g, b })
+  if (tc.isValid()) {
+    const h = tc.toHsl()
+    return `hsl(${Math.round(h.h * 360)}, ${Math.round(h.s * 100)}%, ${Math.round(h.l * 100)}%)`
+  }
+  return ""
+}
 
 interface PaletteModalProps {
   open: boolean
@@ -55,11 +139,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   } = props
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
+  const queryClient = useQueryClient()
+  const { data: foldersForColorSync } = useGetFolders(true)
   const [colors, setColors] = useState(initialColors ? initialColors : [createDefaultColorObject(), createDefaultColorObject()])
   const [originalColors, setOriginalColors] = useState(initialColors ? initialColors : [createDefaultColorObject(), createDefaultColorObject()])
   const [colorPickerIndex, setColorPickerIndex] = useState(0)
   const [tags, setTags] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  /** Primary action (Add/Save palette or color) — separate from "save selected color separately" so footer labels stay correct */
+  const [primarySaving, setPrimarySaving] = useState(false)
+  const [saveSelectedSaving, setSaveSelectedSaving] = useState(false)
+  const saveInProgress = primarySaving || saveSelectedSaving
   const [activeTab, setActiveTab] = useState<"info" | "create">("create")
   const [activeInfoSubtab, setActiveInfoSubtab] = useState<"palette" | "color">("palette")
   const [nameFieldError, setNameFieldError] = useState(false)
@@ -136,6 +225,30 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       document.body.style.overflow = "unset"
     }
   }, [open])
+
+  const activeColor = colorPickerIndex !== null ? colors[colorPickerIndex] : null
+  const activeColorFolderSyncKey =
+    activeColor == null
+      ? ""
+      : `${colorPickerIndex}:${activeColor._id ?? ""}:${activeColor.id ?? ""}`
+
+  // Color Info folders follow the selected swatch; only re-sync when swatch identity changes (not on every hex edit).
+  useEffect(() => {
+    if (!open) return
+    const folders = foldersForColorSync?.folders
+    if (!folders || folders.length === 0) return
+    if (colorPickerIndex === null || !colors[colorPickerIndex]) return
+    const color = colors[colorPickerIndex]
+    const ids = collectFolderIdsForColor(color, folders)
+    const hasStoredId =
+      (color._id != null && String(color._id).length > 0) ||
+      (color.id != null && String(color.id).length > 0)
+    if (hasStoredId || ids.length > 0) {
+      setSelectedFolderIds(ids)
+    } else {
+      setSelectedFolderIds([])
+    }
+  }, [open, colorPickerIndex, activeColorFolderSyncKey, foldersForColorSync?.folders])
 
   const handleColorBoxClick = (idx: number) => {
     setColorPickerIndex(idx)
@@ -235,21 +348,17 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     }
   }, [colors.length, onStateChange])
 
-  const primaryActionLabel = loading
+  const primaryActionLabel = primarySaving
     ? "Saving..."
     : isSingleColorEdit
-    ? "Save Color"
-    : isEditing
-    ? isSingleColor
-      ? "Save Color"
-      : "Save Palette"
-    : isSingleColor
-    ? "Add Color"
-    : "Add Palette"
+      ? "Save"
+      : isSingleColor
+        ? "Save"
+        : "Save"
 
   useImperativeHandle(ref, () => ({
     submit: () => {
-      if (!loading) handleFinish()
+      if (!saveInProgress) handleFinish()
     },
     getColorsCount: () => colors.length,
     canUndo,
@@ -257,24 +366,24 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     handleUndo,
     handleRedo,
     saveSelectedColorSeparately: () => {
-      if (!loading) handleSaveSelectedColor()
+      if (!saveInProgress) handleSaveSelectedColor()
     },
   }))
 
   useEffect(() => {
     onPrimaryActionMetaChange?.({
       label: primaryActionLabel,
-      disabled: loading,
+      disabled: saveInProgress,
     })
-  }, [onPrimaryActionMetaChange, primaryActionLabel, loading])
+  }, [onPrimaryActionMetaChange, primaryActionLabel, saveInProgress])
 
   const canSaveSelectedColorSeparately = isPalette && !isEditing && colorPickerIndex !== null
   useEffect(() => {
     onSaveSelectedColorMetaChange?.({
-      disabled: !canSaveSelectedColorSeparately || loading,
-      loading,
+      disabled: !canSaveSelectedColorSeparately || saveInProgress,
+      loading: saveSelectedSaving,
     })
-  }, [onSaveSelectedColorMetaChange, canSaveSelectedColorSeparately, loading])
+  }, [onSaveSelectedColorMetaChange, canSaveSelectedColorSeparately, saveInProgress, saveSelectedSaving])
 
   const parseSheetUrl = (url: string) => {
     if (!url) return null
@@ -312,7 +421,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     // Recalculate based on current colors state to ensure accuracy
     const currentIsSingleColor = colors.length === 1
     const isActuallySingleColor = isSingleColorEdit || currentIsSingleColor
-    
+
     if (!formData.name.trim() && colors.length > 1 && !isActuallySingleColor) {
       toast.display("error", "Please enter a palette name")
       setActiveTab("info")
@@ -321,11 +430,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       return
     }
 
-    setLoading(true)
+    setPrimarySaving(true)
     try {
       if (isActuallySingleColor) {
         const colorData = colors[0]
-        
+
         // Handle RGB - can be object or string
         let r = 0, g = 0, b = 0
         if (typeof colorData.rgb === 'string') {
@@ -340,12 +449,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           g = colorData.rgb.g
           b = colorData.rgb.b
         }
-        
+
         const timestamp = Math.floor(Date.now() / 1000)
 
         if (isEditing) {
           const sheetInfo = parseSheetUrl(colorData.sheetUrl || "")
-          
+
           // Format HSL properly
           let hslValue: string
           if (typeof colorData.hsl === 'string') {
@@ -355,7 +464,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           } else {
             hslValue = colorData.hsl || ""
           }
-          
+
           await axiosInstance.put(
             config.api.endpoints.updateColor,
             {
@@ -393,7 +502,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           } else {
             hslValue = colorData.hsl || ""
           }
-          
+
           const response = await axiosInstance.post(
             config.api.endpoints.addColor,
             {
@@ -421,16 +530,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             }
           )
           toast.display("success", "Color created!")
-          
+
           // Copy color to selected folders if folders are selected
           if (selectedFolderIds && selectedFolderIds.length > 0) {
             try {
               // Handle different response structures
-              const colorId = response?.data?.data?.createdColor?._id 
+              const colorId = response?.data?.data?.createdColor?._id
                 || response?.data?.createdColor?._id
                 || response?.data?.data?.colorId
                 || response?.data?.colorId
-              
+
               if (colorId) {
                 await Promise.all(
                   selectedFolderIds.map((folderId) =>
@@ -550,7 +659,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             }
           )
           toast.display("success", isSingleColor ? "Color created!" : "Palette created!")
-          
+
           // Move palette colors to the selected folder (move = remove from elsewhere, add to selected folder)
           if (selectedFolderIds && selectedFolderIds.length > 0 && !isEditing) {
             const data = response?.data?.data ?? response?.data
@@ -608,7 +717,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       toast.display("error", `Failed to ${action} ${itemType}`)
       console.error("Error saving:", err)
     } finally {
-      setLoading(false)
+      setPrimarySaving(false)
     }
   }
 
@@ -617,13 +726,17 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       toast.display("error", "Please select a color to save")
       return
     }
+    if (!state.user?.jwtToken) {
+      toast.display("error", "Please log in to save colors")
+      return
+    }
 
-    setLoading(true)
+    setSaveSelectedSaving(true)
     try {
       const colorData = colors[colorPickerIndex]
-      const { r, g, b } = colorData.rgb
+      const { r, g, b } = parseRgbTriplet(colorData)
+      const hslValue = formatHslForApiRow(colorData)
       const timestamp = Math.floor(Date.now() / 1000)
-      // Don't use sheetUrl when generating - always set to null
 
       const response = await axiosInstance.post(
         config.api.endpoints.addColor,
@@ -631,38 +744,37 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           spreadsheetId: null,
           sheetName: null,
           sheetId: null,
-          // When saving a single generated color, also respect selectedFolderIds
-          // so the color is created directly inside those folders (not as non-foldered).
           folderIds: Array.isArray(selectedFolderIds) ? selectedFolderIds : [],
           row: {
             timestamp,
-            hex: colorData.hex,
+            hex: colorData.hex || "",
             name: colorData.name || "",
             rgb: `rgb(${r}, ${g}, ${b})`,
-            hsl: colorData.hsl,
-            url: colorData.url,
-            ranking: colorData.ranking.toString(),
-            comments: colorData.comments,
-            slash_naming: colorData.slash_naming,
-            tags: parseTags(colorData.tags),
-            additionalColumns: colorData.additionalColumns,
+            hsl: hslValue,
+            url: colorData.url || "",
+            ranking: colorData.ranking != null ? String(colorData.ranking) : "0",
+            comments: colorData.comments || "",
+            slash_naming: colorData.slash_naming || "",
+            tags: parseTags(colorData.tags || []),
+            additionalColumns: colorData.additionalColumns || [],
           },
         },
         {
           headers: {
-            Authorization: `Bearer ${state.user?.jwtToken}`,
+            Authorization: `Bearer ${state.user.jwtToken}`,
           },
         }
       )
 
       const result = response?.data?.data ?? response?.data
       const created = result?.createdColor
-      if (created?.hex) {
+      const createdHex = created?.hex ?? colorData.hex
+      if (created && createdHex) {
         const parsed = {
-          _id: created._id,
-          id: created._id,
-          hex: created.hex,
-          url: created.url ?? colorData.url,
+          _id: created._id ?? created.id,
+          id: created._id ?? created.id,
+          hex: createdHex,
+          url: created.url ?? colorData.url ?? "",
           slash_naming: created.slash_naming ?? colorData.slash_naming ?? "",
           comments: created.comments ?? colorData.comments ?? "",
           ranking: created.ranking ?? colorData.ranking ?? 0,
@@ -672,15 +784,23 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           hsl: created.hsl ?? colorData.hsl,
           timestamp,
         }
-        dispatch({ type: "ADD_COLOR_HISTORY", payload: { hex: created.hex, parsed } })
+        dispatch({ type: "ADD_COLOR_HISTORY", payload: { hex: createdHex, parsed } })
       }
+
+      await queryClient.invalidateQueries({ queryKey: ["colors-and-palettes"] })
+      await queryClient.invalidateQueries({ queryKey: ["folders"] })
 
       toast.display("success", "Color saved successfully!")
     } catch (err: any) {
-      toast.display("error", "Failed to save color")
+      const msg =
+        err?.response?.data?.err ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to save color"
+      toast.display("error", typeof msg === "string" ? msg : "Failed to save color")
       console.error("Error saving color:", err)
     } finally {
-      setLoading(false)
+      setSaveSelectedSaving(false)
     }
   }
 
@@ -773,16 +893,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             </div>
           </div> */}
 
-            <ColorsSection
-              colors={colors}
-              colorPickerIndex={colorPickerIndex}
-              onColorClick={handleColorBoxClick}
-              onRemoveColor={handleRemoveColor}
-              onAddColor={handleAddColor}
-              onMoveColor={moveColor}
-              onAddColorToPalette={handleAddColorToPalette}
-              onReplaceColor={handleReplaceColor}
-            />
+          <ColorsSection
+            colors={colors}
+            colorPickerIndex={colorPickerIndex}
+            onColorClick={handleColorBoxClick}
+            onRemoveColor={handleRemoveColor}
+            onAddColor={handleAddColor}
+            onMoveColor={moveColor}
+            onAddColorToPalette={handleAddColorToPalette}
+            onReplaceColor={handleReplaceColor}
+          />
 
           {/* Tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid #f0f0f0", marginBottom: "8px" }}>
@@ -990,7 +1110,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           {isPalette && !isEditing && colorPickerIndex !== null && !props.hidePrimaryActionButton && (
             <button
               onClick={handleSaveSelectedColor}
-              disabled={loading}
+              disabled={saveInProgress}
               style={{
                 padding: "4px 15px",
                 fontSize: "14px",
@@ -998,12 +1118,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 border: "1px solid #d9d9d9",
                 borderRadius: "6px",
                 background: "#fff",
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.5 : 1,
+                cursor: saveInProgress ? "not-allowed" : "pointer",
+                opacity: saveInProgress ? 0.5 : 1,
                 marginRight: "8px",
               }}
             >
-              Save selected color separately
+              {saveSelectedSaving ? "Saving..." : "Save selected color separately"}
             </button>
           )}
         </div>

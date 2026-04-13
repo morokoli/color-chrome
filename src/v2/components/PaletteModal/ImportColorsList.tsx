@@ -26,8 +26,34 @@ interface ImportColorsListProps {
 
 const ITEM_TYPE = "IMPORT_COLOR"
 
+type LibraryListRow =
+  | { kind: "color"; color: any; sortAt: number }
+  | { kind: "palette"; palette: any; sortAt: number }
+
 const isPaletteEntry = (item: any) =>
   item?.type === "palette" || (item?.colorIds && Array.isArray(item.colorIds))
+
+/** Resolved colors for a palette row (same resolution as LibraryPaletteCard). */
+const getResolvedPaletteColors = (item: any, colorById: Map<string, any>): any[] => {
+  if (!isPaletteEntry(item)) return []
+  const colorIds = item.colorIds || []
+  return colorIds
+    .map((c: any) => {
+      const id = c?._id ?? c
+      const fromMap = id ? colorById.get(String(id)) : null
+      return fromMap ?? (c && (c.hex || c._id) ? c : null)
+    })
+    .filter(Boolean)
+}
+
+const colorDedupeKey = (c: any): string => {
+  if (c?._id) return `id:${String(c._id)}`
+  const h = c?.hex ? String(c.hex).toLowerCase() : ""
+  return `hex:${h}`
+}
+
+const rowSortTime = (item: any): number =>
+  new Date(item?.createdAt || item?.created_at || 0).getTime()
 
 const SimpleColorBox = ({ colorData }: { colorData: any }) => {
   if (!colorData?.hex) return null
@@ -152,14 +178,7 @@ const LibraryPaletteCard = ({
   colorById: Map<string, any>
   onAddColor: (colorData: any) => void
 }) => {
-  const colorIds = paletteData.colorIds || []
-  const colors = colorIds
-    .map((c: any) => {
-      const id = c?._id ?? c
-      const fromMap = id ? colorById.get(String(id)) : null
-      return fromMap ?? (c && (c.hex || c._id) ? c : null)
-    })
-    .filter(Boolean)
+  const colors = getResolvedPaletteColors(paletteData, colorById)
   const hexList = colors.map((c: any) => getColorHex(c) || "#ccc")
 
   return (
@@ -326,6 +345,17 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
                 )
               }
               if (item.type === "palette" || item.colorIds) {
+                const resolved = getResolvedPaletteColors(item, colorById)
+                if (resolved.length === 1) {
+                  const c = resolved[0]
+                  return (
+                    (item.name && item.name.toLowerCase().includes(q)) ||
+                    (item.description && item.description.toLowerCase().includes(q)) ||
+                    (c.hex && String(c.hex).toLowerCase().includes(q)) ||
+                    (c.slash_naming && String(c.slash_naming).toLowerCase().includes(q)) ||
+                    (c.comments && String(c.comments).toLowerCase().includes(q))
+                  )
+                }
                 return (
                   (item.name && item.name.toLowerCase().includes(q)) ||
                   (item.description && item.description.toLowerCase().includes(q))
@@ -334,21 +364,39 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
               return false
             })
 
-      const typeFiltered = searchFiltered.filter((item: any) => {
-        if (isPaletteEntry(item)) return showPalettes
-        return showColors
-      })
+      const rows: LibraryListRow[] = []
+      const seenColorKeys = new Set<string>()
 
-      return typeFiltered.sort((a: any, b: any) => {
-        const dateA = new Date(a.createdAt || a.created_at || 0).getTime()
-        const dateB = new Date(b.createdAt || b.created_at || 0).getTime()
-        return dateB - dateA
-      })
+      const pushColorRow = (c: any, sortAt: number) => {
+        if (!c?.hex) return
+        const k = colorDedupeKey(c)
+        if (seenColorKeys.has(k)) return
+        seenColorKeys.add(k)
+        rows.push({ kind: "color", color: c, sortAt })
+      }
+
+      for (const item of searchFiltered) {
+        if (isPaletteEntry(item)) {
+          const resolved = getResolvedPaletteColors(item, colorById)
+          const n = resolved.length
+          if (showPalettes && n >= 2) {
+            rows.push({ kind: "palette", palette: item, sortAt: rowSortTime(item) })
+          }
+          if (showColors && n === 1) {
+            const c = resolved[0]
+            pushColorRow(c, rowSortTime(c) || rowSortTime(item))
+          }
+        } else if (item.hex && item.type !== "palette" && showColors) {
+          pushColorRow(item, rowSortTime(item))
+        }
+      }
+
+      return rows.sort((a, b) => b.sortAt - a.sortAt)
     } catch (err) {
       console.error("Error processing library items:", err)
       return []
     }
-  }, [rawAll, searchQuery, showColors, showPalettes])
+  }, [rawAll, searchQuery, showColors, showPalettes, colorById])
 
   const libraryHeader = (
     <div
@@ -515,22 +563,26 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md flex-shrink-0"
       />
       <div className="flex-1 overflow-y-auto pr-2 flex flex-col items-center min-h-0">
-        {currentItems.map((item: any, idx: number) => {
-          const isPalette = isPaletteEntry(item)
-          if (isPalette) {
+        {currentItems.map((row: LibraryListRow, idx: number) => {
+          if (row.kind === "palette") {
+            const p = row.palette
             return (
-              <div key={`palette-${item._id}-${idx}`} className="w-full flex justify-center">
+              <div key={`palette-${p._id}-${idx}`} className="w-full flex justify-center">
                 <LibraryPaletteCard
-                  paletteData={item}
+                  paletteData={p}
                   colorById={colorById}
                   onAddColor={(colorData) => onAddToPalette(colorData, null)}
                 />
               </div>
             )
           }
+          const c = row.color
           return (
-            <div key={`color-${item._id}-${idx}`} className="w-full flex justify-center">
-              <DraggableImportItem colorData={item} />
+            <div
+              key={`color-${c._id ?? c.hex ?? idx}-${idx}`}
+              className="w-full flex justify-center"
+            >
+              <DraggableImportItem colorData={c} />
             </div>
           )
         })}

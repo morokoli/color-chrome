@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { X, Plus } from "lucide-react"
+import { FolderDropdownRow } from "@/v2/components/common/FolderDropdownRow"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
 import { MultiSelectDropdown } from "@/v2/components/FigmaManager/MultiSelectDropdown"
 import { useGetFolders } from "@/v2/api/folders.api"
@@ -9,10 +10,14 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { useToast } from "@/v2/hooks/useToast"
 import { Slider } from "@/components/ui/slider"
+import { useFolderTreeExpanded } from "../../hooks/useFolderTreeExpanded"
 import {
   buildParentIdByChildId,
-  getFolderLabelWithParent,
   flattenFoldersHierarchyOrder,
+  flattenVisibleFolderIdsInOrder,
+  folderHasChildrenInList,
+  getFolderDepthById,
+  getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
 
 interface ColorPropertiesFormProps {
@@ -37,6 +42,14 @@ const ColorPropertiesForm = ({
     [foldersData?.folders]
   )
   const parentByChildId = useMemo(() => buildParentIdByChildId(foldersList), [foldersList])
+  const allFolderIds = useMemo(() => foldersList.map((f) => f._id), [foldersList])
+  const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
+  const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
+    useFolderTreeExpanded(allFolderIds)
+  const visibleFolderIds = useMemo(
+    () => flattenVisibleFolderIdsInOrder(foldersList, expandedIds),
+    [foldersList, expandedIds],
+  )
   const queryClient = useQueryClient()
   const toast = useToast()
   const [tagsInput, setTagsInput] = useState("")
@@ -199,12 +212,122 @@ const ColorPropertiesForm = ({
           </label>
           <MultiSelectDropdown<string>
             selected={selectedFolderIds}
-            items={foldersList.map(f => f._id)}
+            items={visibleFolderIds}
+            itemsWhenSearching={foldersList.map((f) => f._id)}
+            renderHeader={() => {
+              const allSelected =
+                allFolderIds.length > 0 &&
+                selectedFolderIds.length === allFolderIds.length &&
+                allFolderIds.every((id) => selectedFolderIds.includes(id))
+              const someSelected = selectedFolderIds.length > 0 && !allSelected
+              return (
+                <div className="flex items-center justify-between h-8 px-3">
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-5 h-5 shrink-0 mr-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200/70 rounded-sm focus:outline-none transition-colors"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      allExpanded ? collapseAll() : expandAll()
+                    }}
+                    aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`transition-transform duration-150 ${allExpanded ? "rotate-90" : ""}`}
+                      aria-hidden
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </button>
+                  <div className="shrink-0">
+                    <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) (el as HTMLInputElement).indeterminate = someSelected
+                        }}
+                        onChange={() => onFolderChange(allSelected ? [] : [...allFolderIds])}
+                        onClick={(e) => e.stopPropagation()}
+                        className="cursor-pointer"
+                        style={{
+                          appearance: "none",
+                          WebkitAppearance: "none",
+                          MozAppearance: "none",
+                          width: "16px",
+                          height: "16px",
+                          minWidth: "16px",
+                          minHeight: "16px",
+                          border: allSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                          borderRadius: "3px",
+                          backgroundColor: allSelected ? "#000000" : "#ffffff",
+                          transition: "all 0.15s ease-in-out",
+                          outline: "none",
+                          position: "relative",
+                          flexShrink: 0,
+                          margin: 0,
+                          padding: 0,
+                          boxSizing: "border-box",
+                          imageRendering: "crisp-edges",
+                          WebkitFontSmoothing: "antialiased",
+                          MozOsxFontSmoothing: "grayscale",
+                        }}
+                        aria-label="Select all folders"
+                      />
+                      {allSelected && (
+                        <svg
+                          className="absolute pointer-events-none"
+                          style={{
+                            width: "10px",
+                            height: "10px",
+                            left: "50%",
+                            top: "50%",
+                            transform: "translate(-50%, -50%)",
+                            strokeWidth: "2.5",
+                            imageRendering: "crisp-edges",
+                            shapeRendering: "geometricPrecision",
+                          }}
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M8 2.5L4 6.5L2.5 5"
+                            stroke="white"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
             keyExtractor={(folderId) => folderId}
             renderItem={(folderId) => {
               const folder = foldersList.find(f => f._id === folderId)
               return folder
-                ? getFolderLabelWithParent(folder, foldersList, parentByChildId)
+                ? (
+                  <FolderDropdownRow
+                    depth={getFolderDepthById(folderId, parentByChildId)}
+                    name={folder.name}
+                    title={getFolderPathLabelById(folderId, foldersList, parentByChildId) || folder.name}
+                    hasChildren={folderHasChildrenInList(folder, existingIdSet)}
+                    expanded={expandedIds.has(folder._id)}
+                    onToggleExpand={() => toggleExpanded(folder._id)}
+                  />
+                )
                 : folderId
             }}
             renderSelected={(selected) => {
@@ -212,10 +335,16 @@ const ColorPropertiesForm = ({
               if (selected.length === 1) {
                 const folder = foldersList.find(f => f._id === selected[0])
                 return folder
-                  ? getFolderLabelWithParent(folder, foldersList, parentByChildId)
+                  ? (getFolderPathLabelById(selected[0], foldersList, parentByChildId) || folder.name)
                   : selected[0]
               }
               return `${selected.length} folders selected`
+            }}
+            getSearchText={(folderId) => {
+              const folder = foldersList.find(f => f._id === folderId)
+              return folder
+                ? (getFolderPathLabelById(folderId, foldersList, parentByChildId) || folder.name)
+                : String(folderId)
             }}
             onSelect={(folderIds) => onFolderChange(folderIds)}
             placeholder="Select folders"
@@ -223,6 +352,8 @@ const ColorPropertiesForm = ({
             isSearchable
             checkboxAtEnd={true}
             renderFooter={renderFolderFooter}
+            listMaxHeightClass="max-h-[160px]"
+            menuMaxHeightClass="max-h-[300px]"
           />
         </div>
       )}

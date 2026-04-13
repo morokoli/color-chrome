@@ -51,6 +51,52 @@ function getItemKey(c: any, groupKey?: string): string {
   return key ? `${c._id}_${key}` : c._id
 }
 
+function getPaletteItemKey(palette: any, groupKey: string): string {
+  return `palette_${palette._id}_${groupKey}`
+}
+
+const EMPTY_PALETTE_META = {
+  paletteName: "",
+  paletteUrl: "",
+  paletteRanking: "",
+  paletteTags: "",
+}
+
+function buildExportRow(
+  c: any,
+  folderName: string,
+  paletteMeta: typeof EMPTY_PALETTE_META
+) {
+  let rgbVal = ""
+  if (typeof c.rgb === "string") rgbVal = c.rgb
+  else if (c.rgb && typeof c.rgb === "object" && "r" in c.rgb)
+    rgbVal = `rgb(${c.rgb.r}, ${c.rgb.g}, ${c.rgb.b})`
+  else rgbVal = colors.hexToRGB(c.hex)
+  let hslVal = ""
+  if (typeof c.hsl === "string") hslVal = c.hsl
+  else if (c.hsl && typeof c.hsl === "object" && "h" in c.hsl)
+    hslVal = `hsl(${c.hsl.h}, ${c.hsl.s}%, ${c.hsl.l}%)`
+  else hslVal = colors.hexToHSL(c.hex)
+  const tags = Array.isArray(c.tags) ? c.tags : []
+  return {
+    timestamp: Date.now(),
+    url: c.url || "Export to Sheet",
+    hex: c.hex,
+    hsl: hslVal,
+    rgb: rgbVal,
+    ranking: (c.ranking ?? 0).toString(),
+    comments: c.comments || "",
+    slash_naming: c.slash_naming || "",
+    tags,
+    additionalColumns: c.additionalColumns || [],
+    folder: folderName,
+    paletteName: paletteMeta.paletteName,
+    paletteUrl: paletteMeta.paletteUrl,
+    paletteRanking: paletteMeta.paletteRanking,
+    paletteTags: paletteMeta.paletteTags,
+  }
+}
+
 function getContrastColor(hex: string): "white" | "black" {
   const h = (hex || "#808080").replace("#", "")
   if (h.length !== 6) return "white"
@@ -59,6 +105,12 @@ function getContrastColor(hex: string): "white" | "black" {
   const b = parseInt(h.slice(4, 6), 16)
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
   return luminance < 0.5 ? "white" : "black"
+}
+
+function folderNameForExport(groupKey: string, sheetName?: string) {
+  const fromKey = groupKey.replace(/^(folder|group)_\d+_/, "")
+  if (sheetName?.startsWith("Folder: ")) return sheetName.slice(8)
+  return fromKey || sheetName || ""
 }
 
 export interface ExportToSheetProps {
@@ -156,6 +208,19 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
     return list
   }, [groupedColors])
 
+  /** Palettes listed per folder group — selectable; export expands to one sheet row per swatch color. */
+  const filteredPalettes = useMemo(() => {
+    const list: { palette: any; groupKey: string }[] = []
+    Object.entries(groupedColors).forEach(([groupKey, items]) => {
+      items.forEach((c: any) => {
+        if (c.type === "palette" && c._id) list.push({ palette: c, groupKey })
+      })
+    })
+    return list
+  }, [groupedColors])
+
+  const totalSelectable = filteredColors.length + filteredPalettes.length
+
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -166,18 +231,26 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
   }, [])
 
   const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === filteredColors.length) {
+    const allColorKeys = filteredColors.map((c) => getItemKey(c))
+    const allPaletteKeys = filteredPalettes.map(({ palette, groupKey }) =>
+      getPaletteItemKey(palette, groupKey)
+    )
+    const allKeys = [...allColorKeys, ...allPaletteKeys]
+    if (allKeys.length > 0 && selectedIds.size === allKeys.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(filteredColors.map((c) => getItemKey(c))))
+      setSelectedIds(new Set(allKeys))
     }
-  }, [filteredColors, selectedIds.size])
+  }, [filteredColors, filteredPalettes, selectedIds.size])
 
   const handleSheetConfirm = useCallback(
     async (sheets: { spreadsheetId: string; sheetId: number; sheetName: string }[]) => {
       const selectedColors = filteredColors.filter((c) => selectedIds.has(getItemKey(c)))
-      if (selectedColors.length === 0) {
-        toast.display("error", "No colors selected")
+      const selectedPalettes = filteredPalettes.filter(({ palette, groupKey }) =>
+        selectedIds.has(getPaletteItemKey(palette, groupKey))
+      )
+      if (selectedColors.length === 0 && selectedPalettes.length === 0) {
+        toast.display("error", "No colors or palettes selected")
         return
       }
       if (sheets.length === 0) {
@@ -186,34 +259,48 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
       }
       setExporting(true)
       try {
-        const rows = selectedColors.map((c: any) => {
-          let rgbVal = ""
-          if (typeof c.rgb === "string") rgbVal = c.rgb
-          else if (c.rgb && typeof c.rgb === "object" && "r" in c.rgb)
-            rgbVal = `rgb(${c.rgb.r}, ${c.rgb.g}, ${c.rgb.b})`
-          else rgbVal = colors.hexToRGB(c.hex)
-          let hslVal = ""
-          if (typeof c.hsl === "string") hslVal = c.hsl
-          else if (c.hsl && typeof c.hsl === "object" && "h" in c.hsl)
-            hslVal = `hsl(${c.hsl.h}, ${c.hsl.s}%, ${c.hsl.l}%)`
-          else hslVal = colors.hexToHSL(c.hex)
-          const folderName =
-            c._folderGroupKey ||
-            (c.sheetName?.startsWith("Folder: ") ? c.sheetName.slice(8) : (c.sheetName || ""))
-          return {
-            timestamp: Date.now(),
-            url: c.url || "Export to Sheet",
-            hex: c.hex,
-            hsl: hslVal,
-            rgb: rgbVal,
-            ranking: (c.ranking ?? 0).toString(),
-            comments: c.comments || "",
-            slash_naming: c.slash_naming || "",
-            tags: Array.isArray(c.tags) ? c.tags : [],
-            additionalColumns: c.additionalColumns || [],
-            folder: folderName,
+        const rows: ReturnType<typeof buildExportRow>[] = []
+
+        for (const c of selectedColors) {
+          const folderName = folderNameForExport(
+            typeof c._folderGroupKey === "string" ? c._folderGroupKey : "",
+            c.sheetName
+          )
+          rows.push(buildExportRow(c, folderName, EMPTY_PALETTE_META))
+        }
+
+        for (const { palette, groupKey } of selectedPalettes) {
+          const folderName = folderNameForExport(groupKey, palette.sheetName)
+          const paletteMeta = {
+            paletteName: typeof palette.name === "string" ? palette.name : String(palette.name ?? ""),
+            paletteUrl: palette.url != null && String(palette.url).trim() !== "" ? String(palette.url).trim() : "",
+            paletteRanking:
+              palette.ranking != null && String(palette.ranking).trim() !== ""
+                ? String(palette.ranking).trim()
+                : "",
+            paletteTags: Array.isArray(palette.tags)
+              ? palette.tags.join(", ")
+              : palette.tags != null
+                ? String(palette.tags)
+                : "",
           }
-        })
+          const swatches = Array.isArray(palette.colorIds) ? palette.colorIds : []
+          if (swatches.length === 0) {
+            toast.display("error", `Palette "${paletteMeta.paletteName || "Untitled"}" has no colors to export`)
+            setExporting(false)
+            return
+          }
+          for (const cc of swatches) {
+            if (!cc?.hex) continue
+            rows.push(buildExportRow(cc, folderName, paletteMeta))
+          }
+        }
+
+        if (rows.length === 0) {
+          toast.display("error", "Nothing to export — selected items have no color rows")
+          setExporting(false)
+          return
+        }
         const authHeader = { headers: { Authorization: `Bearer ${state.user?.jwtToken}` } }
         for (const { spreadsheetId, sheetId, sheetName } of sheets) {
           await axiosInstance.post(
@@ -225,8 +312,8 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
         toast.display(
           "success",
           sheets.length > 1
-            ? `Exported ${rows.length} color(s) to ${sheets.length} sheets`
-            : `Exported ${rows.length} color(s) to sheet`
+            ? `Exported ${rows.length} row(s) to ${sheets.length} sheets`
+            : `Exported ${rows.length} row(s) to sheet`
         )
         setSheetModalOpen(false)
         setSelectedIds(new Set())
@@ -236,12 +323,12 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
         setExporting(false)
       }
     },
-    [filteredColors, selectedIds, state.user?.jwtToken, toast]
+    [filteredColors, filteredPalettes, selectedIds, state.user?.jwtToken, toast]
   )
 
   const handleExportClick = () => {
     if (selectedIds.size === 0) {
-      toast.display("error", "Select at least one color to export")
+      toast.display("error", "Select at least one color or palette to export")
       return
     }
     setSheetModalOpen(true)
@@ -258,7 +345,10 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
 
   const handleSelectAllInFolder = useCallback((items: any[], groupKey: string) => {
     const colorItems = items.filter((c: any) => c.type !== "palette" && c._id)
-    const itemKeys = colorItems.map((c: any) => getItemKey(c, groupKey))
+    const paletteItems = items.filter((c: any) => c.type === "palette" && c._id)
+    const colorKeys = colorItems.map((c: any) => getItemKey(c, groupKey))
+    const paletteKeys = paletteItems.map((p: any) => getPaletteItemKey(p, groupKey))
+    const itemKeys = [...colorKeys, ...paletteKeys]
     const allSelected = itemKeys.length > 0 && itemKeys.every((key) => selectedIds.has(key))
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -437,9 +527,9 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                           aria-label={allExpanded ? "Collapse all" : "Expand all"}
                         >
                           {allExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-gray-600" />
+                            <ChevronUp className="w-4 h-4 text-gray-600" strokeWidth={2.25} />
                           ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                            <ChevronDown className="w-4 h-4 text-gray-600" strokeWidth={2.25} />
                           )}
                         </button>
                       </Tooltip.Trigger>
@@ -457,8 +547,15 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
               const isCollapsed = collapsedGroups.has(groupKey)
               const displayKey = groupKey.replace(/^(folder|group)_\d+_/, "")
               const colorItems = items.filter((c: any) => c.type !== "palette" && c._id)
-              const selectedCount = colorItems.filter((c: any) => selectedIds.has(getItemKey(c, groupKey))).length
-              const allSelectedInFolder = colorItems.length > 0 && colorItems.every((c: any) => selectedIds.has(getItemKey(c, groupKey)))
+              const paletteItems = items.filter((c: any) => c.type === "palette" && c._id)
+              const folderSelectableKeys = [
+                ...colorItems.map((c: any) => getItemKey(c, groupKey)),
+                ...paletteItems.map((p: any) => getPaletteItemKey(p, groupKey)),
+              ]
+              const selectedCount = folderSelectableKeys.filter((key) => selectedIds.has(key)).length
+              const allSelectedInFolder =
+                folderSelectableKeys.length > 0 &&
+                folderSelectableKeys.every((key) => selectedIds.has(key))
               return (
                 <div key={groupKey} className="border border-gray-200 rounded">
                   {/* Folder Header – same as Bulk Editor: checkbox, name + count, chevron */}
@@ -490,6 +587,8 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                     >
                       <ChevronDown
                         size={14}
+                        strokeWidth={2.25}
+                        className="text-gray-600"
                         style={{
                           transformOrigin: "center",
                           transform: `rotate(${isCollapsed ? -90 : 0}deg)`,
@@ -503,15 +602,30 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                       <div className="flex flex-wrap gap-1.5">
                         <Tooltip.Provider>
                           {items.map((c: any) => {
-                            if (c.type === "palette" && c.colorIds?.length) {
+                            if (c.type === "palette" && c._id) {
+                              const paletteKey = getPaletteItemKey(c, groupKey)
+                              const paletteSelected = selectedIds.has(paletteKey)
+                              const firstHex = c.colorIds?.[0]?.hex || "#ccc"
+                              const paletteContrast = getContrastColor(firstHex)
                               return (
-                                <Tooltip.Root key={c._id}>
+                                <Tooltip.Root key={paletteKey}>
                                   <Tooltip.Trigger asChild>
                                     <div
-                                      className="relative w-[32px] h-[32px] border-2 border-gray-300 rounded overflow-hidden flex flex-row cursor-default"
-                                      title={c.name || "Palette"}
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => toggleSelection(paletteKey)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault()
+                                          toggleSelection(paletteKey)
+                                        }
+                                      }}
+                                      className={`relative w-[32px] h-[32px] border-2 rounded overflow-hidden flex flex-row cursor-pointer transition-all ${
+                                        paletteSelected ? "border-gray-900 ring-1 ring-gray-900" : "border-gray-300 hover:border-gray-500"
+                                      }`}
+                                      title={c.name || "Palette — click to select for export"}
                                     >
-                                      {c.colorIds.map((cc: any, i: number) => (
+                                      {(c.colorIds || []).map((cc: any, i: number) => (
                                         <div
                                           key={cc._id || i}
                                           style={{
@@ -521,11 +635,20 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                                           }}
                                         />
                                       ))}
+                                      {paletteSelected && (
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/15">
+                                          <Check
+                                            size={18}
+                                            strokeWidth={3}
+                                            className={`flex-shrink-0 drop-shadow ${paletteContrast === "white" ? "text-white" : "text-black"}`}
+                                          />
+                                        </div>
+                                      )}
                                     </div>
                                   </Tooltip.Trigger>
                                   <Tooltip.Portal>
-                                    <Tooltip.Content className="bg-gray-900 text-white text-xs px-2 py-1 rounded">
-                                      {c.name || "Palette"}
+                                    <Tooltip.Content className="bg-gray-900 text-white text-xs px-2 py-1 rounded max-w-[220px]">
+                                      {c.name || "Palette"} — exports one row per color (palette name, URL, ranking, tags on each row)
                                     </Tooltip.Content>
                                   </Tooltip.Portal>
                                 </Tooltip.Root>
@@ -580,13 +703,13 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
               type="button"
               onClick={toggleSelectAll}
               className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                filteredColors.length > 0 && selectedIds.size === filteredColors.length
+                totalSelectable > 0 && selectedIds.size === totalSelectable
                   ? "bg-gray-900 border-gray-900"
                   : "border-gray-300 hover:border-gray-400"
               }`}
-              title={selectedIds.size === filteredColors.length ? "Deselect all" : "Select all"}
+              title={selectedIds.size === totalSelectable && totalSelectable > 0 ? "Deselect all" : "Select all"}
             >
-              {filteredColors.length > 0 && selectedIds.size === filteredColors.length && (
+              {totalSelectable > 0 && selectedIds.size === totalSelectable && (
                 <Check size={12} className="text-white" />
               )}
             </button>
@@ -598,7 +721,7 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
               Select all
             </button>
             <span className="text-[12px] text-gray-500">
-              {selectedIds.size} of {filteredColors.length} selected
+              {selectedIds.size} of {totalSelectable} selected
             </span>
           </div>
           <button

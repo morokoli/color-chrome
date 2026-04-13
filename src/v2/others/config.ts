@@ -1,4 +1,10 @@
 export const config = {
+  webApp: {
+    baseURL: (import.meta.env.VITE_WEB_APP_URL || "https://app.colorswithyou.com").replace(
+      /\/$/,
+      ""
+    ),
+  },
   spreadsheet: {
     baseURL: import.meta.env.VITE_SPREADSHEET_URL || "https://docs.google.com/spreadsheets/d/",
   },

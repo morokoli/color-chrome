@@ -120,7 +120,7 @@ const PickPanel: FC<Props> = ({
           </button>
           {menuOpen && (
             <div
-              className={`absolute left-full top-[2px] bg-white border border-gray-200 rounded shadow-lg z-50 ${pickMode === 'page' ? "min-w-[180px]" : "min-w-[85px]"}`}
+              className={`absolute left-full top-[2px] bg-white border border-gray-200 rounded shadow-lg z-50 ${pickMode === 'page' ? "min-w-[130px]" : "min-w-[130px]"}`}
               role="menu"
             >
               <button

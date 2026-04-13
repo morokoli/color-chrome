@@ -351,7 +351,9 @@ const App = () => {
     syncColorPickerStateForBackground()
     const hex = await openEyeDropper()
     if (!hex) return
+    setLastPickSource("eyedropper")
     dispatch({ type: "SET_COLOR", payload: hex })
+    dispatch({ type: "ADD_COLOR_HISTORY", payload: hex })
     copyToClipboard(hex, "HEX")
     setTab("PICK_PANEL")
     chrome.storage.local.set({ openTab: "PICK_PANEL", eyedropperPick: true }, () => {

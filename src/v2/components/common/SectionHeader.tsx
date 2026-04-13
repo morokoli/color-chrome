@@ -72,7 +72,7 @@ const SectionHeader: FC<SectionHeaderProps> = ({
           <span
             className={`flex-shrink-0 transition-opacity ${showChevron ? "opacity-100" : "opacity-0"}`}
           >
-            <ChevronDown className="w-4 h-4 text-gray-500" />
+            <ChevronDown className="w-4 h-4 text-gray-600" strokeWidth={2.25} />
           </span>
         </div>
         {dropdownOpen && (

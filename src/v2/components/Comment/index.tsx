@@ -5,19 +5,66 @@ import { colors } from '@/v2/helpers/colors'
 import { config } from '@/v2/others/config'
 import { axiosInstance } from '@/v2/hooks/useAPI'
 import { useGetFolders } from '@/v2/api/folders.api'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Copy, Check, X, Plus } from 'lucide-react'
 import SectionHeader from '../common/SectionHeader'
+import { FolderDropdownRow } from '@/v2/components/common/FolderDropdownRow'
 import { Slider } from '@/components/ui/slider'
 import { HexColorPicker } from 'react-colorful'
-import { Dropdown } from '../FigmaManager/Dropdown'
+import { MultiSelectDropdown } from '../FigmaManager/MultiSelectDropdown'
+import { useFolderTreeExpanded } from '../../hooks/useFolderTreeExpanded'
 import {
   buildParentIdByChildId,
-  getFolderLabelWithParent,
   flattenFoldersHierarchyOrder,
+  flattenVisibleFolderIdsInOrder,
+  folderHasChildrenInList,
+  getFolderDepthById,
+  getFolderPathLabelById,
 } from '@/v2/utils/folderDisplayName'
 
 const MAX_LOCAL_COLORS = 30
+
+/** Same rules as BulkEditor batch name + Generator: max 5 parts, `/` separators, optional trailing `/` while typing. */
+function normalizeSlashNamingInput(raw: string): string {
+  const val = raw
+  const parts = val.split("/").map((p) => p.trim())
+  const nonEmpty = parts.filter(Boolean)
+  const limited = nonEmpty.slice(0, 5)
+  let next = limited.join("/")
+  if (val.trim().endsWith("/") && limited.length < 5) next += "/"
+  return next
+}
+
+function normalizeTagsArray(tags: unknown): string[] {
+  if (Array.isArray(tags)) return tags.map((t) => String(t).trim()).filter(Boolean)
+  if (typeof tags === "string" && tags) return tags.split(",").map((t) => t.trim()).filter(Boolean)
+  return []
+}
+
+function tagsEqualAcross(a: unknown, b: unknown): boolean {
+  const sa = [...normalizeTagsArray(a)].sort().join("\0")
+  const sb = [...normalizeTagsArray(b)].sort().join("\0")
+  return sa === sb
+}
+
+/** Neutral hex for color picker when multiple colors differ (picker still needs a valid color). */
+const MIXED_HEX_FALLBACK = "#bdbdbd"
+
+function normalizeUrlForCompare(u: unknown): string {
+  const s = u == null || u === "" ? "Manually created" : String(u)
+  return s === "Manually Added" ? "Manually created" : s
+}
+
+function normalizeAdditionalColumnsForCompare(cols: unknown): string {
+  if (!Array.isArray(cols)) return "[]"
+  const normalized = cols
+    .map((c: any) => ({
+      name: String(c?.name ?? "").trim(),
+      value: String(c?.value ?? "").trim(),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return JSON.stringify(normalized)
+}
 
 /** Returns "black" or "white" for contrast on the given hex background */
 function getContrastColor(hex: string): "black" | "white" {
@@ -51,29 +98,126 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [updateLoading, setUpdateLoading] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
   const [copiedType, setCopiedType] = useState<string>('')
-  const [slashParts, setSlashParts] = useState<string[]>([])
-  const [slashInput, setSlashInput] = useState<string>('')
+  const [slashNaming, setSlashNaming] = useState<string>("")
   const [tagsList, setTagsList] = useState<string[]>([])
   const [tagsInput, setTagsInput] = useState<string>('')
   const [colorUrl, setColorUrl] = useState<string>('')
   const [currentTabUrl, setCurrentTabUrl] = useState<string>('Manually created')
   const [comment, setComment] = useState<string>('')
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolderLoading, setIsCreatingFolderLoading] = useState(false)
+  /** When true (multi-select loaded with differing folder sets), skip folder API on save until user changes folder dropdown. */
+  const [skipFolderSyncUntilChange, setSkipFolderSyncUntilChange] = useState(false)
+  const [hexMixed, setHexMixed] = useState(false)
+  const [urlMixed, setUrlMixed] = useState(false)
+  const [slashMixed, setSlashMixed] = useState(false)
+  const [tagsMixed, setTagsMixed] = useState(false)
+  const [commentMixed, setCommentMixed] = useState(false)
+  const [rankingMixed, setRankingMixed] = useState(false)
   const justSavedRef = useRef(false)
   const lastLoadedDataRef = useRef<string>('')  // Track what data we last loaded
 
-  // For single color editing (first selected)
-  const selectedColorIndex = selectedColorIndices.length > 0 ? selectedColorIndices[0] : null
+  const selectedIndicesSorted = useMemo(
+    () => [...selectedColorIndices].sort((a, b) => a - b),
+    [selectedColorIndices],
+  )
+  // Primary index for backwards-compatible single-selection logic
+  const selectedColorIndex = selectedIndicesSorted.length > 0 ? selectedIndicesSorted[0] : null
 
   const { data: foldersData } = useGetFolders(true)
   const folders = useMemo(
     () => flattenFoldersHierarchyOrder(foldersData?.folders ?? []),
     [foldersData?.folders],
   )
+  const { data: allColorData } = useQuery({
+    queryKey: ["all-color-data"],
+    queryFn: async () => {
+      const response = await axiosInstance.get("/api/database-sheets/all-color-data", {
+        headers: {
+          Authorization: `Bearer ${state.user?.jwtToken}`,
+        },
+      })
+      return response.data?.data || response.data
+    },
+    enabled: !!state.user?.jwtToken,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  })
+
+  /** Latest DB color snapshot by color id (folders + non-foldered). */
+  const latestColorById = useMemo(() => {
+    const m = new Map<string, any>()
+    const folderColors = (foldersData?.folders || []).flatMap((f: any) => f?.colors || [])
+    folderColors.forEach((c: any) => {
+      if (c?._id != null) m.set(String(c._id), c)
+    })
+    const nonFoldered = Array.isArray(allColorData?.colorsWithoutFolders)
+      ? allColorData.colorsWithoutFolders
+      : []
+    nonFoldered.forEach((c: any) => {
+      if (c?._id != null) m.set(String(c._id), c)
+    })
+    return m
+  }, [foldersData?.folders, allColorData?.colorsWithoutFolders])
   const parentByChildId = useMemo(() => buildParentIdByChildId(folders), [folders])
+  const allFolderIds = useMemo(() => folders.map((f) => f._id), [folders])
+  const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
+  const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
+    useFolderTreeExpanded(allFolderIds)
+  const visibleFolderIds = useMemo(
+    () => flattenVisibleFolderIdsInOrder(folders, expandedIds),
+    [folders, expandedIds],
+  )
+
+  // Keep History/Editor rows aligned with latest DB values when color has a stable id.
+  useEffect(() => {
+    if (!latestColorById.size || !Array.isArray(parsedData) || parsedData.length === 0) return
+    parsedData.forEach((p: any) => {
+      const colorId = p?._id ?? p?.id
+      if (colorId == null) return
+      const latest = latestColorById.get(String(colorId))
+      if (!latest) return
+
+      const nextTags = normalizeTagsArray(latest.tags)
+      const prevTags = normalizeTagsArray(p?.tags)
+      const nextAdditional = latest.additionalColumns ?? latest.additional_columns ?? []
+      const prevAdditional = p?.additionalColumns ?? p?.additional_columns ?? []
+      const hasDiff =
+        String(latest.hex ?? "").toLowerCase() !== String(p?.hex ?? "").toLowerCase() ||
+        normalizeUrlForCompare(latest.url) !== normalizeUrlForCompare(p?.url) ||
+        String(latest.slash_naming ?? "") !== String(p?.slash_naming ?? "") ||
+        String(latest.comments ?? "") !== String(p?.comments ?? "") ||
+        String(latest.ranking ?? "") !== String(p?.ranking ?? "") ||
+        JSON.stringify(nextTags.sort()) !== JSON.stringify(prevTags.sort()) ||
+        normalizeAdditionalColumnsForCompare(nextAdditional) !==
+          normalizeAdditionalColumnsForCompare(prevAdditional)
+
+      if (!hasDiff) return
+
+      dispatch({
+        type: "UPDATE_PARSED_BY_COLOR_ID",
+        payload: {
+          colorId: String(colorId),
+          parsed: {
+            _id: latest._id ?? p?._id ?? p?.id,
+            id: latest._id ?? p?.id ?? p?._id,
+            hex: latest.hex ?? p?.hex,
+            url: latest.url ?? p?.url ?? "Manually created",
+            ranking: latest.ranking ?? p?.ranking ?? 0,
+            comments: latest.comments ?? p?.comments ?? "",
+            slash_naming: latest.slash_naming ?? p?.slash_naming ?? "",
+            tags: nextTags,
+            additionalColumns: nextAdditional,
+            rgb: latest.rgb ?? p?.rgb,
+            hsl: latest.hsl ?? p?.hsl,
+          },
+        },
+      })
+    })
+  }, [latestColorById, parsedData, dispatch])
 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
@@ -142,39 +286,31 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     )
   }, [isCreatingFolder, newFolderName, isCreatingFolderLoading])
 
-  // When user selects a color, show its folder if parsedData has color id (from createdColor when picked)
-  // Fallback: when parsedData has no _id (e.g. padded slot), match by hex in folder.colors and store colorId for Update
-  useEffect(() => {
-    let folderId: string | null = null
-    if (selectedColorIndex !== null && folders.length > 0) {
-      const data = parsedData[selectedColorIndex] as any
+  const collectFolderIdsForIndex = useCallback(
+    (idx: number): string[] => {
+      const data = parsedData[idx] as any
       const colorId = data?._id ?? data?.id
       const colorIdStr = colorId != null ? String(colorId) : null
-      const hex = colorHistory[selectedColorIndex]
+      const hex = colorHistory[idx]
       const hexNorm = hex ? String(hex).toLowerCase() : null
-
+      const foundIds: string[] = []
       if (colorIdStr) {
-        const folder = folders.find((f) =>
-          (f.colorIds ?? []).some((cid) => String(cid) === colorIdStr)
-        )
-        folderId = folder ? folder._id : null
+        for (const f of folders) {
+          if ((f.colorIds ?? []).some((cid) => String(cid) === colorIdStr)) {
+            foundIds.push(f._id)
+          }
+        }
       } else if (hexNorm && Array.isArray((folders[0] as any)?.colors)) {
-        const folder = folders.find((f) =>
-          (f.colors ?? []).some((c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm)
-        )
-        if (folder) {
-          folderId = folder._id
-          const matchedColor = (folder.colors ?? []).find((c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm)
-          if (matchedColor?._id && !(data?._id ?? data?.id)) {
-            dispatch({ type: "UPDATE_PARSED_AT", payload: { index: selectedColorIndex, parsed: { _id: matchedColor._id } } })
+        for (const f of folders) {
+          if ((f.colors ?? []).some((c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm)) {
+            foundIds.push(f._id)
           }
         }
       }
-      setSelectedFolderId(folderId)
-    } else {
-      setSelectedFolderId(null)
-    }
-  }, [selectedColorIndex, parsedData, folders, colorHistory, dispatch])
+      return foundIds
+    },
+    [parsedData, folders, colorHistory],
+  )
 
   // Fetch current tab URL on mount
   useEffect(() => {
@@ -193,66 +329,187 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     })
   }, [])
 
-  // Load all fields when color is selected or when parsedData changes
+  // Load form + folders from selection; resolve missing ids; multi-select shows shared values only when all match
   useEffect(() => {
-    if (selectedColorIndex !== null && colorHistory[selectedColorIndex]) {
-      const currentColor = colorHistory[selectedColorIndex]
-      setEditingColor(currentColor)
-      setOriginalColor(currentColor)
-      setIsEditing(false)
+    if (selectedColorIndex === null || !colorHistory[selectedColorIndex]) return
+    const sorted = selectedIndicesSorted
 
-      // Skip loading if we just saved (to preserve user's entered values)
-      if (justSavedRef.current) {
-        justSavedRef.current = false
-        return
-      }
-
-      const data = parsedData[selectedColorIndex]
-      if (data) {
-        // Create a unique key for this data to detect changes (include name/tags so Bulk Editor updates are reflected)
-        const dataKey = `${selectedColorIndex}:${data.hex}:${data.slash_naming || ''}:${JSON.stringify((data as any).tags || [])}`
-
-        // Only reload if the data has actually changed
-        if (lastLoadedDataRef.current !== dataKey) {
-          lastLoadedDataRef.current = dataKey
-          setRanking(Number(data.ranking) || 0)
-          // Parse slash naming into parts array
-          const slashNameStr = data.slash_naming || ''
-          setSlashParts(slashNameStr ? slashNameStr.split('/').filter(Boolean).slice(0, 5) : [])
-          setSlashInput('')
-          // Parse tags into list array
-          const tagsData = (data as any).tags
-          if (Array.isArray(tagsData)) {
-            setTagsList(tagsData)
-          } else if (typeof tagsData === 'string' && tagsData) {
-            setTagsList(tagsData.split(',').map((t: string) => t.trim()).filter(Boolean))
-          } else {
-            setTagsList([])
+    sorted.forEach((idx) => {
+      const data = parsedData[idx] as any
+      const hexNorm = colorHistory[idx] ? String(colorHistory[idx]).toLowerCase() : null
+      if ((data?._id ?? data?.id) == null && hexNorm && Array.isArray((folders[0] as any)?.colors)) {
+        let dispatched = false
+        for (const f of folders) {
+          if ((f.colors ?? []).some((c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm)) {
+            const matchedColor = (f.colors ?? []).find(
+              (c: any) => String(c?.hex ?? '').toLowerCase() === hexNorm,
+            )
+            if (matchedColor?._id && !dispatched) {
+              dispatch({
+                type: "UPDATE_PARSED_AT",
+                payload: { index: idx, parsed: { _id: matchedColor._id } },
+              })
+              dispatched = true
+            }
+            break
           }
-          setTagsInput('')
-          setComment(data.comments || '')
-          setColorUrl((data as any).url || 'Manually created')
-        }
-      } else {
-        // Reset fields for new colors (not in parsedData)
-        if (lastLoadedDataRef.current !== `new:${selectedColorIndex}`) {
-          lastLoadedDataRef.current = `new:${selectedColorIndex}`
-          setRanking(0)
-          setSlashParts([])
-          setSlashInput('')
-          setTagsList([])
-          setTagsInput('')
-          setComment('')
-          setColorUrl(currentTabUrl)
         }
       }
+    })
+
+    if (justSavedRef.current) {
+      justSavedRef.current = false
+      return
     }
-  }, [selectedColorIndex, colorHistory, parsedData, currentTabUrl])
+
+    const dataKey =
+      `${sorted.join(",")}:` +
+      sorted
+        .map(
+          (i) =>
+            `${i}:${(parsedData[i] as any)?.hex ?? ""}:${(parsedData[i] as any)?.slash_naming ?? ""}:${JSON.stringify((parsedData[i] as any)?.tags ?? [])}`,
+        )
+        .join("|")
+
+    if (lastLoadedDataRef.current === dataKey) return
+    lastLoadedDataRef.current = dataKey
+
+    setIsEditing(false)
+    setSkipFolderSyncUntilChange(false)
+    setHexMixed(false)
+    setUrlMixed(false)
+    setSlashMixed(false)
+    setTagsMixed(false)
+    setCommentMixed(false)
+    setRankingMixed(false)
+
+    const primary = sorted[0]
+    setOriginalColor(colorHistory[primary])
+
+    if (sorted.length === 1 && !parsedData[primary]) {
+      setEditingColor(colorHistory[primary])
+      setHexMixed(false)
+      setRanking(0)
+      setRankingMixed(false)
+      setSlashNaming("")
+      setSlashMixed(false)
+      setTagsList([])
+      setTagsMixed(false)
+      setTagsInput("")
+      setComment("")
+      setCommentMixed(false)
+      setColorUrl(currentTabUrl)
+      setUrlMixed(false)
+      setSelectedFolderIds(collectFolderIdsForIndex(primary))
+      setSkipFolderSyncUntilChange(false)
+      return
+    }
+
+    if (sorted.some((i) => !parsedData[i])) {
+      setEditingColor(MIXED_HEX_FALLBACK)
+      setHexMixed(true)
+      setRanking(0)
+      setRankingMixed(true)
+      setSlashNaming("")
+      setSlashMixed(true)
+      setTagsList([])
+      setTagsInput("")
+      setTagsMixed(true)
+      setComment("")
+      setCommentMixed(true)
+      setColorUrl("")
+      setUrlMixed(true)
+      setSelectedFolderIds([])
+      setSkipFolderSyncUntilChange(true)
+      return
+    }
+
+    const datas = sorted.map((i) => parsedData[i] as any)
+
+    const hexNorms = sorted.map((i) => colors.expandHex(colorHistory[i] || "#ffffff").toLowerCase())
+    if (hexNorms.every((h) => h === hexNorms[0])) {
+      setEditingColor(colorHistory[primary])
+      setHexMixed(false)
+    } else {
+      setEditingColor(MIXED_HEX_FALLBACK)
+      setHexMixed(true)
+    }
+
+    const urls = datas.map((d) => normalizeUrlForCompare(d?.url))
+    if (urls.every((u) => u === urls[0])) {
+      setColorUrl(urls[0] === "Manually created" ? "Manually created" : String(datas[0]?.url ?? "Manually created"))
+      setUrlMixed(false)
+    } else {
+      setColorUrl("")
+      setUrlMixed(true)
+    }
+
+    const slashes = datas.map((d) => String(d?.slash_naming ?? "").trim())
+    if (slashes.every((s) => s === slashes[0])) {
+      setSlashNaming(slashes[0])
+      setSlashMixed(false)
+    } else {
+      setSlashNaming("")
+      setSlashMixed(true)
+    }
+
+    if (datas.every((d, j) => j === 0 || tagsEqualAcross(d.tags, datas[0].tags))) {
+      const t0 = normalizeTagsArray(datas[0].tags)
+      setTagsList(t0)
+      setTagsMixed(false)
+    } else {
+      setTagsList([])
+      setTagsMixed(true)
+    }
+    setTagsInput("")
+
+    const comments = datas.map((d) => String(d?.comments ?? "").trim())
+    if (comments.every((c) => c === comments[0])) {
+      setComment(comments[0])
+      setCommentMixed(false)
+    } else {
+      setComment("")
+      setCommentMixed(true)
+    }
+
+    const ranks = datas.map((d) => Number(d?.ranking) || 0)
+    if (ranks.every((r) => r === ranks[0])) {
+      setRanking(ranks[0])
+      setRankingMixed(false)
+    } else {
+      setRanking(0)
+      setRankingMixed(true)
+    }
+
+    const folderLists = sorted.map((idx) => collectFolderIdsForIndex(idx).slice().sort())
+    const sameFolders = folderLists.every((fl) => fl.join(",") === folderLists[0].join(","))
+    if (sameFolders) {
+      setSelectedFolderIds(folderLists[0] ?? [])
+      setSkipFolderSyncUntilChange(false)
+    } else {
+      setSelectedFolderIds([])
+      setSkipFolderSyncUntilChange(true)
+    }
+  }, [
+    selectedColorIndex,
+    selectedIndicesSorted,
+    colorHistory,
+    parsedData,
+    currentTabUrl,
+    folders,
+    dispatch,
+    collectFolderIdsForIndex,
+  ])
 
   // Track when user is editing the color
   const handleColorChange = (newColor: string) => {
+    setHexMixed(false)
     setEditingColor(newColor)
-    if (newColor.toLowerCase() !== originalColor.toLowerCase()) {
+    if (selectedIndicesSorted.length <= 1) {
+      if (newColor.toLowerCase() !== originalColor.toLowerCase()) {
+        setIsEditing(true)
+      }
+    } else {
       setIsEditing(true)
     }
   }
@@ -318,7 +575,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   }
 
   // Confirm editing - add as new color to local history and save to database
-  const handleConfirmNewColor = () => {
+  const handleConfirmNewColor = async () => {
     if (colorHistory.length >= MAX_LOCAL_COLORS) {
       dispatch({ type: "REMOVE_OLDEST_COLOR_HISTORY" })
     }
@@ -328,30 +585,46 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     // Save to database if logged in
     if (state.user?.jwtToken) {
       const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
-      axiosInstance.post(
-        config.api.endpoints.addColor,
-        {
-          spreadsheetId: null,
-          sheetName: null,
-          sheetId: null,
-          row: {
-            timestamp: new Date().valueOf(),
-            url: finalUrl,
-            hex: normalizedHex,
-            hsl: colors.hexToHSL(normalizedHex),
-            rgb: colors.hexToRGB(normalizedHex),
-            comments: comment,
-            ranking: String(ranking || 0),
-            slash_naming: slashParts.join('/'),
-            tags: tagsList,
-            additionalColumns: [],
+      const folderIdsForCreate =
+        selectedFolderIds.length > 0 ? [selectedFolderIds[0]] : []
+      const auth = { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      try {
+        const response = await axiosInstance.post(
+          config.api.endpoints.addColor,
+          {
+            spreadsheetId: null,
+            sheetName: null,
+            sheetId: null,
+            row: {
+              timestamp: new Date().valueOf(),
+              url: finalUrl,
+              hex: normalizedHex,
+              hsl: colors.hexToHSL(normalizedHex),
+              rgb: colors.hexToRGB(normalizedHex),
+              comments: comment,
+              ranking: String(ranking || 0),
+              slash_naming: slashNaming,
+              tags: tagsList,
+              additionalColumns: [],
+            },
+            folderIds: folderIdsForCreate,
           },
-          folderIds: selectedFolderId ? [selectedFolderId] : [],
-        },
-        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
-      ).then((response) => {
+          auth
+        )
         const apiResponse = response?.data?.data ?? response?.data
         const createdColor = apiResponse?.createdColor
+        const newColorId = createdColor?._id ?? createdColor?.id
+        if (newColorId && selectedFolderIds.length > 1) {
+          await Promise.all(
+            selectedFolderIds.slice(1).map((fid) =>
+              axiosInstance.post(
+                `${config.api.endpoints.copyColorToFolder}/${fid}/copy-color`,
+                { colorId: String(newColorId) },
+                auth
+              )
+            )
+          )
+        }
         if (createdColor) {
           dispatch({
             type: "ADD_COLOR_HISTORY",
@@ -362,10 +635,10 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
         }
         toast.display("success", "Color saved successfully")
         queryClient.invalidateQueries({ queryKey: ["folders"] })
-      }).catch(() => {
+      } catch {
         dispatch({ type: "ADD_COLOR_HISTORY", payload: normalizedHex })
         toast.display("error", "Color added locally but failed to save to database")
-      })
+      }
     } else {
       dispatch({ type: "ADD_COLOR_HISTORY", payload: editingColor })
       toast.display("success", "Color added to history")
@@ -386,78 +659,166 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       toast.display("error", "Select a color to update")
       return
     }
-    const data = parsedData[selectedColorIndex] as any
-    const colorId = data?._id ?? data?.id
-    if (!colorId) {
-      toast.display("error", "Select a saved color (with ID) to update it in the database")
-      return
+    const indices = selectedIndicesSorted
+    for (const idx of indices) {
+      const p = parsedData[idx] as any
+      const id = p?._id ?? p?.id
+      if (!id) {
+        toast.display(
+          "error",
+          indices.length > 1
+            ? "Every selected color must be saved to the database before bulk update"
+            : "Select a saved color (with ID) to update it in the database",
+        )
+        return
+      }
     }
+
     setUpdateLoading(true)
     try {
-      const normalizedHex = colors.expandHex(editingColor)
-      const slashNamingStr = slashParts.join('/')
-      const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
-      const row = {
-        url: finalUrl,
-        hex: normalizedHex,
-        rgb: colors.hexToRGB(normalizedHex),
-        hsl: colors.hexToHSL(normalizedHex),
-        slash_naming: slashNamingStr,
-        comments: comment,
-        ranking: Number(ranking) || 0,
-        tags: tagsList,
-        additionalColumns: data?.additionalColumns ?? [],
-        timestamp: Date.now(),
+      const authHeaders = {
+        Authorization: `Bearer ${state.user?.jwtToken ?? ""}`,
       }
-      const response = await axiosInstance.put(
-        config.api.endpoints.updateColor,
-        {
-          colorId,
-          sheetId: null,
-          isUpdateSheet: false,
-          row,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${state.user?.jwtToken}`,
+      let anyFolderChange = false
+      let lastRowHex = colors.expandHex(editingColor)
+
+      for (const idx of indices) {
+        const data = parsedData[idx] as any
+        const colorId = data?._id ?? data?.id
+        const rowHex = hexMixed
+          ? colors.expandHex(colorHistory[idx] || "#ffffff")
+          : colors.expandHex(editingColor)
+        const ru = (data as any)?.url
+        const finalUrl = urlMixed
+          ? !ru || ru === "Manually created" || ru === "Manually Added"
+            ? "Manually Added"
+            : String(ru)
+          : colorUrl === "Manually created"
+            ? "Manually Added"
+            : colorUrl || currentTabUrl
+        const row = {
+          url: finalUrl,
+          hex: rowHex,
+          rgb: colors.hexToRGB(rowHex),
+          hsl: colors.hexToHSL(rowHex),
+          slash_naming: slashMixed ? String(data.slash_naming ?? "") : slashNaming,
+          comments: commentMixed ? String(data.comments ?? "") : comment,
+          ranking: rankingMixed ? Number(data.ranking) || 0 : Number(ranking) || 0,
+          tags: tagsMixed ? normalizeTagsArray(data.tags) : tagsList,
+          additionalColumns: data?.additionalColumns ?? [],
+          timestamp: Date.now(),
+        }
+        lastRowHex = rowHex
+
+        const response = await axiosInstance.put(
+          config.api.endpoints.updateColor,
+          {
+            colorId,
+            sheetId: null,
+            isUpdateSheet: false,
+            row,
           },
-        }
-      )
-      const result = response?.data?.data ?? response?.data
-      const updatedColor = result?.color
+          { headers: authHeaders },
+        )
+        const result = response?.data?.data ?? response?.data
+        const updatedColor = result?.color
 
-      if (updatedColor) {
-        const parsed = {
-          _id: updatedColor._id,
-          id: updatedColor._id,
-          hex: updatedColor.hex,
-          url: updatedColor.url,
-          slash_naming: updatedColor.slash_naming,
-          comments: updatedColor.comments,
-          ranking: updatedColor.ranking,
-          tags: updatedColor.tags,
-          additionalColumns: updatedColor.additionalColumns ?? [],
+        if (updatedColor) {
+          const parsed = {
+            _id: updatedColor._id,
+            id: updatedColor._id,
+            hex: updatedColor.hex,
+            url: updatedColor.url,
+            slash_naming: updatedColor.slash_naming,
+            comments: updatedColor.comments,
+            ranking: updatedColor.ranking,
+            tags: updatedColor.tags,
+            additionalColumns: updatedColor.additionalColumns ?? [],
+          }
+          dispatch({
+            type: "UPDATE_COLOR_AT",
+            payload: { index: idx, hex: updatedColor.hex, parsed },
+          })
+        } else {
+          dispatch({
+            type: "UPDATE_COLOR_AT",
+            payload: {
+              index: idx,
+              hex: rowHex,
+              parsed: { ...data, ...row, _id: colorId },
+            },
+          })
         }
-        dispatch({ type: "UPDATE_COLOR_AT", payload: { index: selectedColorIndex, hex: updatedColor.hex, parsed } })
-      } else {
-        dispatch({ type: "UPDATE_COLOR_AT", payload: { index: selectedColorIndex, hex: normalizedHex, parsed: { ...data, ...row, _id: colorId } } })
+
+        if (state.user?.jwtToken && !skipFolderSyncUntilChange) {
+          const colorIdStr = String(colorId)
+          const currentFolderIds = folders
+            .filter((f) => (f.colorIds ?? []).some((cid) => String(cid) === colorIdStr))
+            .map((f) => f._id)
+          const desired = new Set(selectedFolderIds)
+          const current = new Set(currentFolderIds)
+          const toRemove = currentFolderIds.filter((id) => !desired.has(id))
+          const toAdd = selectedFolderIds.filter((id) => !current.has(id))
+          const stayingFolderIds = currentFolderIds.filter((id) => desired.has(id))
+          const folderAuth = { headers: authHeaders }
+
+          for (const fid of toRemove) {
+            await axiosInstance.delete(
+              `${config.api.endpoints.copyColorToFolder}/${fid}/remove-color`,
+              { data: { colorId: colorIdStr }, ...folderAuth },
+            )
+          }
+          if (toAdd.length > 0) {
+            if (stayingFolderIds.length > 0) {
+              await Promise.all(
+                toAdd.map((fid) =>
+                  axiosInstance.post(
+                    `${config.api.endpoints.copyColorToFolder}/${fid}/copy-color`,
+                    { colorId: colorIdStr },
+                    folderAuth,
+                  ),
+                ),
+              )
+            } else {
+              const [firstAdd, ...restAdd] = toAdd
+              await axiosInstance.post(
+                `${config.api.endpoints.copyColorToFolder}/${firstAdd}/add-color`,
+                { colorId: colorIdStr },
+                folderAuth,
+              )
+              if (restAdd.length > 0) {
+                await Promise.all(
+                  restAdd.map((fid) =>
+                    axiosInstance.post(
+                      `${config.api.endpoints.copyColorToFolder}/${fid}/copy-color`,
+                      { colorId: colorIdStr },
+                      folderAuth,
+                    ),
+                  ),
+                )
+              }
+            }
+          }
+          if (toRemove.length > 0 || toAdd.length > 0) anyFolderChange = true
+        }
       }
 
-      if (selectedFolderId) {
-        await axiosInstance.post(
-          `${config.api.endpoints.moveColorsToFolder}/${selectedFolderId}/move-colors`,
-          { colorIds: [colorId], isNotFoldered: false },
-          { headers: { Authorization: `Bearer ${state.user?.jwtToken}` } }
-        )
+      if (anyFolderChange) {
         await queryClient.invalidateQueries({ queryKey: ["folders"] })
       }
 
       justSavedRef.current = true
-      setOriginalColor(normalizedHex)
+      setOriginalColor(lastRowHex)
       setIsEditing(false)
-      toast.display("success", "Color updated successfully")
+      toast.display(
+        "success",
+        indices.length > 1 ? `Updated ${indices.length} colors` : "Color updated successfully",
+      )
     } catch (err: any) {
-      toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to update color")
+      toast.display(
+        "error",
+        err?.response?.data?.err || err?.response?.data?.message || "Failed to update color",
+      )
     } finally {
       setUpdateLoading(false)
     }
@@ -524,7 +885,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
         {/* Column 1 - Color Picker & Local Colors */}
         <div className="w-[220px] p-3 border-r border-gray-200">
           <HexColorPicker
-            color={editingColor}
+            color={hexMixed ? MIXED_HEX_FALLBACK : editingColor}
             onChange={handleColorChange}
             style={{ width: '100%', height: '160px' }}
           />
@@ -532,7 +893,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           {/* Color preview on top */}
           <div
             className="mt-2 h-8 w-full rounded border border-gray-200"
-            style={{ backgroundColor: editingColor }}
+            style={{
+              backgroundColor: hexMixed ? MIXED_HEX_FALLBACK : editingColor,
+            }}
           />
 
           {/* Color values below */}
@@ -542,12 +905,13 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               <span className="w-7 text-[9px] text-gray-400">HEX</span>
               <input
                 type="text"
-                value={editingColor}
+                value={hexMixed ? "" : editingColor}
+                placeholder={hexMixed ? "Multiple" : ""}
                 onChange={(e) => handleColorChange(e.target.value)}
                 className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded focus:outline-none focus:border-gray-400 uppercase"
               />
               <button
-                onClick={() => handleCopy(editingColor, 'hex')}
+                onClick={() => handleCopy(hexMixed ? "" : editingColor, "hex")}
                 className="p-0.5 hover:bg-gray-100 rounded transition-colors"
                 title="Copy HEX"
               >
@@ -563,7 +927,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               <span className="w-7 text-[9px] text-gray-400">RGB</span>
               <input
                 type="text"
-                value={colors.hexToRGB(editingColor)}
+                value={hexMixed ? "" : colors.hexToRGB(editingColor)}
+                placeholder={hexMixed ? "Multiple" : ""}
                 onChange={(e) => {
                   const hex = colors.rgbToHex(e.target.value)
                   if (hex !== '#000000' || e.target.value.includes('0, 0, 0')) {
@@ -573,7 +938,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                 className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded focus:outline-none focus:border-gray-400"
               />
               <button
-                onClick={() => handleCopy(colors.hexToRGB(editingColor), 'rgb')}
+                onClick={() =>
+                  handleCopy(hexMixed ? "" : colors.hexToRGB(editingColor), "rgb")
+                }
                 className="p-0.5 hover:bg-gray-100 rounded transition-colors"
                 title="Copy RGB"
               >
@@ -589,7 +956,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               <span className="w-7 text-[9px] text-gray-400">HSL</span>
               <input
                 type="text"
-                value={colors.hexToHSL(editingColor)}
+                value={hexMixed ? "" : colors.hexToHSL(editingColor)}
+                placeholder={hexMixed ? "Multiple" : ""}
                 onChange={(e) => {
                   const hex = colors.hslToHex(e.target.value)
                   if (hex !== '#000000' || e.target.value.includes('0, 0%, 0%')) {
@@ -599,7 +967,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                 className="flex-1 px-1.5 py-0.5 text-[10px] font-mono border border-gray-200 rounded focus:outline-none focus:border-gray-400"
               />
               <button
-                onClick={() => handleCopy(colors.hexToHSL(editingColor), 'hsl')}
+                onClick={() =>
+                  handleCopy(hexMixed ? "" : colors.hexToHSL(editingColor), "hsl")
+                }
                 className="p-0.5 hover:bg-gray-100 rounded transition-colors"
                 title="Copy HSL"
               >
@@ -704,28 +1074,155 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           <div className="mb-3">
             {/* Folder dropdown - shows selected color's folder when color has id in parsedData */}
             <div className="mb-2">
-              <label className="block text-[11px] text-gray-500 mb-1">Select folder</label>
+              <label className="block text-[11px] text-gray-500 mb-1">Select folders</label>
 
-              <Dropdown
-                selected={selectedFolderId}
-                items={folders.map((f) => f._id)}
+              <MultiSelectDropdown<string>
+                selected={selectedFolderIds}
+                items={visibleFolderIds}
+                itemsWhenSearching={folders.map((f) => f._id)}
+                renderHeader={() => {
+                  const allSelected =
+                    allFolderIds.length > 0 &&
+                    selectedFolderIds.length === allFolderIds.length &&
+                    allFolderIds.every((id) => selectedFolderIds.includes(id))
+                  const someSelected = selectedFolderIds.length > 0 && !allSelected
+                  return (
+                    <div className="flex items-center justify-between h-8 px-3">
+                      <button
+                        type="button"
+                        className="flex items-center justify-center w-5 h-5 shrink-0 mr-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200/70 rounded-sm focus:outline-none transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          allExpanded ? collapseAll() : expandAll()
+                        }}
+                        aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.25"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className={`transition-transform duration-150 ${allExpanded ? "rotate-90" : ""}`}
+                          aria-hidden
+                        >
+                          <path d="M9 18l6-6-6-6" />
+                        </svg>
+                      </button>
+                      <div className="shrink-0">
+                        <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(el) => {
+                              if (el) (el as HTMLInputElement).indeterminate = someSelected
+                            }}
+                            onChange={() => setSelectedFolderIds(allSelected ? [] : [...allFolderIds])}
+                            onClick={(e) => e.stopPropagation()}
+                            className="cursor-pointer"
+                            style={{
+                              appearance: "none",
+                              WebkitAppearance: "none",
+                              MozAppearance: "none",
+                              width: "16px",
+                              height: "16px",
+                              minWidth: "16px",
+                              minHeight: "16px",
+                              border: allSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                              borderRadius: "3px",
+                              backgroundColor: allSelected ? "#000000" : "#ffffff",
+                              transition: "all 0.15s ease-in-out",
+                              outline: "none",
+                              position: "relative",
+                              flexShrink: 0,
+                              margin: 0,
+                              padding: 0,
+                              boxSizing: "border-box",
+                              imageRendering: "crisp-edges",
+                              WebkitFontSmoothing: "antialiased",
+                              MozOsxFontSmoothing: "grayscale",
+                            }}
+                            aria-label="Select all folders"
+                          />
+                          {allSelected && (
+                            <svg
+                              className="absolute pointer-events-none"
+                              style={{
+                                width: "10px",
+                                height: "10px",
+                                left: "50%",
+                                top: "50%",
+                                transform: "translate(-50%, -50%)",
+                                strokeWidth: "2.5",
+                                imageRendering: "crisp-edges",
+                                shapeRendering: "geometricPrecision",
+                              }}
+                              viewBox="0 0 10 10"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M8 2.5L4 6.5L2.5 5"
+                                stroke="white"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }}
+                keyExtractor={(folderId) => folderId}
                 renderItem={(folderId) => {
                   const folder = folders.find((f) => f._id === folderId)
                   return folder
-                    ? getFolderLabelWithParent(folder, folders, parentByChildId)
+                    ? (
+                      <FolderDropdownRow
+                        depth={getFolderDepthById(folderId, parentByChildId)}
+                        name={folder.name}
+                        title={getFolderPathLabelById(folderId, folders, parentByChildId) || folder.name}
+                        hasChildren={folderHasChildrenInList(folder, existingIdSet)}
+                        expanded={expandedIds.has(folder._id)}
+                        onToggleExpand={() => toggleExpanded(folder._id)}
+                      />
+                    )
                     : folderId
                 }}
-                renderSelected={(folderId) => {
+                renderSelected={(selected) => {
+                  if (selected.length === 0) return "Select folders"
+                  if (selected.length === 1) {
+                    const folder = folders.find((f) => f._id === selected[0])
+                    return folder
+                      ? (getFolderPathLabelById(selected[0], folders, parentByChildId) || folder.name)
+                      : selected[0]
+                  }
+                  return `${selected.length} folders selected`
+                }}
+                getSearchText={(folderId) => {
                   const folder = folders.find((f) => f._id === folderId)
                   return folder
-                    ? getFolderLabelWithParent(folder, folders, parentByChildId)
-                    : 'Select a folder'
+                    ? (getFolderPathLabelById(folderId, folders, parentByChildId) || folder.name)
+                    : String(folderId)
                 }}
-                onSelect={(folderId) => setSelectedFolderId(folderId)}
-                placeholder="Select a folder"
+                onSelect={(folderIds) => {
+                  setSkipFolderSyncUntilChange(false)
+                  setSelectedFolderIds(folderIds)
+                }}
+                placeholder="Select folders"
                 width="100%"
+                isSearchable
+                checkboxAtEnd={true}
                 renderFooter={renderFolderFooter}
-                footerExpanded={isCreatingFolder}
+                listMaxHeightClass="max-h-[224px]"
+                menuMaxHeightClass="max-h-[448px]"
               />
             </div>
           </div>
@@ -737,60 +1234,29 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               {/* URL Source */}
               <input
                 type="text"
-                value={colorUrl}
-                onChange={(e) => setColorUrl(e.target.value)}
-                placeholder="Source URL"
+                value={urlMixed ? "" : colorUrl}
+                onChange={(e) => {
+                  setUrlMixed(false)
+                  setColorUrl(e.target.value)
+                }}
+                placeholder={urlMixed ? "Multiple values" : "Source URL"}
                 className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 text-gray-500"
               />
 
-              {/* Slash Naming Chip Input */}
-              <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
-                <div className="flex flex-wrap gap-1 items-center">
-                  {slashParts.map((part, idx) => (
-                    <span key={idx} className="inline-flex items-center">
-                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 text-[11px] rounded">
-                        {part}
-                        <button
-                          onClick={() => setSlashParts(slashParts.filter((_, i) => i !== idx))}
-                          className="ml-0.5 text-gray-400 hover:text-gray-600"
-                        >
-                          <X size={10} />
-                        </button>
-                      </span>
-                      {idx < slashParts.length - 1 && (
-                        <span className="mx-1 text-gray-400 text-[11px]">/</span>
-                      )}
-                    </span>
-                  ))}
-                  {slashParts.length < 5 && (
-                    <input
-                      type="text"
-                      value={slashInput}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        const parts = val.split('/').map((p) => p.trim()).filter(Boolean).slice(0, 5)
-                        setSlashInput(parts.join('/'))
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === '/') {
-                          const newParts = slashInput.split('/').map((p) => p.trim()).filter(Boolean)
-                          const remaining = 5 - slashParts.length
-                          const toAdd = newParts.slice(0, remaining)
-                          if (toAdd.length > 0) {
-                            e.preventDefault()
-                            setSlashParts([...slashParts, ...toAdd])
-                            setSlashInput('')
-                          }
-                        } else if (e.key === 'Backspace' && !slashInput && slashParts.length > 0) {
-                          setSlashParts(slashParts.slice(0, -1))
-                        }
-                      }}
-                      placeholder={slashParts.length === 0 ? "Slash Naming (e.g. Brand/Primary/Blue, max 5 names)" : ""}
-                      className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
-                    />
-                  )}
-                </div>
-              </div>
+              <input
+                type="text"
+                value={slashMixed ? "" : slashNaming}
+                onChange={(e) => {
+                  setSlashMixed(false)
+                  setSlashNaming(normalizeSlashNamingInput(e.target.value))
+                }}
+                placeholder={
+                  slashMixed
+                    ? "Multiple values"
+                    : "Slash naming (e.g. Brand/Primary/Blue, max 5 parts)"
+                }
+                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+              />
 
               {/* Tags Chip Input */}
               <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
@@ -799,7 +1265,10 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                     <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] rounded">
                       {tag}
                       <button
-                        onClick={() => setTagsList(tagsList.filter((_, i) => i !== idx))}
+                        onClick={() => {
+                          setTagsMixed(false)
+                          setTagsList(tagsList.filter((_, i) => i !== idx))
+                        }}
                         className="ml-0.5 text-blue-400 hover:text-blue-600"
                       >
                         <X size={10} />
@@ -814,13 +1283,21 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                       onKeyDown={(e) => {
                         if ((e.key === 'Enter' || e.key === ',') && tagsInput.trim()) {
                           e.preventDefault()
+                          setTagsMixed(false)
                           setTagsList([...tagsList, tagsInput.trim()])
                           setTagsInput('')
                         } else if (e.key === 'Backspace' && !tagsInput && tagsList.length > 0) {
+                          setTagsMixed(false)
                           setTagsList(tagsList.slice(0, -1))
                         }
                       }}
-                      placeholder={tagsList.length === 0 ? "Tags (press , or Enter)" : ""}
+                      placeholder={
+                        tagsList.length === 0
+                          ? tagsMixed
+                            ? "Multiple values"
+                            : "Tags (press , or Enter)"
+                          : ""
+                      }
                       className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
                     />
                   )}
@@ -829,9 +1306,12 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
 
               {/* Comment Input */}
               <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Comment"
+                value={commentMixed ? "" : comment}
+                onChange={(e) => {
+                  setCommentMixed(false)
+                  setComment(e.target.value)
+                }}
+                placeholder={commentMixed ? "Multiple values" : "Comment"}
                 rows={2}
                 className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 resize-y min-h-[60px]"
               />
@@ -840,11 +1320,16 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] text-gray-500">Priority</span>
-                  <span className="text-[11px] font-medium text-gray-700">{ranking}</span>
+                  <span className="text-[11px] font-medium text-gray-700">
+                    {rankingMixed ? "—" : ranking}
+                  </span>
                 </div>
                 <Slider
-                  value={[ranking]}
-                  onValueChange={(value) => setRanking(value[0])}
+                  value={[rankingMixed ? 0 : ranking]}
+                  onValueChange={(value) => {
+                    setRankingMixed(false)
+                    setRanking(value[0])
+                  }}
                   max={100}
                   step={1}
                   className="w-full"
@@ -861,7 +1346,15 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                   handleUpdate()
                 }
               }}
-              disabled={!state.user?.jwtToken || selectedColorIndex === null || updateLoading || !((parsedData[selectedColorIndex] as any)?._id ?? (parsedData[selectedColorIndex] as any)?.id)}
+              disabled={
+                !state.user?.jwtToken ||
+                selectedColorIndex === null ||
+                updateLoading ||
+                !selectedIndicesSorted.every((i) => {
+                  const p = parsedData[i] as any
+                  return p?._id ?? p?.id
+                })
+              }
               className="px-4 py-2.5 text-[12px] bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors disabled:bg-gray-200 disabled:text-gray-500 flex items-center justify-center gap-1.5 min-w-[120px]"
             >
               {updateLoading ? 'Updating...' : 'Update'}

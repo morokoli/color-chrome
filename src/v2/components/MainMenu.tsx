@@ -41,6 +41,16 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
     chrome.tabs.create({ url })
   }
 
+  const openWebApp = () => {
+    const jwt = state.user?.jwtToken
+    if (!jwt) {
+      logInHandler()
+      return
+    }
+    const url = `${config.webApp.baseURL}/chrome-handoff#token=${encodeURIComponent(jwt)}`
+    chrome.tabs.create({ url })
+  }
+
   const firstSectionWithHeading = 0
 
   return (
@@ -59,14 +69,13 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
               >
                 <p className="text-[15px] text-[#7D7D7D]">{section.title}</p>
                 {sectionIndex === firstSectionWithHeading && (
-                  <a
-                    href="https://app.colorswithyou.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={openWebApp}
                     className="shrink-0 rounded px-3 py-1 text-[12px] font-medium bg-black text-white hover:bg-gray-900 transition-colors"
                   >
                     Go to library
-                  </a>
+                  </button>
                 )}
               </div>
             )}

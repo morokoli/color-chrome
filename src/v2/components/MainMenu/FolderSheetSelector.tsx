@@ -1,14 +1,19 @@
 import { FC, useMemo, useState, useCallback } from "react"
+import { useFolderTreeExpanded } from "../../hooks/useFolderTreeExpanded"
 import {
   buildParentIdByChildId,
-  getFolderLabelWithParent,
+  getFolderDepthById,
+  getFolderPathLabelById,
   flattenFoldersHierarchyOrder,
+  flattenVisibleFolderIdsInOrder,
+  folderHasChildrenInList,
 } from "@/v2/utils/folderDisplayName"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useGetFolders } from "@/v2/api/folders.api"
 import { Folder } from "@/v2/api/folders.api"
 import { File } from "@/v2/types/general"
-import { Folder as FolderIcon, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
+import { FolderDropdownRow } from "@/v2/components/common/FolderDropdownRow"
 import { useQueryClient } from "@tanstack/react-query"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
@@ -81,6 +86,28 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
         }))
     }, [folderList])
     const parentByChildId = useMemo(() => buildParentIdByChildId(folderList), [folderList])
+    const allFolderIds = useMemo(() => folderList.map((f) => f._id), [folderList])
+    const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
+    const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
+        useFolderTreeExpanded(allFolderIds)
+    const visibleFolderIds = useMemo(
+        () => flattenVisibleFolderIdsInOrder(folderList, expandedIds),
+        [folderList, expandedIds],
+    )
+    const folderItemById = useMemo(() => {
+        const m = new Map<string, SelectableItem>()
+        for (const it of allItems) {
+            if (it.type === "folder") m.set(it.id, it)
+        }
+        return m
+    }, [allItems])
+    const visibleFolderItems = useMemo(
+        () =>
+            visibleFolderIds
+                .map((id) => folderItemById.get(id))
+                .filter((x): x is SelectableItem => x !== undefined),
+        [visibleFolderIds, folderItemById],
+    )
 
     // Get selected items
     const selectedItems = useMemo(() => {
@@ -111,20 +138,18 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
 
     const renderItem = (item: SelectableItem) => {
         if (item.type === "folder") {
-            const label = getFolderLabelWithParent(item.folder, folderList, parentByChildId)
             return (
-                <div className="flex items-center gap-2">
-                    <FolderIcon className="w-3.5 h-3.5 text-gray-500" />
-                    <span className="text-[12px]">{label}</span>
-                </div>
+                <FolderDropdownRow
+                    depth={getFolderDepthById(item.id, parentByChildId)}
+                    name={item.folder.name}
+                    title={getFolderPathLabelById(item.id, folderList, parentByChildId) || item.folder.name}
+                    hasChildren={folderHasChildrenInList(item.folder, existingIdSet)}
+                    expanded={expandedIds.has(item.id)}
+                    onToggleExpand={() => toggleExpanded(item.id)}
+                />
             )
         }
-        return (
-            <div className="flex items-center gap-2">
-                <FolderIcon className="w-3.5 h-3.5 text-gray-500" />
-                <span className="text-[12px]">{item.name}</span>
-            </div>
-        )
+        return <span className="text-[12px] text-gray-800">{item.name}</span>
     }
 
     const renderSelected = (selected: SelectableItem[]) => {
@@ -134,7 +159,7 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
         if (selected.length === 1) {
             const first = selected[0]
             if (first.type === "folder") {
-                return getFolderLabelWithParent(first.folder, folderList, parentByChildId)
+                return getFolderPathLabelById(first.id, folderList, parentByChildId) || first.folder.name
             }
             return first.name
         }
@@ -196,10 +221,122 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
                 <p className="text-[13px] text-gray-800 mb-2">Saving colors to</p>
                 <MultiSelectDropdown<SelectableItem>
                     selected={selectedItems}
-                    items={allItems}
+                    items={visibleFolderItems}
+                    itemsWhenSearching={allItems}
+                    renderHeaderWithSearch={(searchField) => {
+                        const allSelected =
+                            allFolderIds.length > 0 &&
+                            selectedFolders.length === allFolderIds.length &&
+                            allFolderIds.every((id) => selectedFolders.includes(id))
+                        const someSelected = selectedFolders.length > 0 && !allSelected
+                        return (
+                            <div className="flex items-center gap-2 px-3 py-2 min-h-10 w-full min-w-0">
+                                <button
+                                    type="button"
+                                    className="flex items-center justify-center w-5 h-5 shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-200/70 rounded-sm focus:outline-none transition-colors"
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        allExpanded ? collapseAll() : expandAll()
+                                    }}
+                                    aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2.25"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className={`transition-transform duration-150 ${allExpanded ? "rotate-90" : ""}`}
+                                        aria-hidden
+                                    >
+                                        <path d="M9 18l6-6-6-6" />
+                                    </svg>
+                                </button>
+                                <div className="flex-1 min-w-0">{searchField}</div>
+                                <div className="shrink-0">
+                                    <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            ref={(el) => {
+                                                if (el) (el as HTMLInputElement).indeterminate = someSelected
+                                            }}
+                                            onChange={() => onFoldersChange(allSelected ? [] : [...allFolderIds])}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="cursor-pointer"
+                                            style={{
+                                                appearance: "none",
+                                                WebkitAppearance: "none",
+                                                MozAppearance: "none",
+                                                width: "16px",
+                                                height: "16px",
+                                                minWidth: "16px",
+                                                minHeight: "16px",
+                                                border: allSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                                                borderRadius: "3px",
+                                                backgroundColor: allSelected ? "#000000" : "#ffffff",
+                                                transition: "all 0.15s ease-in-out",
+                                                outline: "none",
+                                                position: "relative",
+                                                flexShrink: 0,
+                                                margin: 0,
+                                                padding: 0,
+                                                boxSizing: "border-box",
+                                                imageRendering: "crisp-edges",
+                                                WebkitFontSmoothing: "antialiased",
+                                                MozOsxFontSmoothing: "grayscale",
+                                            }}
+                                            aria-label="Select all folders"
+                                        />
+                                        {allSelected && (
+                                            <svg
+                                                className="absolute pointer-events-none"
+                                                style={{
+                                                    width: "10px",
+                                                    height: "10px",
+                                                    left: "50%",
+                                                    top: "50%",
+                                                    transform: "translate(-50%, -50%)",
+                                                    strokeWidth: "2.5",
+                                                    imageRendering: "crisp-edges",
+                                                    shapeRendering: "geometricPrecision",
+                                                }}
+                                                viewBox="0 0 10 10"
+                                                fill="none"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                                <path
+                                                    d="M8 2.5L4 6.5L2.5 5"
+                                                    stroke="white"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    vectorEffect="non-scaling-stroke"
+                                                />
+                                            </svg>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    }}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
                     renderSelected={renderSelected}
+                    getSearchText={(item) =>
+                      item.type === "folder"
+                        ? [
+                            item.folder.name,
+                            getFolderPathLabelById(item.id, folderList, parentByChildId) || item.name,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")
+                        : item.name
+                    }
                     onSelect={handleSelect}
                     placeholder="Folders"
                     isSearchable
@@ -207,6 +344,8 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
                     checkboxAtEnd={true}
                     openUpward={true}
                     renderFooter={renderFooter}
+                    listMaxHeightClass="max-h-[224px]"
+                    menuMaxHeightClass="max-h-[448px]"
                 />
             </div>
         </div>

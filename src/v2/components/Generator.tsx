@@ -11,6 +11,8 @@ interface Props {
 const Generator: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
     const paletteRef = useRef<PaletteModalHandle | null>(null)
     const [primaryDisabled, setPrimaryDisabled] = useState(false)
+    /** Mirrors PaletteModal primary label ("Add Palette", "Saving...", etc.) */
+    const [primaryLabel, setPrimaryLabel] = useState("Save")
     const [saveSelectedColorDisabled, setSaveSelectedColorDisabled] = useState(true)
     const [saveSelectedColorLoading, setSaveSelectedColorLoading] = useState(false)
 
@@ -39,8 +41,9 @@ const Generator: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =
                     onClose={handleClose}
                     onSuccess={handleSuccess}
                     hidePrimaryActionButton={true}
-                    onPrimaryActionMetaChange={({ disabled }) => {
+                    onPrimaryActionMetaChange={({ disabled, label }) => {
                         setPrimaryDisabled(disabled)
+                        setPrimaryLabel(label)
                     }}
                     onSaveSelectedColorMetaChange={({ disabled, loading }) => {
                         setSaveSelectedColorDisabled(disabled)
@@ -71,7 +74,7 @@ const Generator: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =
                             : "bg-gray-100 text-gray-400 cursor-not-allowed"
                     }`}
                 >
-                    Save
+                    {primaryLabel}
                 </button>
             </div>
         </div>

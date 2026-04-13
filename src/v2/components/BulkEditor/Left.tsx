@@ -8,12 +8,17 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { CollapsibleBox } from "../CollapsibleBox"
 import { FolderSelectionModal, type SelectedColorItem } from "./FolderSelectionModal"
+import { FolderDropdownRow } from "@/v2/components/common/FolderDropdownRow"
 import { ChevronDown, Check, Plus } from "lucide-react"
 import * as Tooltip from "@radix-ui/react-tooltip"
+import { useFolderTreeExpanded } from "../../hooks/useFolderTreeExpanded"
 import {
   buildParentIdByChildId,
-  getFolderLabelWithParent,
   flattenFoldersHierarchyOrder,
+  flattenVisibleFolderIdsInOrder,
+  folderHasChildrenInList,
+  getFolderDepthById,
+  getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
 
 /** Returns "black" or "white" for contrast on the given hex background */
@@ -97,9 +102,18 @@ const Left: React.FC = () => {
 
   const foldersFlat = foldersData?.folders || []
   const parentByChildId = useMemo(() => buildParentIdByChildId(foldersFlat), [foldersFlat])
+  const allFolderIds = useMemo(() => foldersFlat.map((f) => f._id), [foldersFlat])
+  const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
+  const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
+    useFolderTreeExpanded(allFolderIds)
+  const visibleFolderIds = useMemo(
+    () => flattenVisibleFolderIdsInOrder(foldersFlat, expandedIds),
+    [foldersFlat, expandedIds],
+  )
+  const folderById = useMemo(() => new Map(foldersFlat.map((f) => [f._id, f])), [foldersFlat])
   const folderSelectionLabel = useCallback(
     (folder: Folder | null) =>
-      !folder ? "Non-foldered" : getFolderLabelWithParent(folder, foldersFlat, parentByChildId),
+      !folder ? "Non-foldered" : (getFolderPathLabelById(folder._id, foldersFlat, parentByChildId) || folder.name),
     [foldersFlat, parentByChildId]
   )
 
@@ -347,7 +361,7 @@ const Left: React.FC = () => {
                   additionalColumns: color.additionalColumns ?? existing?.color.additionalColumns ?? [],
                 },
                 folderId: folder._id,
-                folderName: getFolderLabelWithParent(folder, updatedFolders),
+                folderName: folder?.name || "",
                 originalColorId: color._id,
               })
             })
@@ -375,7 +389,7 @@ const Left: React.FC = () => {
                       additionalColumns: serverColor.additionalColumns ?? existing.color.additionalColumns ?? [],
                     },
                     folderId: folder._id,
-                    folderName: getFolderLabelWithParent(folder, updatedFolders),
+                    folderName: folder?.name || "",
                   })
                 }
               })
@@ -581,9 +595,16 @@ const Left: React.FC = () => {
   }
 
   const folders = flattenFoldersHierarchyOrder(foldersData?.folders || [])
+  const visibleFolders = visibleFolderIds
+    .map((id) => folderById.get(id))
+    .filter((f): f is Folder => f !== undefined)
 
-  // Create dropdown items: non-foldered option at top, then folders (hierarchy order)
+  // Create dropdown items: non-foldered option at top, then visible tree folders
   const dropdownItems: SelectableItem[] = [
+    { _id: NON_FOLDERED_ID, name: "Non-foldered colors", isNonFoldered: true } as SelectableItem,
+    ...visibleFolders,
+  ]
+  const dropdownItemsForSearch: SelectableItem[] = [
     { _id: NON_FOLDERED_ID, name: "Non-foldered colors", isNonFoldered: true } as SelectableItem,
     ...folders,
   ]
@@ -614,15 +635,128 @@ const Left: React.FC = () => {
           placeholder="Select Folders"
           selected={selectedItems}
           items={dropdownItems}
+          itemsWhenSearching={dropdownItemsForSearch}
+          renderHeader={() => {
+            const allSelected = selectedFolders.length === folders.length && includeNonFoldered
+            const noneSelected = selectedFolders.length === 0 && !includeNonFoldered
+            const someSelected = !allSelected && !noneSelected
+            return (
+              <div className="flex items-center justify-between h-8 px-3">
+                <button
+                  type="button"
+                  className="flex items-center justify-center w-5 h-5 shrink-0 mr-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200/70 rounded-sm focus:outline-none transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    allExpanded ? collapseAll() : expandAll()
+                  }}
+                  aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.25"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`transition-transform duration-150 ${allExpanded ? "rotate-90" : ""}`}
+                    aria-hidden
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+                <div className="shrink-0">
+                  <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) (el as HTMLInputElement).indeterminate = someSelected
+                      }}
+                      onChange={() => {
+                        if (allSelected) {
+                          setSelectedFolders([])
+                          setIncludeNonFoldered(false)
+                        } else {
+                          setSelectedFolders([...folders])
+                          setIncludeNonFoldered(true)
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="cursor-pointer"
+                      style={{
+                        appearance: "none",
+                        WebkitAppearance: "none",
+                        MozAppearance: "none",
+                        width: "16px",
+                        height: "16px",
+                        minWidth: "16px",
+                        minHeight: "16px",
+                        border: allSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                        borderRadius: "3px",
+                        backgroundColor: allSelected ? "#000000" : "#ffffff",
+                        transition: "all 0.15s ease-in-out",
+                        outline: "none",
+                        position: "relative",
+                        flexShrink: 0,
+                        margin: 0,
+                        padding: 0,
+                        boxSizing: "border-box",
+                        imageRendering: "crisp-edges",
+                        WebkitFontSmoothing: "antialiased",
+                        MozOsxFontSmoothing: "grayscale",
+                      }}
+                      aria-label="Select all folders and non-foldered"
+                    />
+                    {allSelected && (
+                      <svg
+                        className="absolute pointer-events-none"
+                        style={{
+                          width: "10px",
+                          height: "10px",
+                          left: "50%",
+                          top: "50%",
+                          transform: "translate(-50%, -50%)",
+                          strokeWidth: "2.5",
+                          imageRendering: "crisp-edges",
+                          shapeRendering: "geometricPrecision",
+                        }}
+                        viewBox="0 0 10 10"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M8 2.5L4 6.5L2.5 5"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          }}
           keyExtractor={(item) => item._id}
           renderItem={(item) => {
             if ('isNonFoldered' in item && item.isNonFoldered) {
-              return <span className="text-[12px]">{item.name}</span>
+              return <FolderDropdownRow depth={0} name={item.name} title={item.name} />
             }
+            const f = item as Folder
             return (
-              <span className="text-[12px]">
-                {getFolderLabelWithParent(item as Folder, foldersFlat, parentByChildId)}
-              </span>
+              <FolderDropdownRow
+                depth={getFolderDepthById(f._id, parentByChildId)}
+                name={f.name}
+                title={getFolderPathLabelById(f._id, foldersFlat, parentByChildId) || f.name}
+                hasChildren={folderHasChildrenInList(f, existingIdSet)}
+                expanded={expandedIds.has(f._id)}
+                onToggleExpand={() => toggleExpanded(f._id)}
+              />
             )
           }}
           renderSelected={(selected) => {
@@ -639,6 +773,11 @@ const Left: React.FC = () => {
             if (folderCount > 0) parts.push(`${folderCount} Folder${folderCount > 1 ? 's' : ''}`)
             if (hasNonFoldered) parts.push("Non-foldered")
             return parts.join(", ") || "Select options"
+          }}
+          getSearchText={(item) => {
+            if ('isNonFoldered' in item && item.isNonFoldered) return item.name
+            const f = item as Folder
+            return getFolderPathLabelById(f._id, foldersFlat, parentByChildId) || f.name
           }}
           onSelect={handleDropdownSelect}
           width="100%"
@@ -710,6 +849,8 @@ const Left: React.FC = () => {
             >
               <ChevronDown
                 size={14}
+                strokeWidth={2.25}
+                className="text-gray-600"
                 style={{
                   transformOrigin: "center",
                   transform: `rotate(${allCollapsed ? -90 : 0}deg)`,
@@ -762,6 +903,8 @@ const Left: React.FC = () => {
             >
               <ChevronDown
                 size={14}
+                strokeWidth={2.25}
+                className="text-gray-600"
                 style={{
                   transformOrigin: "center",
                   transform: `rotate(${collapsedNonFoldered ? -90 : 0}deg)`,
@@ -885,7 +1028,7 @@ const Left: React.FC = () => {
                   </button>
                   <div className="flex-grow min-w-0">
                     <div className="text-[12px] font-medium text-gray-800 truncate">
-                      {getFolderLabelWithParent(folder, foldersFlat, parentByChildId)}
+                      {getFolderPathLabelById(folder._id, foldersFlat, parentByChildId) || folder.name}
                     </div>
                     <div className="text-[10px] text-gray-500">
                       {colors.length} color{colors.length !== 1 ? "s" : ""}
@@ -899,6 +1042,8 @@ const Left: React.FC = () => {
                   >
                     <ChevronDown
                       size={14}
+                      strokeWidth={2.25}
+                      className="text-gray-600"
                       style={{
                         transformOrigin: "center",
                         transform: `rotate(${isCollapsed ? -90 : 0}deg)`,
