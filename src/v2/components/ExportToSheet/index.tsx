@@ -78,7 +78,8 @@ function buildExportRow(
     hslVal = `hsl(${c.hsl.h}, ${c.hsl.s}%, ${c.hsl.l}%)`
   else hslVal = colors.hexToHSL(c.hex)
   const tags = Array.isArray(c.tags) ? c.tags : []
-  return {
+  
+  const baseRow = {
     timestamp: Date.now(),
     url: c.url || "Export to Sheet",
     hex: c.hex,
@@ -95,6 +96,20 @@ function buildExportRow(
     paletteRanking: paletteMeta.paletteRanking,
     paletteTags: paletteMeta.paletteTags,
   }
+  
+  // Include gradient data if present
+  if (c.type === 'gradient' && c.gradient_data) {
+    return {
+      ...baseRow,
+      type: 'gradient',
+      gradient_data: c.gradient_data,
+    }
+  }
+  
+  return {
+    ...baseRow,
+    type: 'solid',
+  }
 }
 
 function getContrastColor(hex: string): "white" | "black" {
@@ -105,6 +120,38 @@ function getContrastColor(hex: string): "white" | "black" {
   const b = parseInt(h.slice(4, 6), 16)
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
   return luminance < 0.5 ? "white" : "black"
+}
+
+/** Helper to generate CSS gradient string */
+function generateGradientCSS(gradientData: any): string | null {
+  if (!gradientData || !gradientData.stops) return null
+  
+  const sortedStops = [...gradientData.stops].sort((a: any, b: any) => a.position - b.position)
+  
+  // For conic gradients, use degrees; for linear/radial, use percentages
+  const stopsString = gradientData.type === 'conic'
+    ? sortedStops.map((stop: any) => `${stop.color} ${stop.position}deg`).join(', ')
+    : sortedStops.map((stop: any) => `${stop.color} ${stop.position}%`).join(', ')
+  
+  switch (gradientData.type) {
+    case 'linear':
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+    case 'radial':
+      return `radial-gradient(circle at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    case 'conic':
+      return `conic-gradient(from ${gradientData.angle}deg at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    default:
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+  }
+}
+
+/** Helper to get background style for color or gradient */
+function getBackgroundStyle(color: any): React.CSSProperties {
+  if (color.type === 'gradient' && color.gradient_data) {
+    const gradientCSS = generateGradientCSS(color.gradient_data)
+    return gradientCSS ? { background: gradientCSS } : { backgroundColor: color.hex }
+  }
+  return { backgroundColor: color.hex }
 }
 
 function folderNameForExport(groupKey: string, sheetName?: string) {
@@ -661,7 +708,7 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                               <Tooltip.Root key={itemKey}>
                                 <Tooltip.Trigger asChild>
                                   <div
-                                    style={{ backgroundColor: c.hex }}
+                                    style={getBackgroundStyle(c)}
                                     className="relative w-[32px] h-[32px] cursor-pointer border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center"
                                     onClick={() => toggleSelection(itemKey)}
                                   >
@@ -676,7 +723,16 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
                                   <Tooltip.Content className="bg-gray-900 text-white text-xs px-2 py-1 rounded max-w-[200px]">
-                                    {c.hex} {c.slash_naming ? `· ${c.slash_naming}` : ""}
+                                    {c.type === 'gradient' ? (
+                                      <>
+                                        Gradient ({c.gradient_data?.type || 'linear'})
+                                        {c.slash_naming ? ` · ${c.slash_naming}` : ""}
+                                      </>
+                                    ) : (
+                                      <>
+                                        {c.hex} {c.slash_naming ? `· ${c.slash_naming}` : ""}
+                                      </>
+                                    )}
                                   </Tooltip.Content>
                                 </Tooltip.Portal>
                               </Tooltip.Root>
