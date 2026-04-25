@@ -20,7 +20,7 @@ const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_K)
 const swPx = `${LIBRARY_SWATCH_PX}px`
 
 interface ImportColorsListProps {
-  onAddToPalette: (colorData: any, index: number | null) => void
+  onAddToPalette: (colorData: any, index: number | null, isGradientClick?: boolean) => void
   onAddPaletteToPalette?: (colors: any[]) => void
 }
 
@@ -32,6 +32,8 @@ type LibraryListRow =
 
 const isPaletteEntry = (item: any) =>
   item?.type === "palette" || (item?.colorIds && Array.isArray(item.colorIds))
+const isGradientEntry = (item: any) =>
+  item?.type === "gradient" && item?.gradient_data
 
 /** Resolved colors for a palette row (same resolution as LibraryPaletteCard). */
 const getResolvedPaletteColors = (item: any, colorById: Map<string, any>): any[] => {
@@ -119,6 +121,85 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
             }}
           >
             {colorData.slash_naming || ""}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const generateGradientCSS = (gradientData: any) => {
+  if (!gradientData || !gradientData.stops) return null
+  const sortedStops = [...gradientData.stops].sort((a, b) => a.position - b.position)
+  const stopsString = gradientData.type === "conic"
+    ? sortedStops.map((stop: any) => `${stop.color} ${stop.position}deg`).join(", ")
+    : sortedStops.map((stop: any) => `${stop.color} ${stop.position}%`).join(", ")
+  switch (gradientData.type) {
+    case "linear":
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+    case "radial":
+      return `radial-gradient(circle at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    case "conic":
+      return `conic-gradient(from ${gradientData.angle}deg at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    default:
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+  }
+}
+
+const GradientPreviewBox = ({ gradientData }: { gradientData: any }) => {
+  if (!gradientData?.gradient_data) return null
+  const gradientCSS = generateGradientCSS(gradientData.gradient_data)
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: `${LIBRARY_GAP}px`,
+        width: swPx,
+      }}
+    >
+      <div
+        style={{
+          minWidth: swPx,
+          height: swPx,
+          position: "relative",
+          overflow: "hidden",
+          boxSizing: "border-box",
+          transition: "border-width 0.3s ease-in-out",
+          cursor: "pointer",
+          background: gradientCSS || "#ddd",
+          border: "2px solid #e5e5e5",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: `${LIBRARY_INSET}px`,
+            left: `${LIBRARY_INSET}px`,
+            right: `${LIBRARY_INSET}px`,
+            bottom: `${LIBRARY_INSET}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            color: "#fff",
+            fontSize: `${LIBRARY_FONT_HEX}px`,
+            fontWeight: "600",
+            textShadow: "0 1px 3px rgba(0,0,0,0.8)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: `${LIBRARY_FONT_NAME}px`,
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {gradientData.slash_naming || gradientData.name || "Gradient"}
           </span>
         </div>
       </div>
@@ -328,8 +409,9 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     try {
       const items = rawAll.filter((item: any) => {
         if (!item) return false
-        if (item.hex && item.type !== "palette") return true
+        if (item.hex && item.type !== "palette" && item.type !== "gradient") return true
         if (item.type === "palette" || (item.colorIds && Array.isArray(item.colorIds))) return true
+        if (item.type === "gradient" && item.gradient_data) return true
         return false
       })
       const searchFiltered =
@@ -337,7 +419,14 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           ? items
           : items.filter((item: any) => {
               const q = searchQuery.toLowerCase()
-              if (item.hex && item.type !== "palette") {
+              if (item.type === "gradient" && item.gradient_data) {
+                return (
+                  (item.name && item.name.toLowerCase().includes(q)) ||
+                  (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
+                  (item.comments && item.comments.toLowerCase().includes(q))
+                )
+              }
+              if (item.hex && item.type !== "palette" && item.type !== "gradient") {
                 return (
                   (item.hex && item.hex.toLowerCase().includes(q)) ||
                   (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
@@ -386,7 +475,9 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
             const c = resolved[0]
             pushColorRow(c, rowSortTime(c) || rowSortTime(item))
           }
-        } else if (item.hex && item.type !== "palette" && showColors) {
+        } else if (isGradientEntry(item) && showColors) {
+          rows.push({ kind: "color", color: item, sortAt: rowSortTime(item) })
+        } else if (item.hex && item.type !== "palette" && item.type !== "gradient" && showColors) {
           pushColorRow(item, rowSortTime(item))
         }
       }
@@ -438,6 +529,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   )
 
   const DraggableImportItem = ({ colorData }: { colorData: any }) => {
+    const isGradient = isGradientEntry(colorData)
     const [{ isDragging }, drag] = useDrag({
       type: ITEM_TYPE,
       item: { colorData, type: ITEM_TYPE },
@@ -456,9 +548,13 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           transform: isDragging ? "rotate(5deg)" : "none",
           transition: "opacity 0.2s, transform 0.2s",
         }}
-        onClick={() => onAddToPalette(colorData, null)}
+        onClick={() => onAddToPalette(colorData, null, isGradient)}
       >
-        <SimpleColorBox colorData={colorData} />
+        {isGradient ? (
+          <GradientPreviewBox gradientData={colorData} />
+        ) : (
+          <SimpleColorBox colorData={colorData} />
+        )}
       </div>
     )
   }
@@ -492,7 +588,8 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
 
   const hasSourceItems = rawAll.some((item: any) => {
     if (!item) return false
-    if (item.hex && item.type !== "palette") return true
+    if (item.hex && item.type !== "palette" && item.type !== "gradient") return true
+    if (isGradientEntry(item)) return true
     return isPaletteEntry(item)
   })
 

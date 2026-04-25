@@ -16,6 +16,7 @@ interface ColorEditSectionProps {
     selectedColor: any
     onColorChange: (color: any) => void
     colorPickerIndex: number | null
+    isMobile?: boolean
 }
 
 const ColorEditSection = ({

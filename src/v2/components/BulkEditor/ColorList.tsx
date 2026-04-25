@@ -11,6 +11,38 @@ interface ColorListProps {
   clearColors: () => void
 }
 
+// Helper to generate CSS gradient string
+const generateGradientCSS = (gradientData: any) => {
+  if (!gradientData || !gradientData.stops) return null
+  
+  const sortedStops = [...gradientData.stops].sort((a: any, b: any) => a.position - b.position)
+  
+  // For conic gradients, use degrees; for linear/radial, use percentages
+  const stopsString = gradientData.type === 'conic'
+    ? sortedStops.map((stop: any) => `${stop.color} ${stop.position}deg`).join(', ')
+    : sortedStops.map((stop: any) => `${stop.color} ${stop.position}%`).join(', ')
+  
+  switch (gradientData.type) {
+    case 'linear':
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+    case 'radial':
+      return `radial-gradient(circle at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    case 'conic':
+      return `conic-gradient(from ${gradientData.angle}deg at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    default:
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+  }
+}
+
+// Helper to get background style for color or gradient
+const getBackgroundStyle = (color: any) => {
+  if (color.type === 'gradient' && color.gradient_data) {
+    const gradientCSS = generateGradientCSS(color.gradient_data)
+    return gradientCSS ? { background: gradientCSS } : { backgroundColor: color.hex }
+  }
+  return { backgroundColor: color.hex }
+}
+
 export const ColorList = ({
   colors,
   activeColors,
@@ -75,7 +107,7 @@ export const ColorList = ({
                     <Tooltip.Trigger asChild>
                       <div
                         className="w-9 h-9 rounded-md border border-gray-200 flex-shrink-0 cursor-pointer shadow-sm"
-                        style={{ backgroundColor: item.color.hex }}
+                        style={getBackgroundStyle(item.color)}
                       />
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
@@ -84,25 +116,49 @@ export const ColorList = ({
                         sideOffset={5}
                       >
                         <div className="flex flex-col gap-1">
-                          <div className="font-medium text-gray-900 mb-1">Color Info</div>
-                          <div className="text-gray-600">Hex: <span className="font-mono">{item.color.hex}</span></div>
-                          {item.color.rgb && (
-                            <div className="text-gray-600">
-                              RGB: <span className="font-mono">
-                                {typeof item.color.rgb === 'string' 
-                                  ? item.color.rgb 
-                                  : `rgb(${item.color.rgb.r}, ${item.color.rgb.g}, ${item.color.rgb.b})`}
-                              </span>
-                            </div>
-                          )}
-                          {item.color.hsl && (
-                            <div className="text-gray-600">
-                              HSL: <span className="font-mono">
-                                {typeof item.color.hsl === 'string' 
-                                  ? item.color.hsl 
-                                  : `hsl(${item.color.hsl.h}, ${item.color.hsl.s}%, ${item.color.hsl.l}%)`}
-                              </span>
-                            </div>
+                          <div className="font-medium text-gray-900 mb-1">
+                            {item.color.type === 'gradient' ? 'Gradient Info' : 'Color Info'}
+                          </div>
+                          {item.color.type === 'gradient' ? (
+                            <>
+                              <div className="text-gray-600">
+                                Type: <span className="font-mono">Gradient</span>
+                              </div>
+                              <div className="text-gray-600">
+                                Pattern:{" "}
+                                <span className="font-mono">
+                                  {item.color.gradient_data?.type || 'linear'}
+                                </span>
+                              </div>
+                              <div className="text-gray-600">
+                                Stops:{" "}
+                                <span className="font-mono">
+                                  {item.color.gradient_data?.stops?.length || 0}
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-gray-600">Hex: <span className="font-mono">{item.color.hex}</span></div>
+                              {item.color.rgb && (
+                                <div className="text-gray-600">
+                                  RGB: <span className="font-mono">
+                                    {typeof item.color.rgb === 'string' 
+                                      ? item.color.rgb 
+                                      : `rgb(${item.color.rgb.r}, ${item.color.rgb.g}, ${item.color.rgb.b})`}
+                                  </span>
+                                </div>
+                              )}
+                              {item.color.hsl && (
+                                <div className="text-gray-600">
+                                  HSL: <span className="font-mono">
+                                    {typeof item.color.hsl === 'string' 
+                                      ? item.color.hsl 
+                                      : `hsl(${item.color.hsl.h}, ${item.color.hsl.s}%, ${item.color.hsl.l}%)`}
+                                  </span>
+                                </div>
+                              )}
+                            </>
                           )}
                           <div className="text-gray-600">Folder: <span className="font-medium">{item.folderName}</span></div>
                           {item.color.additionalColumns &&

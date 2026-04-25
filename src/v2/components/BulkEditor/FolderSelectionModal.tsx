@@ -36,11 +36,55 @@ function getContrastColor(hex: string): "black" | "white" {
   return luminance < 0.5 ? "white" : "black"
 }
 
+/** Helper to generate CSS gradient string */
+function generateGradientCSS(gradientData: any): string | null {
+  if (!gradientData || !gradientData.stops) return null
+
+  const sortedStops = [...gradientData.stops].sort(
+    (a: any, b: any) => a.position - b.position,
+  )
+
+  // For conic gradients, use degrees; for linear/radial, use percentages
+  const stopsString =
+    gradientData.type === "conic"
+      ? sortedStops
+          .map((stop: any) => `${stop.color} ${stop.position}deg`)
+          .join(", ")
+      : sortedStops
+          .map((stop: any) => `${stop.color} ${stop.position}%`)
+          .join(", ")
+
+  switch (gradientData.type) {
+    case "linear":
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+    case "radial":
+      return `radial-gradient(circle at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    case "conic":
+      return `conic-gradient(from ${gradientData.angle}deg at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    default:
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+  }
+}
+
+/** Helper to get background style for color or gradient */
+function getBackgroundStyle(color: any): React.CSSProperties {
+  if (color.type === "gradient" && color.gradient_data) {
+    const gradientCSS = generateGradientCSS(color.gradient_data)
+    return gradientCSS
+      ? { background: gradientCSS }
+      : { backgroundColor: color.hex }
+  }
+  return { backgroundColor: color.hex }
+}
+
 export interface FolderSelectionModalProps {
   isOpen: boolean
   onClose: () => void
   /** Called with destination folder IDs and the colors selected in this modal (may differ from bulk editor selection) */
-  onConfirm: (folderIds: string[], colorsToOperateOn: SelectedColorItem[]) => void
+  onConfirm: (
+    folderIds: string[],
+    colorsToOperateOn: SelectedColorItem[],
+  ) => void
   title: string
   actionType: "copy" | "move"
   isLoading?: boolean
@@ -59,10 +103,14 @@ export const FolderSelectionModal = ({
 }: FolderSelectionModalProps) => {
   const { state } = useGlobalState()
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+    new Set(),
+  )
   const [collapsedNonFoldered, setCollapsedNonFoldered] = useState(false)
   /** Modal-local selection (independent of bulk editor); keyed by color._id */
-  const [modalSelection, setModalSelection] = useState<Map<string, SelectedColorItem>>(new Map())
+  const [modalSelection, setModalSelection] = useState<
+    Map<string, SelectedColorItem>
+  >(new Map())
 
   const { data: foldersData, isLoading: foldersLoading } = useGetFolders(true)
 
@@ -72,7 +120,7 @@ export const FolderSelectionModal = ({
     if (isOpen && !wasOpenRef.current) {
       wasOpenRef.current = true
       const initial = selectedColors?.length
-        ? new Map(selectedColors.map(item => [item.color._id, item]))
+        ? new Map(selectedColors.map((item) => [item.color._id, item]))
         : new Map()
       setModalSelection(initial)
     }
@@ -82,11 +130,14 @@ export const FolderSelectionModal = ({
   const { data: allColorData, isLoading: isLoadingNonFoldered } = useQuery({
     queryKey: ["all-color-data", isOpen],
     queryFn: async () => {
-      const response = await axiosInstance.get("/api/database-sheets/all-color-data", {
-        headers: {
-          Authorization: `Bearer ${state.user?.jwtToken}`,
+      const response = await axiosInstance.get(
+        "/api/database-sheets/all-color-data",
+        {
+          headers: {
+            Authorization: `Bearer ${state.user?.jwtToken}`,
+          },
         },
-      })
+      )
       const data = response.data?.data || response.data
       if (data?.colorsWithoutFolders) {
         return {
@@ -103,9 +154,11 @@ export const FolderSelectionModal = ({
             slash_naming: c.slash_naming || "",
             tags: c.tags || [],
             additionalColumns: c.additionalColumns || [],
+            type: c.type || "solid",
+            gradient_data: c.gradient_data || null,
             createdAt: c.createdAt,
             updatedAt: c.updatedAt,
-          }))
+          })),
         }
       }
       return data
@@ -118,8 +171,14 @@ export const FolderSelectionModal = ({
     () => flattenFoldersHierarchyOrder(foldersFlat),
     [foldersFlat],
   )
-  const parentByChildId = useMemo(() => buildParentIdByChildId(foldersFlat), [foldersFlat])
-  const allFolderIds = useMemo(() => foldersFlat.map((f) => f._id), [foldersFlat])
+  const parentByChildId = useMemo(
+    () => buildParentIdByChildId(foldersFlat),
+    [foldersFlat],
+  )
+  const allFolderIds = useMemo(
+    () => foldersFlat.map((f) => f._id),
+    [foldersFlat],
+  )
   const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
   const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
     useFolderTreeExpanded(allFolderIds)
@@ -134,7 +193,7 @@ export const FolderSelectionModal = ({
   const actionLabel = actionType === "copy" ? "Copy to" : "Move to"
 
   const handleFolderToggle = (folderId: string) => {
-    setCollapsedFolders(prev => {
+    setCollapsedFolders((prev) => {
       const next = new Set(prev)
       if (next.has(folderId)) next.delete(folderId)
       else next.add(folderId)
@@ -143,7 +202,7 @@ export const FolderSelectionModal = ({
   }
 
   const handleColorToggle = (color: Color, folder: Folder | null) => {
-    setModalSelection(prev => {
+    setModalSelection((prev) => {
       const next = new Map(prev)
       if (next.has(color._id)) {
         next.delete(color._id)
@@ -152,7 +211,11 @@ export const FolderSelectionModal = ({
           color,
           folderId: folder?._id ?? "non-foldered",
           folderName: folder
-            ? (getFolderPathLabelById(folder._id, foldersFlat, parentByChildId) || folder.name)
+            ? getFolderPathLabelById(
+                folder._id,
+                foldersFlat,
+                parentByChildId,
+              ) || folder.name
             : "Non-foldered",
           originalColorId: color._id,
         })
@@ -195,7 +258,9 @@ export const FolderSelectionModal = ({
           {/* Left 50%: all folders with colors (browse) */}
           <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200 overflow-hidden bg-gray-50">
             <div className="px-3 py-2 border-b border-gray-200 flex-shrink-0">
-              <span className="text-[13px] font-medium text-gray-800">Your folders</span>
+              <span className="text-[13px] font-medium text-gray-800">
+                Your folders
+              </span>
             </div>
             <div className="flex-1 overflow-y-auto p-3 min-h-0">
               {/* Non-foldered Colors Section */}
@@ -204,7 +269,7 @@ export const FolderSelectionModal = ({
                   <div className="flex items-center gap-2 p-2 bg-gray-50 border-b border-gray-200">
                     <button
                       type="button"
-                      onClick={() => setCollapsedNonFoldered(prev => !prev)}
+                      onClick={() => setCollapsedNonFoldered((prev) => !prev)}
                       className="p-1 hover:bg-gray-200 rounded transition-colors"
                     >
                       <ChevronDown
@@ -223,7 +288,9 @@ export const FolderSelectionModal = ({
                         Non-foldered Colors
                       </div>
                       <div className="text-[10px] text-gray-500">
-                        {isLoadingNonFoldered ? "Loading..." : `${nonFolderedColors.length} color${nonFolderedColors.length !== 1 ? "s" : ""}`}
+                        {isLoadingNonFoldered
+                          ? "Loading..."
+                          : `${nonFolderedColors.length} color${nonFolderedColors.length !== 1 ? "s" : ""}`}
                       </div>
                     </div>
                   </div>
@@ -243,9 +310,11 @@ export const FolderSelectionModal = ({
                                   <div
                                     role="button"
                                     tabIndex={0}
-                                    style={{ backgroundColor: color.hex }}
+                                    style={getBackgroundStyle(color)}
                                     className="relative w-[32px] h-[32px] border-2 border-gray-300 hover:border-gray-400 rounded cursor-pointer flex items-center justify-center transition-all"
-                                    onClick={() => handleColorToggle(color, null)}
+                                    onClick={() =>
+                                      handleColorToggle(color, null)
+                                    }
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter" || e.key === " ") {
                                         e.preventDefault()
@@ -268,10 +337,38 @@ export const FolderSelectionModal = ({
                                     sideOffset={5}
                                   >
                                     <div className="flex flex-col gap-1">
-                                      <div className="font-medium">Color Information</div>
-                                      <div>Hex: {color.hex}</div>
+                                      <div className="font-medium">
+                                        {color.type === "gradient"
+                                          ? "Gradient Information"
+                                          : "Color Information"}
+                                      </div>
+                                      {color.type === "gradient" ? (
+                                        <>
+                                          <div>
+                                            Type:{" "}
+                                            {color.gradient_data?.type ||
+                                              "linear"}
+                                          </div>
+                                          <div>
+                                            Stops:{" "}
+                                            {color.gradient_data?.stops
+                                              ?.length || 0}
+                                          </div>
+                                          {color.gradient_data?.angle !==
+                                            undefined && (
+                                            <div>
+                                              Angle: {color.gradient_data.angle}
+                                              °
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div>Hex: {color.hex}</div>
+                                      )}
                                       {color.slash_naming ? (
-                                        <div>Slash Naming: {color.slash_naming}</div>
+                                        <div>
+                                          Slash Naming: {color.slash_naming}
+                                        </div>
                                       ) : null}
                                       <Tooltip.Arrow className="fill-white" />
                                     </div>
@@ -294,7 +391,10 @@ export const FolderSelectionModal = ({
                     const colors = folder.colors || []
                     const isCollapsed = collapsedFolders.has(folder._id)
                     return (
-                      <div key={folder._id} className="border border-gray-200 rounded">
+                      <div
+                        key={folder._id}
+                        className="border border-gray-200 rounded"
+                      >
                         <div className="flex items-center gap-2 p-2 bg-gray-50 border-b border-gray-200">
                           <button
                             type="button"
@@ -314,10 +414,15 @@ export const FolderSelectionModal = ({
                           </button>
                           <div className="flex-grow">
                             <div className="text-[12px] font-medium text-gray-800 truncate">
-                              {getFolderPathLabelById(folder._id, foldersFlat, parentByChildId) || folder.name}
+                              {getFolderPathLabelById(
+                                folder._id,
+                                foldersFlat,
+                                parentByChildId,
+                              ) || folder.name}
                             </div>
                             <div className="text-[10px] text-gray-500">
-                              {colors.length} color{colors.length !== 1 ? "s" : ""}
+                              {colors.length} color
+                              {colors.length !== 1 ? "s" : ""}
                             </div>
                           </div>
                         </div>
@@ -334,7 +439,9 @@ export const FolderSelectionModal = ({
                               <div className="flex flex-wrap gap-1.5">
                                 <Tooltip.Provider>
                                   {colors.map((color: Color) => {
-                                    const isSelected = modalSelection.has(color._id)
+                                    const isSelected = modalSelection.has(
+                                      color._id,
+                                    )
                                     const contrast = getContrastColor(color.hex)
                                     return (
                                       <Tooltip.Root key={color._id}>
@@ -342,11 +449,16 @@ export const FolderSelectionModal = ({
                                           <div
                                             role="button"
                                             tabIndex={0}
-                                            style={{ backgroundColor: color.hex }}
+                                            style={getBackgroundStyle(color)}
                                             className="relative w-[32px] h-[32px] border-2 border-gray-300 hover:border-gray-400 rounded cursor-pointer flex items-center justify-center transition-all"
-                                            onClick={() => handleColorToggle(color, folder)}
+                                            onClick={() =>
+                                              handleColorToggle(color, folder)
+                                            }
                                             onKeyDown={(e) => {
-                                              if (e.key === "Enter" || e.key === " ") {
+                                              if (
+                                                e.key === "Enter" ||
+                                                e.key === " "
+                                              ) {
                                                 e.preventDefault()
                                                 handleColorToggle(color, folder)
                                               }
@@ -367,10 +479,43 @@ export const FolderSelectionModal = ({
                                             sideOffset={5}
                                           >
                                             <div className="flex flex-col gap-1">
-                                              <div className="font-medium">Color Information</div>
-                                              <div>Hex: {color.hex}</div>
+                                              <div className="font-medium">
+                                                {color.type === "gradient"
+                                                  ? "Gradient Information"
+                                                  : "Color Information"}
+                                              </div>
+                                              {color.type === "gradient" ? (
+                                                <>
+                                                  <div>
+                                                    Type:{" "}
+                                                    {color.gradient_data
+                                                      ?.type || "linear"}
+                                                  </div>
+                                                  <div>
+                                                    Stops:{" "}
+                                                    {color.gradient_data?.stops
+                                                      ?.length || 0}
+                                                  </div>
+                                                  {color.gradient_data
+                                                    ?.angle !== undefined && (
+                                                    <div>
+                                                      Angle:{" "}
+                                                      {
+                                                        color.gradient_data
+                                                          .angle
+                                                      }
+                                                      °
+                                                    </div>
+                                                  )}
+                                                </>
+                                              ) : (
+                                                <div>Hex: {color.hex}</div>
+                                              )}
                                               {color.slash_naming ? (
-                                                <div>Slash Naming: {color.slash_naming}</div>
+                                                <div>
+                                                  Slash Naming:{" "}
+                                                  {color.slash_naming}
+                                                </div>
                                               ) : null}
                                               <Tooltip.Arrow className="fill-white" />
                                             </div>
@@ -396,7 +541,8 @@ export const FolderSelectionModal = ({
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
             <div className="p-3 border-b border-gray-200 flex-shrink-0">
               <label className="block text-[12px] text-gray-700 mb-2">
-                Select folder(s) to {actionType === "copy" ? "copy to" : "move to"}
+                Select folder(s) to{" "}
+                {actionType === "copy" ? "copy to" : "move to"}
               </label>
               {foldersLoading ? (
                 <div className="text-center text-gray-500 text-sm py-2">
@@ -417,7 +563,8 @@ export const FolderSelectionModal = ({
                       allIds.length > 0 &&
                       selectedFolderIds.length === allIds.length &&
                       allIds.every((id) => selectedFolderIds.includes(id))
-                    const someSelected = selectedFolderIds.length > 0 && !allSelected
+                    const someSelected =
+                      selectedFolderIds.length > 0 && !allSelected
                     return (
                       <div className="flex items-center justify-between h-8 px-3">
                         <button
@@ -428,7 +575,9 @@ export const FolderSelectionModal = ({
                             e.stopPropagation()
                             allExpanded ? collapseAll() : expandAll()
                           }}
-                          aria-label={allExpanded ? "Collapse all" : "Expand all"}
+                          aria-label={
+                            allExpanded ? "Collapse all" : "Expand all"
+                          }
                         >
                           <svg
                             width="13"
@@ -446,14 +595,21 @@ export const FolderSelectionModal = ({
                           </svg>
                         </button>
                         <div className="shrink-0">
-                          <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                          <div
+                            className="relative flex-shrink-0"
+                            style={{ width: "16px", height: "16px" }}
+                          >
                             <input
                               type="checkbox"
                               checked={allSelected}
                               ref={(el) => {
-                                if (el) (el as HTMLInputElement).indeterminate = someSelected
+                                if (el)
+                                  (el as HTMLInputElement).indeterminate =
+                                    someSelected
                               }}
-                              onChange={() => setSelectedFolderIds(allSelected ? [] : allIds)}
+                              onChange={() =>
+                                setSelectedFolderIds(allSelected ? [] : allIds)
+                              }
                               onClick={(e) => e.stopPropagation()}
                               className="cursor-pointer"
                               style={{
@@ -464,9 +620,13 @@ export const FolderSelectionModal = ({
                                 height: "16px",
                                 minWidth: "16px",
                                 minHeight: "16px",
-                                border: allSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                                border: allSelected
+                                  ? "1.5px solid #000000"
+                                  : "1.5px solid #d1d5db",
                                 borderRadius: "3px",
-                                backgroundColor: allSelected ? "#000000" : "#ffffff",
+                                backgroundColor: allSelected
+                                  ? "#000000"
+                                  : "#ffffff",
                                 transition: "all 0.15s ease-in-out",
                                 outline: "none",
                                 position: "relative",
@@ -514,34 +674,53 @@ export const FolderSelectionModal = ({
                   }}
                   keyExtractor={(id) => id}
                   renderItem={(folderId) => {
-                    const folder = foldersFlat.find(f => f._id === folderId)
-                    return folder
-                      ? (
-                        <FolderDropdownRow
-                          depth={getFolderDepthById(folderId, parentByChildId)}
-                          name={folder.name}
-                          title={getFolderPathLabelById(folderId, foldersFlat, parentByChildId) || folder.name}
-                          hasChildren={folderHasChildrenInList(folder, existingIdSet)}
-                          expanded={expandedIds.has(folder._id)}
-                          onToggleExpand={() => toggleExpanded(folder._id)}
-                        />
-                      )
-                      : folderId
+                    const folder = foldersFlat.find((f) => f._id === folderId)
+                    return folder ? (
+                      <FolderDropdownRow
+                        depth={getFolderDepthById(folderId, parentByChildId)}
+                        name={folder.name}
+                        title={
+                          getFolderPathLabelById(
+                            folderId,
+                            foldersFlat,
+                            parentByChildId,
+                          ) || folder.name
+                        }
+                        hasChildren={folderHasChildrenInList(
+                          folder,
+                          existingIdSet,
+                        )}
+                        expanded={expandedIds.has(folder._id)}
+                        onToggleExpand={() => toggleExpanded(folder._id)}
+                      />
+                    ) : (
+                      folderId
+                    )
                   }}
                   renderSelected={(selectedIds) => {
                     if (selectedIds.length === 0) return "Select folders"
                     if (selectedIds.length === 1) {
-                      const folder = foldersFlat.find(f => f._id === selectedIds[0])
+                      const folder = foldersFlat.find(
+                        (f) => f._id === selectedIds[0],
+                      )
                       return folder
-                        ? (getFolderPathLabelById(selectedIds[0], foldersFlat, parentByChildId) || folder.name)
+                        ? getFolderPathLabelById(
+                            selectedIds[0],
+                            foldersFlat,
+                            parentByChildId,
+                          ) || folder.name
                         : selectedIds[0]
                     }
                     return `${selectedIds.length} folders selected`
                   }}
                   getSearchText={(folderId) => {
-                    const folder = foldersFlat.find(f => f._id === folderId)
+                    const folder = foldersFlat.find((f) => f._id === folderId)
                     return folder
-                      ? (getFolderPathLabelById(folderId, foldersFlat, parentByChildId) || folder.name)
+                      ? getFolderPathLabelById(
+                          folderId,
+                          foldersFlat,
+                          parentByChildId,
+                        ) || folder.name
                       : String(folderId)
                   }}
                   onSelect={setSelectedFolderIds}
@@ -553,7 +732,9 @@ export const FolderSelectionModal = ({
               )}
             </div>
             <div className="px-3 py-2 border-b border-gray-100 flex-shrink-0">
-              <span className="text-[13px] font-medium text-gray-800">{actionLabel}</span>
+              <span className="text-[13px] font-medium text-gray-800">
+                {actionLabel}
+              </span>
             </div>
             <div className="flex-1 overflow-y-auto p-3 min-h-0 flex flex-wrap gap-2 content-start">
               {modalSelectedList.length === 0 ? (
@@ -565,8 +746,12 @@ export const FolderSelectionModal = ({
                   <div
                     key={item.color._id + String(index)}
                     className="w-8 h-8 rounded border border-gray-200 flex-shrink-0"
-                    style={{ backgroundColor: item.color.hex || "#ccc" }}
-                    title={item.color.hex}
+                    style={getBackgroundStyle(item.color)}
+                    title={
+                      item.color.type === "gradient"
+                        ? `Gradient (${item.color.gradient_data?.type || "linear"})`
+                        : item.color.hex
+                    }
                   />
                 ))
               )}
@@ -584,9 +769,17 @@ export const FolderSelectionModal = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={selectedFolderIds.length === 0 || modalSelectedList.length === 0 || parentIsLoading || foldersLoading}
+            disabled={
+              selectedFolderIds.length === 0 ||
+              modalSelectedList.length === 0 ||
+              parentIsLoading ||
+              foldersLoading
+            }
             className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-              selectedFolderIds.length > 0 && modalSelectedList.length > 0 && !parentIsLoading && !foldersLoading
+              selectedFolderIds.length > 0 &&
+              modalSelectedList.length > 0 &&
+              !parentIsLoading &&
+              !foldersLoading
                 ? "bg-gray-900 text-white hover:bg-gray-800"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}
@@ -596,8 +789,8 @@ export const FolderSelectionModal = ({
                 ? "Copying..."
                 : "Moving..."
               : actionType === "copy"
-              ? "Copy"
-              : "Move"}
+                ? "Copy"
+                : "Move"}
           </button>
         </div>
       </div>

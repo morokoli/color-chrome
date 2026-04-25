@@ -119,6 +119,11 @@ const Right = () => {
         setTagsInput("")
       } else {
         setActiveColors(selectedColors.map((_, i) => i))
+        // If any selected color is a gradient, switch to "none" mode
+        const hasGradient = selectedColors.some(item => item.color.type === 'gradient')
+        if (hasGradient && nameMode === 'hex') {
+          setNameMode('none')
+        }
         if (selectedColors.length > 0) {
           const firstSlashNaming = selectedColors[0]?.color.slash_naming || ""
           const allSameName = selectedColors.every(
@@ -162,6 +167,11 @@ const Right = () => {
       }
     } else {
       const newActive = [...activeColors, colorId]
+      // If any selected color is a gradient, switch to "none" mode
+      const hasGradient = newActive.some(idx => selectedColors[idx]?.color.type === 'gradient')
+      if (hasGradient && nameMode === 'hex') {
+        setNameMode('none')
+      }
       if (newActive.length === 1) {
         setNameInput(selectedColors[colorId]?.color.slash_naming || "")
         const tags = selectedColors[colorId]?.color.tags || []
@@ -295,20 +305,41 @@ const Right = () => {
       const promises = selectedColors.map(async (item, index) => {
         const color = item.color
         
-        // Handle rgb conversion
-        let rgbValue: string = ''
-        if (typeof color.rgb === 'string') {
-          rgbValue = color.rgb
-        } else if (color.rgb && typeof color.rgb === 'object' && 'r' in color.rgb && 'g' in color.rgb && 'b' in color.rgb) {
-          rgbValue = `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`
+        // Build the row payload based on whether it's a gradient or solid color
+        let rowPayload: any = {
+          slash_naming: color.slash_naming || "",
+          comments: color.comments || "",
+          ranking: color.ranking || 0,
+          tags: color.tags || [],
+          additionalColumns: color.additionalColumns || [],
+          timestamp: Date.now(),
+          url: (color as any).url || "",
         }
-        
-        // Handle hsl conversion
-        let hslValue: string = ''
-        if (typeof color.hsl === 'string') {
-          hslValue = color.hsl
-        } else if (color.hsl && typeof color.hsl === 'object' && 'h' in color.hsl && 's' in color.hsl && 'l' in color.hsl) {
-          hslValue = `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`
+
+        // If it's a gradient, include gradient data and type
+        if (color.type === 'gradient' && color.gradient_data) {
+          rowPayload.type = 'gradient'
+          rowPayload.gradient_data = color.gradient_data
+          rowPayload.hex = color.hex // Keep hex as fallback
+          // Don't send rgb/hsl for gradients as they're not applicable
+        } else {
+          // For solid colors, include hex, rgb, hsl
+          rowPayload.type = 'solid'
+          rowPayload.hex = color.hex
+          
+          // Handle rgb conversion
+          if (typeof color.rgb === 'string') {
+            rowPayload.rgb = color.rgb
+          } else if (color.rgb && typeof color.rgb === 'object' && 'r' in color.rgb && 'g' in color.rgb && 'b' in color.rgb) {
+            rowPayload.rgb = `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`
+          }
+          
+          // Handle hsl conversion
+          if (typeof color.hsl === 'string') {
+            rowPayload.hsl = color.hsl
+          } else if (color.hsl && typeof color.hsl === 'object' && 'h' in color.hsl && 's' in color.hsl && 'l' in color.hsl) {
+            rowPayload.hsl = `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`
+          }
         }
         
         const response = await axiosInstance.put(
@@ -317,19 +348,7 @@ const Right = () => {
             colorId: color._id,
             sheetId: null, // We're updating database only
             isUpdateSheet: false,
-            row: {
-              // Use existing url if available, fallback to empty string (required by backend schema)
-              url: (color as any).url || "",
-              hex: color.hex,
-              rgb: rgbValue,
-              hsl: hslValue,
-              slash_naming: color.slash_naming || "",
-              comments: color.comments || "",
-              ranking: color.ranking || 0,
-              tags: color.tags || [],
-              additionalColumns: color.additionalColumns || [],
-              timestamp: Date.now(),
-            },
+            row: rowPayload,
           },
           {
             headers: {
@@ -362,6 +381,8 @@ const Right = () => {
                 url: serverColor.url,
                 rgb: serverColor.rgb,
                 hsl: serverColor.hsl,
+                type: serverColor.type,
+                gradient_data: serverColor.gradient_data,
               },
             },
           })
@@ -399,6 +420,9 @@ const Right = () => {
                 // Preserve RGB/HSL structure
                 rgb: serverColor.rgb || item.color.rgb,
                 hsl: serverColor.hsl || item.color.hsl,
+                // Preserve gradient data
+                type: serverColor.type || item.color.type,
+                gradient_data: serverColor.gradient_data || item.color.gradient_data,
               }
             }
           }
@@ -456,16 +480,19 @@ const Right = () => {
                   />
                   <span className="text-[12px] text-gray-700">None</span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="nameMode"
-                    checked={nameMode === "hex"}
-                    onChange={() => setNameMode("hex")}
-                    className="w-3.5 h-3.5 accent-black border-gray-400"
-                  />
-                  <span className="text-[12px] text-gray-700">Add Hex</span>
-                </label>
+                {/* Hide "Add Hex" if any selected color is a gradient */}
+                {!activeColors.some(idx => selectedColors[idx]?.color.type === 'gradient') && (
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="nameMode"
+                      checked={nameMode === "hex"}
+                      onChange={() => setNameMode("hex")}
+                      className="w-3.5 h-3.5 accent-black border-gray-400"
+                    />
+                    <span className="text-[12px] text-gray-700">Add Hex</span>
+                  </label>
+                )}
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"

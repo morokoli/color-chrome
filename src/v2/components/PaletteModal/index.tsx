@@ -15,6 +15,8 @@ import ColorPropertiesForm from "./ColorPropertiesForm"
 import ImportColorsList from "./ImportColorsList"
 import PaletteHistory from "./PaletteHistory"
 import { useGetFolders } from "@/v2/api/folders.api"
+import GradientEditor, { generateFigmaGradientData } from "./GradientEditor"
+import GradientPropertiesForm from "./GradientPropertiesForm"
 
 /** Folder IDs that contain this color (by id or populated `colors` hex), for Color Info multi-select. */
 function collectFolderIdsForColor(color: any, folders: any[] | undefined): string[] {
@@ -97,6 +99,50 @@ function formatHslForApiRow(colorData: any): string {
   return ""
 }
 
+type GradientMode = "solid" | "gradient"
+type GradientType = "linear" | "radial" | "conic"
+
+interface GradientStop {
+  id: string
+  color: string
+  position: number
+  hsl?: { h: number; s: number; l: number }
+}
+
+interface GradientData {
+  type: GradientType
+  angle: number
+  position: { x: number; y: number }
+  stops: GradientStop[]
+  metadata: {
+    name: string
+    slash_naming: string
+    url: string
+    tags: string[]
+    comments: string
+    ranking: number
+  }
+  figma?: any
+}
+
+const createDefaultGradient = (): GradientData => ({
+  type: "linear",
+  angle: 90,
+  position: { x: 50, y: 50 },
+  stops: [
+    { id: `stop_${Date.now()}_1`, color: "#3b82f6", position: 0 },
+    { id: `stop_${Date.now()}_2`, color: "#ffffff", position: 100 },
+  ],
+  metadata: {
+    name: "",
+    slash_naming: "",
+    url: "",
+    tags: [],
+    comments: "",
+    ranking: 0,
+  },
+})
+
 interface PaletteModalProps {
   open: boolean
   onClose: () => void
@@ -107,6 +153,11 @@ interface PaletteModalProps {
   initialTags?: string[] | null
   onSuccess?: (colors: any[]) => void
   hidePrimaryActionButton?: boolean
+  hideHeader?: boolean
+  externalColorMode?: GradientMode
+  externalActiveTab?: "create" | "info"
+  onColorModeChange?: (mode: GradientMode) => void
+  onActiveTabChange?: (tab: "create" | "info") => void
   onPrimaryActionMetaChange?: (meta: { label: string; disabled: boolean }) => void
   /** When hidePrimaryActionButton is true, parent can show "Save selected color separately" in its footer; this callback provides disabled/loading */
   onSaveSelectedColorMetaChange?: (meta: { disabled: boolean; loading: boolean }) => void
@@ -121,6 +172,8 @@ export type PaletteModalHandle = {
   handleUndo: () => void
   handleRedo: () => void
   saveSelectedColorSeparately: () => void
+  setColorMode?: (mode: GradientMode) => void
+  setActiveTab?: (tab: "create" | "info") => void
 }
 
 const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, ref) => {
@@ -133,6 +186,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     initialPaletteData = null,
     initialTags = null,
     onSuccess,
+    hidePrimaryActionButton: _hidePrimaryActionButton = false,
+    hideHeader = false,
+    externalColorMode,
+    externalActiveTab,
+    onColorModeChange,
+    onActiveTabChange,
     onPrimaryActionMetaChange,
     onSaveSelectedColorMetaChange,
     onStateChange,
@@ -149,12 +208,34 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const [primarySaving, setPrimarySaving] = useState(false)
   const [saveSelectedSaving, setSaveSelectedSaving] = useState(false)
   const saveInProgress = primarySaving || saveSelectedSaving
-  const [activeTab, setActiveTab] = useState<"info" | "create">("create")
+  const [internalActiveTab, setInternalActiveTab] = useState<"info" | "create">("create")
   const [activeInfoSubtab, setActiveInfoSubtab] = useState<"palette" | "color">("palette")
   const [nameFieldError, setNameFieldError] = useState(false)
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
+  const [internalColorMode, setInternalColorMode] = useState<GradientMode>("solid")
+  const [gradient, setGradient] = useState<GradientData>(createDefaultGradient())
+  
+  // Use external state if provided, otherwise use internal
+  const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab
+  const colorMode = externalColorMode !== undefined ? externalColorMode : internalColorMode
+  
+  const handleSetActiveTab = (tab: "create" | "info") => {
+    if (externalActiveTab !== undefined && onActiveTabChange) {
+      onActiveTabChange(tab)
+    } else {
+      setInternalActiveTab(tab)
+    }
+  }
+  
+  const handleSetColorMode = (mode: GradientMode) => {
+    if (externalColorMode !== undefined && onColorModeChange) {
+      onColorModeChange(mode)
+    } else {
+      setInternalColorMode(mode)
+    }
+  }
   const [formData, setFormData] = useState({
     name: "",
     url: "",
@@ -167,21 +248,25 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const undoRef = useRef<(() => void) | null>(null)
   const redoRef = useRef<(() => void) | null>(null)
 
-  const isSingleColor = colors.length === 1
-  const isPalette = colors.length > 1
+  const isSingleColor = colorMode === "gradient" || colors.length === 1
+  const isPalette = colorMode === "solid" && colors.length > 1
 
   useEffect(() => {
     if (initialColors) {
+      handleSetColorMode("solid")
+      setGradient(createDefaultGradient())
       setColors(initialColors)
       setOriginalColors(initialColors)
       setColorPickerIndex(0)
-      setActiveTab("create")
+      handleSetActiveTab("create")
       setActiveInfoSubtab("palette")
     } else {
+      handleSetColorMode("solid")
+      setGradient(createDefaultGradient())
       setColors([createDefaultColorObject(), createDefaultColorObject()])
       setOriginalColors([createDefaultColorObject(), createDefaultColorObject()])
       setColorPickerIndex(0)
-      setActiveTab("create")
+      handleSetActiveTab("create")
       setActiveInfoSubtab("palette")
       setTags([])
       setFormData({ name: "", url: "", description: "", ranking: 0 })
@@ -192,6 +277,33 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
   useEffect(() => {
     if (initialPaletteData && isEditing) {
+      const isGradientItem =
+        initialPaletteData.type === "gradient" && initialPaletteData.gradient_data
+
+      if (isGradientItem) {
+        handleSetColorMode("gradient")
+        setGradient({
+          type: initialPaletteData.gradient_data.type || "linear",
+          angle: initialPaletteData.gradient_data.angle ?? 90,
+          position: initialPaletteData.gradient_data.position || { x: 50, y: 50 },
+          stops: initialPaletteData.gradient_data.stops || createDefaultGradient().stops,
+          metadata: {
+            name: initialPaletteData.name || "",
+            slash_naming: initialPaletteData.slash_naming || "",
+            url: initialPaletteData.url || "",
+            tags: initialPaletteData.tags || [],
+            comments: initialPaletteData.comments || "",
+            ranking: initialPaletteData.ranking || 0,
+          },
+          figma: initialPaletteData.gradient_data.figma,
+        })
+        setColors([createDefaultColorObject()])
+        setOriginalColors([createDefaultColorObject()])
+        setColorPickerIndex(0)
+        return
+      }
+
+      handleSetColorMode("solid")
       setFormData({
         name: initialPaletteData.name || "",
         url: initialPaletteData.url || "",
@@ -285,7 +397,35 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     setColors(newColors)
   }
 
-  const handleAddColorToPalette = (colorData: any, index: number | null = null) => {
+  const handleAddColorToPalette = (
+    colorData: any,
+    index: number | null = null,
+    isGradientClick = false
+  ) => {
+    const isGradient = colorData?.type === "gradient" && colorData?.gradient_data
+    if (isGradient && isGradientClick) {
+      handleSetColorMode("gradient")
+      const gradientData: GradientData = {
+        type: colorData.gradient_data.type || "linear",
+        angle: colorData.gradient_data.angle ?? 90,
+        position: colorData.gradient_data.position || { x: 50, y: 50 },
+        stops: colorData.gradient_data.stops || createDefaultGradient().stops,
+        metadata: {
+          name: colorData.name || "",
+          slash_naming: colorData.slash_naming || "",
+          url: colorData.url || "",
+          tags: colorData.tags || [],
+          comments: colorData.comments || "",
+          ranking: colorData.ranking || 0,
+        },
+      }
+      const figmaData = generateFigmaGradientData(gradientData)
+      if (figmaData) gradientData.figma = figmaData
+      setGradient(gradientData)
+      return
+    }
+
+    handleSetColorMode("solid")
     if (colors.length < 10) {
       const colorObject =
         typeof colorData === "string"
@@ -368,6 +508,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     saveSelectedColorSeparately: () => {
       if (!saveInProgress) handleSaveSelectedColor()
     },
+    setColorMode: handleSetColorMode,
+    setActiveTab: handleSetActiveTab,
   }))
 
   useEffect(() => {
@@ -417,14 +559,18 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   }
 
   const handleFinish = async () => {
-    // Check if this is a single color (either explicitly set or has only 1 color)
-    // Recalculate based on current colors state to ensure accuracy
     const currentIsSingleColor = colors.length === 1
-    const isActuallySingleColor = isSingleColorEdit || currentIsSingleColor
+    const isActuallySingleColor = isSingleColorEdit || currentIsSingleColor || colorMode === "gradient"
+
+    if (colorMode === "gradient" && !gradient.metadata.name.trim()) {
+      toast.display("error", "Please enter a gradient name")
+      handleSetActiveTab("info")
+      return
+    }
 
     if (!formData.name.trim() && colors.length > 1 && !isActuallySingleColor) {
       toast.display("error", "Please enter a palette name")
-      setActiveTab("info")
+      handleSetActiveTab("info")
       setActiveInfoSubtab("palette")
       setNameFieldError(true)
       return
@@ -433,6 +579,108 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     setPrimarySaving(true)
     try {
       if (isActuallySingleColor) {
+        if (colorMode === "gradient") {
+          const timestamp = Math.floor(Date.now() / 1000)
+          const figmaData = generateFigmaGradientData(gradient)
+          const gradientDataToSend = {
+            type: gradient.type,
+            angle: gradient.angle,
+            position: gradient.position,
+            stops: gradient.stops,
+            figma: figmaData,
+          }
+
+          if (isEditing) {
+            await axiosInstance.put(
+              config.api.endpoints.updateColor,
+              {
+                colorId: paletteId,
+                sheetId: null,
+                isUpdateSheet: false,
+                row: {
+                  type: "gradient",
+                  gradient_data: gradientDataToSend,
+                  name: gradient.metadata.name || "",
+                  url: gradient.metadata.url || "",
+                  ranking: gradient.metadata.ranking || 0,
+                  comments: gradient.metadata.comments || "",
+                  slash_naming: gradient.metadata.slash_naming || "",
+                  tags: parseTags(gradient.metadata.tags || []),
+                  additionalColumns: [],
+                  timestamp: timestamp * 1000,
+                },
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${state.user?.jwtToken}`,
+                },
+              }
+            )
+            toast.display("success", "Gradient updated!")
+          } else {
+            const response = await axiosInstance.post(
+              config.api.endpoints.addColor,
+              {
+                spreadsheetId: null,
+                sheetName: null,
+                sheetId: null,
+                row: {
+                  type: "gradient",
+                  gradient_data: gradientDataToSend,
+                  timestamp,
+                  name: gradient.metadata.name || "",
+                  url: gradient.metadata.url || "",
+                  ranking: String(gradient.metadata.ranking || 0),
+                  comments: gradient.metadata.comments || "",
+                  slash_naming: gradient.metadata.slash_naming || "",
+                  tags: parseTags(gradient.metadata.tags || []),
+                  additionalColumns: [],
+                },
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${state.user?.jwtToken}`,
+                },
+              }
+            )
+            toast.display("success", "Gradient created!")
+
+            if (selectedFolderIds && selectedFolderIds.length > 0) {
+              try {
+                const colorId = response?.data?.data?.createdColor?._id
+                  || response?.data?.createdColor?._id
+                  || response?.data?.data?.colorId
+                  || response?.data?.colorId
+
+                if (colorId) {
+                  await Promise.all(
+                    selectedFolderIds.map((folderId) =>
+                      axiosInstance.post(
+                        `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
+                        { colorId },
+                        {
+                          headers: {
+                            Authorization: `Bearer ${state.user?.jwtToken}`,
+                          },
+                        }
+                      ).catch((err) => {
+                        console.error(`Error copying gradient to folder ${folderId}:`, err)
+                        return null
+                      })
+                    )
+                  )
+                  toast.display("success", `Gradient added to ${selectedFolderIds.length} folder${selectedFolderIds.length > 1 ? "s" : ""}`)
+                }
+              } catch (folderErr) {
+                console.error("Error copying gradient to folders:", folderErr)
+                toast.display("error", "Gradient created but failed to add to folders")
+              }
+            }
+          }
+          onSuccess && onSuccess([gradient])
+          return
+        }
+
         const colorData = colors[0]
 
         // Handle RGB - can be object or string
@@ -713,7 +961,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       }
     } catch (err: any) {
       const action = isEditing ? "update" : "create"
-      const itemType = isSingleColor ? "color" : "palette"
+      const itemType = colorMode === "gradient" ? "gradient" : isSingleColor ? "color" : "palette"
       toast.display("error", `Failed to ${action} ${itemType}`)
       console.error("Error saving:", err)
     } finally {
@@ -893,65 +1141,126 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             </div>
           </div> */}
 
-          <ColorsSection
-            colors={colors}
-            colorPickerIndex={colorPickerIndex}
-            onColorClick={handleColorBoxClick}
-            onRemoveColor={handleRemoveColor}
-            onAddColor={handleAddColor}
-            onMoveColor={moveColor}
-            onAddColorToPalette={handleAddColorToPalette}
-            onReplaceColor={handleReplaceColor}
-          />
+          {/* Mode Toggle - Hide if hideHeader is true */}
+          {!hideHeader && (!isEditing || isSingleColor) && (
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px", padding: "0 4px" }}>
+              <button
+                onClick={() => handleSetColorMode("solid")}
+                style={{
+                  flex: 1,
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                  fontWeight: colorMode === "solid" ? 600 : 400,
+                  color: colorMode === "solid" ? "#fff" : "#666",
+                  background: colorMode === "solid" ? "#000" : "#f5f5f5",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                Solid
+              </button>
+              <button
+                onClick={() => handleSetColorMode("gradient")}
+                style={{
+                  flex: 1,
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                  fontWeight: colorMode === "gradient" ? 600 : 400,
+                  color: colorMode === "gradient" ? "#fff" : "#666",
+                  background: colorMode === "gradient" ? "#000" : "#f5f5f5",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                Gradient
+              </button>
+            </div>
+          )}
 
-          {/* Tabs */}
-          <div style={{ display: "flex", borderBottom: "1px solid #f0f0f0", marginBottom: "8px" }}>
-            <button
-              onClick={() => setActiveTab("create")}
-              style={{
-                padding: "8px 16px",
-                fontSize: "14px",
-                fontWeight: activeTab === "create" ? 500 : 400,
-                color: activeTab === "create" ? "#000" : "#666",
-                background: "transparent",
-                border: "none",
-                borderBottom: activeTab === "create" ? "2px solid #000" : "1px solid transparent",
-                cursor: "pointer",
-              }}
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setActiveTab("info")}
-              style={{
-                padding: "8px 16px",
-                fontSize: "14px",
-                fontWeight: activeTab === "info" ? 500 : 400,
-                color: activeTab === "info" ? "#000" : "#666",
-                background: "transparent",
-                border: "none",
-                borderBottom: activeTab === "info" ? "2px solid #000" : "1px solid transparent",
-                cursor: "pointer",
-              }}
-            >
-              Info
-            </button>
-          </div>
+          {colorMode === "solid" && (
+            <ColorsSection
+              colors={colors}
+              colorPickerIndex={colorPickerIndex}
+              onColorClick={handleColorBoxClick}
+              onRemoveColor={handleRemoveColor}
+              onAddColor={handleAddColor}
+              onMoveColor={moveColor}
+              onAddColorToPalette={handleAddColorToPalette}
+              onReplaceColor={handleReplaceColor}
+            />
+          )}
+
+          {/* Tabs - Hide if hideHeader is true */}
+          {!hideHeader && (
+            <div style={{ display: "flex", borderBottom: "1px solid #f0f0f0", marginBottom: "8px" }}>
+              <button
+                onClick={() => handleSetActiveTab("create")}
+                style={{
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                  fontWeight: activeTab === "create" ? 500 : 400,
+                  color: activeTab === "create" ? "#000" : "#666",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: activeTab === "create" ? "2px solid #000" : "1px solid transparent",
+                  cursor: "pointer",
+                }}
+              >
+                Create
+              </button>
+              <button
+                onClick={() => handleSetActiveTab("info")}
+                style={{
+                  padding: "8px 16px",
+                  fontSize: "14px",
+                  fontWeight: activeTab === "info" ? 500 : 400,
+                  color: activeTab === "info" ? "#000" : "#666",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: activeTab === "info" ? "2px solid #000" : "1px solid transparent",
+                  cursor: "pointer",
+                }}
+              >
+                Info
+              </button>
+            </div>
+          )}
 
           <div style={{ flex: 1, overflowY: "auto" }} className="import-colors-scrollbar">
             {activeTab === "create" ? (
-              <ColorEditSection
-                selectedColor={
-                  colorPickerIndex !== null
-                    ? colors[colorPickerIndex]
-                    : createDefaultColorObject()
-                }
-                onColorChange={handleColorChange}
-                colorPickerIndex={colorPickerIndex}
-              />
+              colorMode === "gradient" ? (
+                <GradientEditor
+                  gradient={gradient}
+                  onChange={setGradient}
+                  isMobile={false}
+                />
+              ) : (
+                <ColorEditSection
+                  selectedColor={
+                    colorPickerIndex !== null
+                      ? colors[colorPickerIndex]
+                      : createDefaultColorObject()
+                  }
+                  onColorChange={handleColorChange}
+                  colorPickerIndex={colorPickerIndex}
+                />
+              )
             ) : (
               <div>
-                {isPalette ? (
+                {colorMode === "gradient" ? (
+                  <GradientPropertiesForm
+                    gradient={gradient}
+                    onGradientMetadataChange={(metadata) =>
+                      setGradient((prev) => ({ ...prev, metadata }))
+                    }
+                    selectedFolderIds={selectedFolderIds}
+                    onFolderChange={setSelectedFolderIds}
+                  />
+                ) : isPalette ? (
                   <div>
                     <div style={{ display: "flex", borderBottom: "1px solid #f0f0f0", marginBottom: "16px" }}>
                       <button
@@ -1022,7 +1331,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
         {/* Right Side Section - History (always visible) */}
         <CollapsibleBoxHorizontal
-          isOpen={activeTab === "create"}
+          isOpen={activeTab === "create" && colorMode === "solid"}
           maxWidth="170px"
         >
           <div

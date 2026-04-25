@@ -27,6 +27,19 @@ export interface Color {
   additionalColumns?: Array<{ name: string; value: string }>
   createdAt?: string
   updatedAt?: string
+  type?: "color" | "gradient"
+  gradient_data?: {
+    type: "linear" | "radial" | "conic"
+    angle: number
+    position: { x: number; y: number }
+    stops: Array<{
+      id: string
+      color: string
+      position: number
+      hsl?: { h: number; s: number; l: number }
+    }>
+    figma?: any
+  }
 }
 
 export interface SelectedColor {

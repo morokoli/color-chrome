@@ -21,6 +21,38 @@ import {
   getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
 
+// Helper to generate CSS gradient string
+const generateGradientCSS = (gradientData: any) => {
+  if (!gradientData || !gradientData.stops) return null
+  
+  const sortedStops = [...gradientData.stops].sort((a: any, b: any) => a.position - b.position)
+  
+  // For conic gradients, use degrees; for linear/radial, use percentages
+  const stopsString = gradientData.type === 'conic'
+    ? sortedStops.map((stop: any) => `${stop.color} ${stop.position}deg`).join(', ')
+    : sortedStops.map((stop: any) => `${stop.color} ${stop.position}%`).join(', ')
+  
+  switch (gradientData.type) {
+    case 'linear':
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+    case 'radial':
+      return `radial-gradient(circle at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    case 'conic':
+      return `conic-gradient(from ${gradientData.angle}deg at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
+    default:
+      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
+  }
+}
+
+// Helper to get background style for color or gradient
+const getBackgroundStyle = (color: Color): React.CSSProperties => {
+  if (color.type === 'gradient' && color.gradient_data) {
+    const gradientCSS = generateGradientCSS(color.gradient_data)
+    return gradientCSS ? { background: gradientCSS } : { backgroundColor: color.hex }
+  }
+  return { backgroundColor: color.hex }
+}
+
 /** Returns "black" or "white" for contrast on the given hex background */
 function getContrastColor(hex: string): "black" | "white" {
   const h = (hex || "#808080").replace("#", "")
@@ -88,6 +120,8 @@ const Left: React.FC = () => {
             slash_naming: c.slash_naming || "",
             tags: c.tags || [],
             additionalColumns: c.additionalColumns || [],
+            type: c.type || "color",
+            gradient_data: c.gradient_data || null,
             createdAt: c.createdAt,
             updatedAt: c.updatedAt,
           }))
@@ -934,9 +968,7 @@ const Left: React.FC = () => {
                         <Tooltip.Root key={color._id}>
                           <Tooltip.Trigger asChild>
                             <div
-                              style={{
-                                backgroundColor: color.hex,
-                              }}
+                              style={getBackgroundStyle(color)}
                               className="relative w-[32px] h-[32px] cursor-pointer border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center"
                               onClick={() => handleColorClick(color, null)}
                             >
@@ -955,21 +987,33 @@ const Left: React.FC = () => {
                               sideOffset={5}
                             >
                               <div className="flex flex-col gap-1">
-                                <div className="font-medium">Color Information</div>
-                                <div>Hex: {color.hex}</div>
-                                {color.rgb && (
-                                  <div>
-                                    RGB: {typeof color.rgb === 'string' 
-                                      ? color.rgb 
-                                      : `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`}
-                                  </div>
-                                )}
-                                {color.hsl && (
-                                  <div>
-                                    HSL: {typeof color.hsl === 'string' 
-                                      ? color.hsl 
-                                      : `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`}
-                                  </div>
+                                <div className="font-medium">
+                                  {color.type === 'gradient' ? 'Gradient Information' : 'Color Information'}
+                                </div>
+                                {color.type === 'gradient' ? (
+                                  <>
+                                    <div>Type: Gradient</div>
+                                    <div>Pattern: {color.gradient_data?.type || 'linear'}</div>
+                                    <div>Stops: {color.gradient_data?.stops?.length || 0}</div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div>Hex: {color.hex}</div>
+                                    {color.rgb && (
+                                      <div>
+                                        RGB: {typeof color.rgb === 'string' 
+                                          ? color.rgb 
+                                          : `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`}
+                                      </div>
+                                    )}
+                                    {color.hsl && (
+                                      <div>
+                                        HSL: {typeof color.hsl === 'string' 
+                                          ? color.hsl 
+                                          : `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`}
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                                 {color.slash_naming && (
                                   <div>Slash Naming: {color.slash_naming}</div>
@@ -1073,9 +1117,7 @@ const Left: React.FC = () => {
                               <Tooltip.Root key={color._id}>
                                 <Tooltip.Trigger asChild>
                                   <div
-                                    style={{
-                                      backgroundColor: color.hex,
-                                    }}
+                                    style={getBackgroundStyle(color)}
                                     className="relative w-[32px] h-[32px] cursor-pointer border-2 border-gray-300 hover:border-gray-400 transition-all flex items-center justify-center"
                                     onClick={() => handleColorClick(color, folder)}
                                   >
@@ -1094,21 +1136,33 @@ const Left: React.FC = () => {
                                     sideOffset={5}
                                   >
                                     <div className="flex flex-col gap-1">
-                                      <div className="font-medium">Color Information</div>
-                                      <div>Hex: {color.hex}</div>
-                                      {color.rgb && (
-                                        <div>
-                                          RGB: {typeof color.rgb === 'string' 
-                                            ? color.rgb 
-                                            : `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`}
-                                        </div>
-                                      )}
-                                      {color.hsl && (
-                                        <div>
-                                          HSL: {typeof color.hsl === 'string' 
-                                            ? color.hsl 
-                                            : `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`}
-                                        </div>
+                                      <div className="font-medium">
+                                        {color.type === 'gradient' ? 'Gradient Information' : 'Color Information'}
+                                      </div>
+                                      {color.type === 'gradient' ? (
+                                        <>
+                                          <div>Type: Gradient</div>
+                                          <div>Pattern: {color.gradient_data?.type || 'linear'}</div>
+                                          <div>Stops: {color.gradient_data?.stops?.length || 0}</div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div>Hex: {color.hex}</div>
+                                          {color.rgb && (
+                                            <div>
+                                              RGB: {typeof color.rgb === 'string' 
+                                                ? color.rgb 
+                                                : `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`}
+                                            </div>
+                                          )}
+                                          {color.hsl && (
+                                            <div>
+                                              HSL: {typeof color.hsl === 'string' 
+                                                ? color.hsl 
+                                                : `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`}
+                                            </div>
+                                          )}
+                                        </>
                                       )}
                                       {color.slash_naming && (
                                         <div>Slash Naming: {color.slash_naming}</div>
