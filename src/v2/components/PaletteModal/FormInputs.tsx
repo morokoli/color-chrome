@@ -55,9 +55,49 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
   const toast = useToast()
   const [tagsInput, setTagsInput] = useState("")
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const isInternalNameUpdate = useRef(false)
+  const [paletteNameInput, setPaletteNameInput] = useState("")
+  const [paletteNameSegments, setPaletteNameSegments] = useState<string[]>([])
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
   const [isCreatingLoading, setIsCreatingLoading] = useState(false)
+
+  const applyPaletteNameState = (segments: string[], inputValue: string) => {
+    const limitedParts = (segments || [])
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+      .slice(0, 4)
+    const currentInput = String(inputValue || "")
+    setPaletteNameSegments(limitedParts)
+    setPaletteNameInput(currentInput)
+    const inputPart = currentInput.trim()
+    const full = [...limitedParts, ...(inputPart ? [inputPart] : [])]
+      .slice(0, 4)
+      .join("/")
+    isInternalNameUpdate.current = true
+    setFormData((prev: typeof formData) => ({ ...prev, name: full }))
+    onClearNameFieldError?.()
+  }
+
+  useEffect(() => {
+    if (isInternalNameUpdate.current) {
+      isInternalNameUpdate.current = false
+      return
+    }
+    const initial = String(formData?.name || "")
+    if (initial.includes("/")) {
+      const parts = initial
+        .split("/")
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .slice(0, 4)
+      setPaletteNameSegments(parts)
+      setPaletteNameInput("")
+    } else {
+      setPaletteNameSegments([])
+      setPaletteNameInput(initial)
+    }
+  }, [formData?.name])
 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
@@ -310,37 +350,6 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
       )}
 
       <div style={{ marginBottom: "12px" }}>
-        <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: nameFieldError ? "#c62828" : undefined }}>
-          Palette Name *
-        </label>
-        <input
-          ref={nameInputRef}
-          type="text"
-          value={formData.name}
-          onChange={(e) => {
-            const val = e.target.value
-            const parts = val.split("/").map((p) => p.trim())
-            const nonEmpty = parts.filter(Boolean)
-            const limited = nonEmpty.slice(0, 4)
-            let next = limited.join("/")
-            if (val.trim().endsWith("/") && limited.length < 4) next += "/"
-            setFormData({ ...formData, name: next })
-            onClearNameFieldError?.()
-          }}
-          placeholder="e.g. Brand/Primary/Blue"
-          style={{
-            width: "100%",
-            padding: "12px 16px",
-            fontSize: "14px",
-            backgroundColor: nameFieldError ? "#ffebee" : "#F5F5F5",
-            outline: "none",
-            border: nameFieldError ? "2px solid #c62828" : "1px solid transparent",
-            borderRadius: "4px",
-          }}
-        />
-      </div>
-
-      <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           URL
         </label>
@@ -357,6 +366,111 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
             outline: "none",
           }}
         />
+      </div>
+
+      <div style={{ marginBottom: "12px" }}>
+        <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500, color: nameFieldError ? "#c62828" : undefined }}>
+          Palette Name *
+        </label>
+        <div
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            fontSize: "14px",
+            backgroundColor: nameFieldError ? "#ffebee" : "#F5F5F5",
+            outline: "none",
+            border: nameFieldError ? "2px solid #c62828" : "1px solid transparent",
+            borderRadius: "4px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+          }}
+          onClick={() => nameInputRef.current?.focus()}
+        >
+          {paletteNameSegments.map((segment, idx) => (
+            <div
+              key={`${segment}-${idx}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 8px",
+                  fontSize: 13,
+                  background: "#f0f0f0",
+                  borderRadius: 4,
+                }}
+              >
+                {segment}
+                <button
+                  type="button"
+                  onClick={() =>
+                    applyPaletteNameState(
+                      paletteNameSegments.filter((_, i) => i !== idx),
+                      paletteNameInput
+                    )
+                  }
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#666",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+              {idx < paletteNameSegments.length - 1 && (
+                <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
+              )}
+            </div>
+          ))}
+          {paletteNameSegments.length > 0 && (
+            <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
+          )}
+          {paletteNameSegments.length < 4 && (
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={paletteNameInput}
+              onChange={(e) => applyPaletteNameState(paletteNameSegments, e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.key === "/" || e.key === ",") && paletteNameInput.trim()) {
+                  e.preventDefault()
+                  applyPaletteNameState([...paletteNameSegments, paletteNameInput], "")
+                } else if (e.key === "Backspace" && !paletteNameInput && paletteNameSegments.length > 0) {
+                  applyPaletteNameState(paletteNameSegments.slice(0, -1), "")
+                }
+              }}
+              onBlur={() => {
+                if (paletteNameInput.trim()) {
+                  applyPaletteNameState([...paletteNameSegments, paletteNameInput], "")
+                }
+              }}
+              placeholder={
+                paletteNameSegments.length === 0
+                  ? "Palette name segments (type / to create chip, max 4)"
+                  : ""
+              }
+              style={{
+                flex: 1,
+                minWidth: 120,
+                fontSize: 14,
+                outline: "none",
+                background: "transparent",
+                border: "none",
+                padding: 0,
+              }}
+            />
+          )}
+        </div>
       </div>
 
       <div style={{ marginBottom: "12px" }}>

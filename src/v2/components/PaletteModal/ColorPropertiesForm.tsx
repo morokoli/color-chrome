@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { X, Plus } from "lucide-react"
 import { FolderDropdownRow } from "@/v2/components/common/FolderDropdownRow"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
@@ -53,6 +53,9 @@ const ColorPropertiesForm = ({
   const queryClient = useQueryClient()
   const toast = useToast()
   const [tagsInput, setTagsInput] = useState("")
+  const isInternalNameUpdate = useRef(false)
+  const [nameInput, setNameInput] = useState("")
+  const [nameSegments, setNameSegments] = useState<string[]>([])
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
   const [isCreatingLoading, setIsCreatingLoading] = useState(false)
@@ -156,32 +159,47 @@ const ColorPropertiesForm = ({
     onColorChange(updatedColor)
   }
 
-  const handleNameChange = (value: string) => {
-    // Max 4 slashes = max 5 slash-name parts; preserve trailing slash while typing
-    const parts = value.split("/").map((p) => p.trim())
-    const nonEmpty = parts.filter(Boolean)
-    const limitedParts = nonEmpty.slice(0, 5)
-    let limitedValue = limitedParts.join("/")
-    if (value.endsWith("/") && limitedParts.length < 5) limitedValue += "/"
-
-    // If name contains slashes, extract first part as name and full string as slash_naming
-    if (limitedValue.includes("/")) {
-      const firstPart = limitedParts[0] || limitedValue
-      const updatedColor = {
-        ...colorObject,
-        name: firstPart,
-        slash_naming: limitedValue,
-      }
-      onColorChange(updatedColor)
-    } else {
-      const updatedColor = {
-        ...colorObject,
-        name: limitedValue,
-        slash_naming: limitedValue,
-      }
-      onColorChange(updatedColor)
-    }
+  const applyNameState = (segments: string[], inputValue: string) => {
+    const limitedParts = (segments || [])
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+      .slice(0, 5)
+    const currentInput = String(inputValue || "")
+    setNameSegments(limitedParts)
+    setNameInput(currentInput)
+    const inputPart = currentInput.trim()
+    const limitedValue = [...limitedParts, ...(inputPart ? [inputPart] : [])]
+      .slice(0, 5)
+      .join("/")
+    const firstPart = limitedParts[0] || ""
+    isInternalNameUpdate.current = true
+    onColorChange({
+      ...colorObject,
+      name: firstPart || limitedValue,
+      slash_naming: limitedValue,
+    })
   }
+
+  useEffect(() => {
+    if (isInternalNameUpdate.current) {
+      isInternalNameUpdate.current = false
+      return
+    }
+    setTagsInput("")
+    const initial = String(colorObject?.slash_naming || colorObject?.name || "")
+    if (initial.includes("/")) {
+      const parts = initial
+        .split("/")
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .slice(0, 5)
+      setNameSegments(parts)
+      setNameInput("")
+    } else {
+      setNameSegments([])
+      setNameInput(initial)
+    }
+  }, [colorPickerIndex, colorObject?._id, colorObject?.id, colorObject?.hex])
 
   const handleTagChange = (tags: string[]) => {
     let processedTags = tags
@@ -360,28 +378,6 @@ const ColorPropertiesForm = ({
 
       <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
-          Name
-        </label>
-        <input
-          type="text"
-          value={colorObject.slash_naming || colorObject.name || ""}
-          onChange={(e) => handleNameChange(e.target.value)}
-          placeholder="e.g., Brand Color/Primary/Blue 01"
-          style={{
-            width: "100%",
-            padding: "12px 16px",
-            fontSize: "14px",
-            backgroundColor: "#F5F5F5",
-            outline: "none",
-          }}
-        />
-        <p style={{ fontSize: "12px", color: "#9B9B9B", marginTop: "4px" }}>
-          Use / to create nested groups (e.g., Colors/Brand/Primary). Max 5 names (4 slashes).
-        </p>
-      </div>
-
-      <div style={{ marginBottom: "12px" }}>
-        <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
           URL
         </label>
         <input
@@ -397,6 +393,112 @@ const ColorPropertiesForm = ({
             outline: "none",
           }}
         />
+      </div>
+
+      <div style={{ marginBottom: "12px" }}>
+        <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
+          Name
+        </label>
+        <div
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            fontSize: "14px",
+            backgroundColor: "#F5F5F5",
+            outline: "none",
+            border: "1px solid transparent",
+            borderRadius: "4px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          {nameSegments.map((segment, idx) => (
+            <div
+              key={`${segment}-${idx}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 8px",
+                  fontSize: 13,
+                  background: "#f0f0f0",
+                  borderRadius: 4,
+                }}
+              >
+                {segment}
+                <button
+                  type="button"
+                  onClick={() =>
+                    applyNameState(
+                      nameSegments.filter((_, i) => i !== idx),
+                      nameInput
+                    )
+                  }
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#666",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+              {idx < nameSegments.length - 1 && (
+                <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
+              )}
+            </div>
+          ))}
+          {nameSegments.length > 0 && (
+            <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
+          )}
+          {nameSegments.length < 5 && (
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => applyNameState(nameSegments, e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.key === "/" || e.key === ",") && nameInput.trim()) {
+                  e.preventDefault()
+                  applyNameState([...nameSegments, nameInput], "")
+                } else if (e.key === "Backspace" && !nameInput && nameSegments.length > 0) {
+                  applyNameState(nameSegments.slice(0, -1), "")
+                }
+              }}
+              onBlur={() => {
+                if (nameInput.trim()) {
+                  applyNameState([...nameSegments, nameInput], "")
+                }
+              }}
+              placeholder={
+                nameSegments.length === 0
+                  ? "Slash naming (type / to create chip, max 5 parts)"
+                  : ""
+              }
+              style={{
+                flex: 1,
+                minWidth: 120,
+                fontSize: 14,
+                outline: "none",
+                background: "transparent",
+                border: "none",
+                padding: 0,
+              }}
+            />
+          )}
+        </div>
+        <p style={{ fontSize: "12px", color: "#9B9B9B", marginTop: "4px" }}>
+          Use / to create nested groups (e.g., Colors/Brand/Primary). Max 5 names (4 slashes).
+        </p>
       </div>
 
       <div style={{ marginBottom: "12px" }}>

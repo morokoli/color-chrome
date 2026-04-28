@@ -24,15 +24,11 @@ import {
 
 const MAX_LOCAL_COLORS = 30
 
-/** Same rules as BulkEditor batch name + Generator: max 5 parts, `/` separators, optional trailing `/` while typing. */
-function normalizeSlashNamingInput(raw: string): string {
-  const val = raw
-  const parts = val.split("/").map((p) => p.trim())
-  const nonEmpty = parts.filter(Boolean)
-  const limited = nonEmpty.slice(0, 5)
-  let next = limited.join("/")
-  if (val.trim().endsWith("/") && limited.length < 5) next += "/"
-  return next
+function normalizeSlashSegments(segments: string[]): string[] {
+  return segments
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .slice(0, 5)
 }
 
 function normalizeTagsArray(tags: unknown): string[] {
@@ -99,6 +95,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [copied, setCopied] = useState<boolean>(false)
   const [copiedType, setCopiedType] = useState<string>('')
   const [slashNaming, setSlashNaming] = useState<string>("")
+  const [slashSegments, setSlashSegments] = useState<string[]>([])
+  const [slashInput, setSlashInput] = useState<string>("")
+  const slashInternalUpdateRef = useRef(false)
   const [tagsList, setTagsList] = useState<string[]>([])
   const [tagsInput, setTagsInput] = useState<string>('')
   const [colorUrl, setColorUrl] = useState<string>('')
@@ -513,6 +512,40 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       setIsEditing(true)
     }
   }
+
+  const applySlashState = useCallback((segments: string[], inputValue: string) => {
+    const cleanSegments = normalizeSlashSegments(segments)
+    const currentInput = String(inputValue || "")
+    setSlashSegments(cleanSegments)
+    setSlashInput(currentInput)
+    const inputPart = currentInput.trim()
+    const full = [...cleanSegments, ...(inputPart ? [inputPart] : [])]
+      .slice(0, 5)
+      .join("/")
+    slashInternalUpdateRef.current = true
+    setSlashMixed(false)
+    setSlashNaming(full)
+  }, [])
+
+  useEffect(() => {
+    if (slashInternalUpdateRef.current) {
+      slashInternalUpdateRef.current = false
+      return
+    }
+    if (slashMixed) {
+      setSlashSegments([])
+      setSlashInput("")
+      return
+    }
+    const initial = String(slashNaming || "")
+    if (initial.includes("/")) {
+      setSlashSegments(normalizeSlashSegments(initial.split("/")))
+      setSlashInput("")
+      return
+    }
+    setSlashSegments([])
+    setSlashInput(initial)
+  }, [slashNaming, slashMixed])
 
   // Auto-select the last color
   useEffect(() => {
@@ -1243,20 +1276,63 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                 className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400 text-gray-500"
               />
 
-              <input
-                type="text"
-                value={slashMixed ? "" : slashNaming}
-                onChange={(e) => {
-                  setSlashMixed(false)
-                  setSlashNaming(normalizeSlashNamingInput(e.target.value))
-                }}
-                placeholder={
-                  slashMixed
-                    ? "Multiple values"
-                    : "Slash naming (e.g. Brand/Primary/Blue, max 5 parts)"
-                }
-                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
-              />
+              <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {slashSegments.map((segment, idx) => (
+                    <div key={`${segment}-${idx}`} className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 text-[11px] rounded">
+                        {segment}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            applySlashState(
+                              slashSegments.filter((_, i) => i !== idx),
+                              slashInput
+                            )
+                          }
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                      {idx < slashSegments.length - 1 && (
+                        <span className="text-gray-500 text-[11px] font-semibold">/</span>
+                      )}
+                    </div>
+                  ))}
+                  {slashSegments.length > 0 && (
+                    <span className="text-gray-500 text-[11px] font-semibold">/</span>
+                  )}
+                  {slashSegments.length < 5 && (
+                    <input
+                      type="text"
+                      value={slashInput}
+                      onChange={(e) => applySlashState(slashSegments, e.target.value)}
+                      onBlur={() => {
+                        if (slashInput.trim()) {
+                          applySlashState([...slashSegments, slashInput], "")
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if ((e.key === "/" || e.key === ",") && slashInput.trim()) {
+                          e.preventDefault()
+                          applySlashState([...slashSegments, slashInput], "")
+                        } else if (e.key === "Backspace" && !slashInput && slashSegments.length > 0) {
+                          applySlashState(slashSegments.slice(0, -1), "")
+                        }
+                      }}
+                      placeholder={
+                        slashSegments.length === 0
+                          ? (slashMixed
+                            ? "Multiple values"
+                            : "Slash naming (type / to create chip, max 5 parts)")
+                          : ""
+                      }
+                      className="flex-1 min-w-[120px] text-[12px] outline-none bg-transparent"
+                    />
+                  )}
+                </div>
+              </div>
 
               {/* Tags Chip Input */}
               <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
