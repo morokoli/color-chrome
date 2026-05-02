@@ -195,6 +195,7 @@ const DraggableColorItem = ({
                             e.stopPropagation()
                             onAddColor(index)
                         }}
+                        type="button"
                         style={{
                             position: "absolute",
                             width: "20px",
@@ -212,9 +213,13 @@ const DraggableColorItem = ({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
+                            padding: 0,
+                            lineHeight: 0,
+                            flexShrink: 0,
+                            boxSizing: "border-box",
                         }}
                     >
-                        <Plus className="w-3 h-3" />
+                        <Plus size={12} strokeWidth={2} style={{ display: "block", flexShrink: 0 }} />
                     </button>
                 )}
             </div>

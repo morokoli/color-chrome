@@ -1,0 +1,24 @@
+<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" width="16.000000" height="16.000000" fill="none">
+	<defs>
+		<filter id="pixso_custom_mask_type_alpha">
+			<feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0 " />
+		</filter>
+	</defs>
+	<mask id="mask_gradient" width="16.000000" height="16.000000" x="0.000000" y="0.000000" maskUnits="userSpaceOnUse">
+		<g filter="url(#pixso_custom_mask_type_alpha)">
+			<rect width="16.000000" height="16.000000" x="0.000000" y="0.000000" fill="rgb(217,217,217)" />
+		</g>
+	</mask>
+	<rect width="16.000000" height="16.000000" x="0.000000" y="0.000000" />
+	<g mask="url(#mask_gradient)">
+		<g>
+			<!-- Outer rectangle frame -->
+			<path d="M2.5 2.5 L13.5 2.5 L13.5 13.5 L2.5 13.5 Z" stroke="rgb(28,27,31)" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
+			
+			<!-- Gradient bars (3 vertical bars to represent gradient) -->
+			<rect x="3.5" y="4" width="2.5" height="8" fill="rgb(28,27,31)" opacity="0.9"/>
+			<rect x="6.5" y="4" width="2.5" height="8" fill="rgb(28,27,31)" opacity="0.5"/>
+			<rect x="9.5" y="4" width="2.5" height="8" fill="rgb(28,27,31)" opacity="0.2"/>
+		</g>
+	</g>
+</svg>

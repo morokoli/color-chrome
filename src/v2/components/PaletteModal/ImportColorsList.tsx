@@ -7,6 +7,7 @@ import { config } from "@/v2/others/config"
 import { Loader2 } from "lucide-react"
 import colorIcon from "@/v2/assets/images/icons/library/color.svg"
 import paletteIcon from "@/v2/assets/images/icons/library/palette.svg"
+import gradientIcon from "@/v2/assets/images/icons/library/gradient.svg"
 
 /** Chrome generator library tiles — larger than original 108px; scales inset/type with size. */
 const LIBRARY_SWATCH_PX = 134
@@ -344,12 +345,17 @@ const LibraryPaletteCard = ({
   )
 }
 
+/** Compact row: fits three toggles without wrapping in narrow Generator sidebar */
+const LIBRARY_FILTER_BTN = 26
+const LIBRARY_FILTER_ICON = 14
+
 const filterBtnBase: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 32,
-  height: 32,
+  width: LIBRARY_FILTER_BTN,
+  height: LIBRARY_FILTER_BTN,
+  flexShrink: 0,
   padding: 0,
   border: "1px solid transparent",
   borderRadius: 4,
@@ -370,6 +376,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   const [searchQuery, setSearchQuery] = useState("")
   const [showColors, setShowColors] = useState(true)
   const [showPalettes, setShowPalettes] = useState(true)
+  const [showGradients, setShowGradients] = useState(true)
   const { state } = useGlobalState()
 
   const { data: colorsAndPalettesData, isLoading, error } = useQuery({
@@ -475,7 +482,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
             const c = resolved[0]
             pushColorRow(c, rowSortTime(c) || rowSortTime(item))
           }
-        } else if (isGradientEntry(item) && showColors) {
+        } else if (isGradientEntry(item) && showGradients) {
           rows.push({ kind: "color", color: item, sortAt: rowSortTime(item) })
         } else if (item.hex && item.type !== "palette" && item.type !== "gradient" && showColors) {
           pushColorRow(item, rowSortTime(item))
@@ -487,32 +494,49 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
       console.error("Error processing library items:", err)
       return []
     }
-  }, [rawAll, searchQuery, showColors, showPalettes, colorById])
+  }, [rawAll, searchQuery, showColors, showPalettes, showGradients, colorById])
 
   const libraryHeader = (
     <div
       style={{
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+        flexDirection: "column",
         gap: 10,
         marginBottom: 16,
         flexShrink: 0,
+        width: "100%",
+        minWidth: 0,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, flex: 1, minWidth: 0 }}>
+      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, lineHeight: 1.2 }}>
         Library
       </h3>
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          flexWrap: "nowrap",
+          gap: 4,
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
         <button
           type="button"
           style={{ ...filterBtnBase, ...(showColors ? filterBtnActive : {}) }}
           aria-pressed={showColors}
-          aria-label="Show colors in library"
-          title="Colors"
+          aria-label="Show solid colors in library"
+          title="Solid colors"
           onClick={() => setShowColors((v) => !v)}
         >
-          <img src={colorIcon} alt="" width={18} height={18} style={{ display: "block", pointerEvents: "none" }} />
+          <img
+            src={colorIcon}
+            alt=""
+            width={LIBRARY_FILTER_ICON}
+            height={LIBRARY_FILTER_ICON}
+            style={{ display: "block", pointerEvents: "none" }}
+          />
         </button>
         <button
           type="button"
@@ -522,7 +546,29 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           title="Palettes"
           onClick={() => setShowPalettes((v) => !v)}
         >
-          <img src={paletteIcon} alt="" width={18} height={18} style={{ display: "block", pointerEvents: "none" }} />
+          <img
+            src={paletteIcon}
+            alt=""
+            width={LIBRARY_FILTER_ICON}
+            height={LIBRARY_FILTER_ICON}
+            style={{ display: "block", pointerEvents: "none" }}
+          />
+        </button>
+        <button
+          type="button"
+          style={{ ...filterBtnBase, ...(showGradients ? filterBtnActive : {}) }}
+          aria-pressed={showGradients}
+          aria-label="Show gradients in library"
+          title="Gradients"
+          onClick={() => setShowGradients((v) => !v)}
+        >
+          <img
+            src={gradientIcon}
+            alt=""
+            width={LIBRARY_FILTER_ICON}
+            height={LIBRARY_FILTER_ICON}
+            style={{ display: "block", pointerEvents: "none" }}
+          />
         </button>
       </div>
     </div>
@@ -560,7 +606,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   }
 
   const currentItems = allItems
-  const bothTypesOff = !showColors && !showPalettes
+  const bothTypesOff = !showColors && !showPalettes && !showGradients
 
   if (isLoading) {
     return (
@@ -598,8 +644,8 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
       <div className="flex flex-col h-full overflow-hidden min-h-0">
         {libraryHeader}
         <div className="text-center py-5 text-gray-500 text-sm flex-1">
-          Turn on colors or palettes
-          <div className="text-xs mt-1">Use the icons next to Library</div>
+          Turn on colors, palettes, or gradients
+          <div className="text-xs mt-1">Use the filter icons under Library</div>
         </div>
       </div>
     )

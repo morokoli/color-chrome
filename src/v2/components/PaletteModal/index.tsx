@@ -7,6 +7,11 @@ import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { useToast } from "@/v2/hooks/useToast"
 import { createDefaultColorObject } from "@/v2/helpers/createDefaultColorObject"
+import {
+  HARMONY_TYPES,
+  applyHarmonyToPalette,
+  getHarmonyDisplayName,
+} from "@/v2/helpers/colorHarmonies"
 import { CollapsibleBoxHorizontal } from "@/v2/components/CollapsibleBoxHorizontal"
 import ColorsSection from "./ColorsSection"
 import ColorEditSection from "./ColorEditSection"
@@ -216,7 +221,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
   const [internalColorMode, setInternalColorMode] = useState<GradientMode>("solid")
   const [gradient, setGradient] = useState<GradientData>(createDefaultGradient())
-  
+  const [harmonyType, setHarmonyType] = useState<string>(HARMONY_TYPES.CUSTOM)
+
   // Use external state if provided, otherwise use internal
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab
   const colorMode = externalColorMode !== undefined ? externalColorMode : internalColorMode
@@ -332,6 +338,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       document.body.style.overflow = "hidden"
     } else {
       document.body.style.overflow = "unset"
+      setHarmonyType(HARMONY_TYPES.CUSTOM)
     }
     return () => {
       document.body.style.overflow = "unset"
@@ -366,12 +373,39 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     setColorPickerIndex(idx)
   }
 
-  const handleColorChange = (color: any) => {
-    if (colorPickerIndex !== null) {
-      const newColors = [...colors]
-      newColors[colorPickerIndex] = color
-      setColors(newColors)
-    }
+  const handleColorChange = (color: any, editIndex?: number) => {
+    const idx =
+      typeof editIndex === "number" && editIndex >= 0 && editIndex < colors.length
+        ? editIndex
+        : colorPickerIndex
+    if (idx === null || idx === undefined || !colors[idx]) return
+    const newColors = [...colors]
+    newColors[idx] = color
+    setColors(newColors)
+  }
+
+  const handleHarmonyChange = (newHarmonyType: string) => {
+    setHarmonyType(newHarmonyType)
+  }
+
+  const handleApplyHarmony = (
+    harmonyTypeToApply: string,
+    { isReapply = false }: { isReapply?: boolean } = {},
+  ) => {
+    if (harmonyTypeToApply === HARMONY_TYPES.CUSTOM || colors.length === 0) return
+    const baseColorIndex = colorPickerIndex !== null ? colorPickerIndex : 0
+    const updatedColors = applyHarmonyToPalette(colors, harmonyTypeToApply, baseColorIndex)
+    setColors(updatedColors)
+    const name = getHarmonyDisplayName(harmonyTypeToApply)
+    toast.display(
+      "success",
+      isReapply ? `${name} reapplied using the selected color as base.` : `${name} harmony applied!`,
+    )
+  }
+
+  const handleReapplyHarmony = () => {
+    if (harmonyType === HARMONY_TYPES.CUSTOM || colors.length === 0) return
+    handleApplyHarmony(harmonyType, { isReapply: true })
   }
 
   const handleAddColor = (idx: number) => {
@@ -1247,6 +1281,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   }
                   onColorChange={handleColorChange}
                   colorPickerIndex={colorPickerIndex}
+                  harmonyType={harmonyType}
+                  onHarmonyChange={handleHarmonyChange}
+                  allColors={colors}
+                  onApplyHarmony={handleApplyHarmony}
+                  onReapplyHarmony={handleReapplyHarmony}
                 />
               )
             ) : (
