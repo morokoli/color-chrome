@@ -44,6 +44,68 @@ function parseHsl(c: any): { h: number; s: number; l: number } | null {
   return null
 }
 
+/** Normalize a gradient stop `color` string to #rrggbb for export. */
+function normalizeStopColorToHex(color: unknown): string {
+  if (typeof color !== "string" || !color.trim()) return ""
+  const t = color.trim()
+  const hex6 = /^#([a-f\d]{6})$/i.exec(t)
+  if (hex6) return `#${hex6[1].toLowerCase()}`
+  const hex3 = /^#([a-f\d]{3})$/i.exec(t)
+  if (hex3) {
+    const x = hex3[1]
+    return `#${x[0]}${x[0]}${x[1]}${x[1]}${x[2]}${x[2]}`.toLowerCase()
+  }
+  const rgb = t.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  if (rgb) {
+    const r = Math.min(255, parseInt(rgb[1], 10))
+    const g = Math.min(255, parseInt(rgb[2], 10))
+    const b = Math.min(255, parseInt(rgb[3], 10))
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`
+  }
+  return ""
+}
+
+function gradientStopHexCsv(gradientData: { stops?: { color?: string; position?: number }[] }): string {
+  if (!gradientData?.stops?.length) return ""
+  const sorted = [...gradientData.stops].sort(
+    (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+  )
+  return sorted.map((s) => normalizeStopColorToHex(s.color)).filter(Boolean).join(",")
+}
+
+function firstGradientStopHex(gradientData: { stops?: { color?: string; position?: number }[] }): string {
+  const csv = gradientStopHexCsv(gradientData)
+  return csv.split(",")[0] || ""
+}
+
+/** Same shape as swatch preview — used for sheet export CSS column. */
+function generateGradientCSS(gradientData: {
+  type?: string
+  angle?: number
+  position?: { x: number; y: number }
+  stops?: { color: string; position: number }[]
+}): string | null {
+  if (!gradientData?.stops?.length) return null
+
+  const sortedStops = [...gradientData.stops].sort((a, b) => a.position - b.position)
+
+  const stopsString =
+    gradientData.type === "conic"
+      ? sortedStops.map((stop) => `${stop.color} ${stop.position}deg`).join(", ")
+      : sortedStops.map((stop) => `${stop.color} ${stop.position}%`).join(", ")
+
+  switch (gradientData.type) {
+    case "linear":
+      return `linear-gradient(${gradientData.angle ?? 0}deg, ${stopsString})`
+    case "radial":
+      return `radial-gradient(circle at ${gradientData.position?.x ?? 50}% ${gradientData.position?.y ?? 50}%, ${stopsString})`
+    case "conic":
+      return `conic-gradient(from ${gradientData.angle ?? 0}deg at ${gradientData.position?.x ?? 50}% ${gradientData.position?.y ?? 50}%, ${stopsString})`
+    default:
+      return `linear-gradient(${gradientData.angle ?? 0}deg, ${stopsString})`
+  }
+}
+
 /** Unique key for a color instance (same color in different folders = different keys).
  * Uses groupKey (folder name) since backend pushes same item to multiple groups. */
 function getItemKey(c: any, groupKey?: string): string {
@@ -67,24 +129,37 @@ function buildExportRow(
   folderName: string,
   paletteMeta: typeof EMPTY_PALETTE_META
 ) {
+  const isGradient = c.type === "gradient" && c.gradient_data
+  const hexForExport = isGradient ? gradientStopHexCsv(c.gradient_data) : (c.hex || "")
+  const derivedHex = isGradient ? firstGradientStopHex(c.gradient_data) || "#808080" : (c.hex || "#808080")
+
   let rgbVal = ""
-  if (typeof c.rgb === "string") rgbVal = c.rgb
+  if (isGradient) {
+    rgbVal = colors.hexToRGB(derivedHex)
+  } else if (typeof c.rgb === "string") rgbVal = c.rgb
   else if (c.rgb && typeof c.rgb === "object" && "r" in c.rgb)
     rgbVal = `rgb(${c.rgb.r}, ${c.rgb.g}, ${c.rgb.b})`
   else rgbVal = colors.hexToRGB(c.hex)
+
   let hslVal = ""
-  if (typeof c.hsl === "string") hslVal = c.hsl
+  if (isGradient) {
+    hslVal = colors.hexToHSL(derivedHex)
+  } else if (typeof c.hsl === "string") hslVal = c.hsl
   else if (c.hsl && typeof c.hsl === "object" && "h" in c.hsl)
     hslVal = `hsl(${c.hsl.h}, ${c.hsl.s}%, ${c.hsl.l}%)`
   else hslVal = colors.hexToHSL(c.hex)
+
   const tags = Array.isArray(c.tags) ? c.tags : []
-  
+  const gradientCss =
+    isGradient && c.gradient_data ? generateGradientCSS(c.gradient_data) || "" : ""
+
   const baseRow = {
     timestamp: Date.now(),
     url: c.url || "Export to Sheet",
-    hex: c.hex,
+    hex: hexForExport,
     hsl: hslVal,
     rgb: rgbVal,
+    gradientCss,
     ranking: (c.ranking ?? 0).toString(),
     comments: c.comments || "",
     slash_naming: c.slash_naming || "",
@@ -96,19 +171,18 @@ function buildExportRow(
     paletteRanking: paletteMeta.paletteRanking,
     paletteTags: paletteMeta.paletteTags,
   }
-  
-  // Include gradient data if present
-  if (c.type === 'gradient' && c.gradient_data) {
+
+  if (isGradient) {
     return {
       ...baseRow,
-      type: 'gradient',
+      type: "gradient" as const,
       gradient_data: c.gradient_data,
     }
   }
-  
+
   return {
     ...baseRow,
-    type: 'solid',
+    type: "solid" as const,
   }
 }
 
@@ -120,29 +194,6 @@ function getContrastColor(hex: string): "white" | "black" {
   const b = parseInt(h.slice(4, 6), 16)
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
   return luminance < 0.5 ? "white" : "black"
-}
-
-/** Helper to generate CSS gradient string */
-function generateGradientCSS(gradientData: any): string | null {
-  if (!gradientData || !gradientData.stops) return null
-  
-  const sortedStops = [...gradientData.stops].sort((a: any, b: any) => a.position - b.position)
-  
-  // For conic gradients, use degrees; for linear/radial, use percentages
-  const stopsString = gradientData.type === 'conic'
-    ? sortedStops.map((stop: any) => `${stop.color} ${stop.position}deg`).join(', ')
-    : sortedStops.map((stop: any) => `${stop.color} ${stop.position}%`).join(', ')
-  
-  switch (gradientData.type) {
-    case 'linear':
-      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
-    case 'radial':
-      return `radial-gradient(circle at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
-    case 'conic':
-      return `conic-gradient(from ${gradientData.angle}deg at ${gradientData.position.x}% ${gradientData.position.y}%, ${stopsString})`
-    default:
-      return `linear-gradient(${gradientData.angle}deg, ${stopsString})`
-  }
 }
 
 /** Helper to get background style for color or gradient */
@@ -223,8 +274,12 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
         const list = arr.filter((c: any) => {
           if (!c) return false
           if (c.type === "palette") return true
-          if (!c.hex) return false
-          const hsl = parseHsl(c)
+          const filterHex =
+            c.type === "gradient" && c.gradient_data
+              ? firstGradientStopHex(c.gradient_data)
+              : c.hex
+          if (!filterHex) return false
+          const hsl = parseHsl({ ...c, hex: filterHex })
           if (hsl) {
             if (hsl.h < hueRange[0] || hsl.h > hueRange[1]) return false
             if (hsl.s < saturationRange[0] || hsl.s > saturationRange[1]) return false
@@ -338,7 +393,8 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
             return
           }
           for (const cc of swatches) {
-            if (!cc?.hex) continue
+            const isGrad = cc?.type === "gradient" && cc?.gradient_data?.stops?.length
+            if (!isGrad && !cc?.hex) continue
             rows.push(buildExportRow(cc, folderName, paletteMeta))
           }
         }
@@ -703,7 +759,11 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
                             }
                             const itemKey = getItemKey(c, groupKey)
                             const isSelected = selectedIds.has(itemKey)
-                            const contrast = getContrastColor(c.hex)
+                            const contrastHex =
+                              c.type === "gradient" && c.gradient_data
+                                ? firstGradientStopHex(c.gradient_data) || c.hex
+                                : c.hex
+                            const contrast = getContrastColor(contrastHex)
                             return (
                               <Tooltip.Root key={itemKey}>
                                 <Tooltip.Trigger asChild>
