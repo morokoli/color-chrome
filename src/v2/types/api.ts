@@ -95,6 +95,7 @@ export type AddMultipleColorsRequest = {
     comments?: string | undefined
     slash_naming: string
     tags?: string
+    css?: string
     additionalColumns: Omit<Column, "id">[]
   }[]
 }

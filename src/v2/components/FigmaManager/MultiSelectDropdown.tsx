@@ -18,6 +18,8 @@ interface MultiSelectDropdownProps<T> {
   placeholder?: string
   isVisible?: boolean
   checkboxAtEnd?: boolean // If true, shows checkbox at end instead of check icon at beginning
+  /** Shown between the label and the checkbox when `checkboxAtEnd`; parent row uses `group` for hover styles */
+  renderTrailingActions?: (item: T) => React.ReactNode
   openUpward?: boolean // If true, opens dropdown upward instead of downward
   usePortal?: boolean // If true, render menu in portal (fixed position) so it floats above modals
   emptyMessage?: string // Custom message when no items are available
@@ -50,6 +52,7 @@ export const MultiSelectDropdown = <T,>({
   placeholder = "Select options",
   isVisible = true,
   checkboxAtEnd = false,
+  renderTrailingActions,
   openUpward = false,
   usePortal = false,
   emptyMessage = "No items found",
@@ -190,84 +193,95 @@ export const MultiSelectDropdown = <T,>({
             <div
               key={keyExtractor ? String(keyExtractor(item)) : i}
               onClick={() => handleItemClick(item)}
-              className={`px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-gray-700 transition-colors min-w-0 ${checkboxAtEnd ? "justify-between" : ""}`}
+              className="group px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2 text-gray-700 transition-colors min-w-0"
             >
               {!checkboxAtEnd && (
                 <div className="w-4 h-4 shrink-0 flex items-center justify-center">
                   {isSelected && <Check size={14} className="text-emerald-600" />}
                 </div>
               )}
-              <div className={`min-w-0 ${checkboxAtEnd ? "flex-1" : "flex-1"}`}>{renderItem(item)}</div>
+              <div className="min-w-0 flex-1">{renderItem(item)}</div>
               {checkboxAtEnd && (
-                <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => handleItemClick(item)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="cursor-pointer"
-                    style={{
-                      appearance: "none",
-                      WebkitAppearance: "none",
-                      MozAppearance: "none",
-                      width: "16px",
-                      height: "16px",
-                      minWidth: "16px",
-                      minHeight: "16px",
-                      border: isSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
-                      borderRadius: "3px",
-                      backgroundColor: isSelected ? "#000000" : "#ffffff",
-                      transition: "all 0.15s ease-in-out",
-                      outline: "none",
-                      position: "relative",
-                      flexShrink: 0,
-                      margin: 0,
-                      padding: 0,
-                      boxSizing: "border-box",
-                      imageRendering: "crisp-edges",
-                      WebkitFontSmoothing: "antialiased",
-                      MozOsxFontSmoothing: "grayscale",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.borderColor = "#9ca3af"
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) e.currentTarget.style.borderColor = "#d1d5db"
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.1)"
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.boxShadow = "none"
-                    }}
-                  />
-                  {isSelected && (
-                    <svg
-                      className="absolute pointer-events-none"
-                      style={{
-                        width: "10px",
-                        height: "10px",
-                        left: "50%",
-                        top: "50%",
-                        transform: "translate(-50%, -50%)",
-                        strokeWidth: "2.5",
-                        imageRendering: "crisp-edges",
-                        shapeRendering: "geometricPrecision",
-                      }}
-                      viewBox="0 0 10 10"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {renderTrailingActions && (
+                    <div
+                      className="flex shrink-0 items-center justify-center opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
                     >
-                      <path
-                        d="M8 2.5L4 6.5L2.5 5"
-                        stroke="white"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </svg>
+                      {renderTrailingActions(item)}
+                    </div>
                   )}
+                  <div className="relative flex-shrink-0" style={{ width: "16px", height: "16px" }}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleItemClick(item)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="cursor-pointer"
+                      style={{
+                        appearance: "none",
+                        WebkitAppearance: "none",
+                        MozAppearance: "none",
+                        width: "16px",
+                        height: "16px",
+                        minWidth: "16px",
+                        minHeight: "16px",
+                        border: isSelected ? "1.5px solid #000000" : "1.5px solid #d1d5db",
+                        borderRadius: "3px",
+                        backgroundColor: isSelected ? "#000000" : "#ffffff",
+                        transition: "all 0.15s ease-in-out",
+                        outline: "none",
+                        position: "relative",
+                        flexShrink: 0,
+                        margin: 0,
+                        padding: 0,
+                        boxSizing: "border-box",
+                        imageRendering: "crisp-edges",
+                        WebkitFontSmoothing: "antialiased",
+                        MozOsxFontSmoothing: "grayscale",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.borderColor = "#9ca3af"
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.borderColor = "#d1d5db"
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.boxShadow = "0 0 0 2px rgba(0, 0, 0, 0.1)"
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.boxShadow = "none"
+                      }}
+                    />
+                    {isSelected && (
+                      <svg
+                        className="absolute pointer-events-none"
+                        style={{
+                          width: "10px",
+                          height: "10px",
+                          left: "50%",
+                          top: "50%",
+                          transform: "translate(-50%, -50%)",
+                          strokeWidth: "2.5",
+                          imageRendering: "crisp-edges",
+                          shapeRendering: "geometricPrecision",
+                        }}
+                        viewBox="0 0 10 10"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M8 2.5L4 6.5L2.5 5"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

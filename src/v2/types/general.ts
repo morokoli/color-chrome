@@ -88,6 +88,7 @@ export type RowData = {
   ranking?: string | number
   comments?: string
   slash_naming?: string
+  css?: string
   additionalColumns: Omit<Column, "id">[]
 }
 

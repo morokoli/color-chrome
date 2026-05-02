@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { X, Plus } from "lucide-react"
+import { X, Plus, ExternalLink } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useAPI } from "@/v2/hooks/useAPI"
@@ -20,6 +20,11 @@ export type SheetSelection = {
   spreadsheetId: string
   sheetId: number
   sheetName: string
+}
+
+function googleSheetEditUrl(spreadsheetId: string, sheetId: number): string {
+  const base = config.spreadsheet.baseURL.replace(/\/$/, "")
+  return `${base}/${spreadsheetId}/edit#gid=${sheetId}`
 }
 
 interface SheetSelectionModalProps {
@@ -183,6 +188,19 @@ export const SheetSelectionModal = ({
             width="100%"
             isSearchable
             checkboxAtEnd
+            getSearchText={(sheet) => sheet.displayName}
+            renderTrailingActions={(sheet) => (
+              <a
+                href={googleSheetEditUrl(sheet.spreadsheetId, sheet.sheetId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open in Google Sheets"
+                className="inline-flex rounded p-0.5 text-gray-500 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                aria-label={`Open ${sheet.displayName} in Google Sheets`}
+              >
+                <ExternalLink size={14} strokeWidth={2} />
+              </a>
+            )}
             usePortal
             emptyMessage={isLoadingUserSheets ? "" : "No sheets yet. Create one below."}
             renderFooter={() => (

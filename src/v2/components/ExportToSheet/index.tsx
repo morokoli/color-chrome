@@ -95,6 +95,7 @@ function buildExportRow(
     paletteUrl: paletteMeta.paletteUrl,
     paletteRanking: paletteMeta.paletteRanking,
     paletteTags: paletteMeta.paletteTags,
+    css: buildSheetCss(c),
   }
   
   // Include gradient data if present
@@ -120,6 +121,27 @@ function getContrastColor(hex: string): "white" | "black" {
   const b = parseInt(h.slice(4, 6), 16)
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
   return luminance < 0.5 ? "white" : "black"
+}
+
+function normalizeHexForCss(hex: string | undefined): string {
+  const raw = (hex || "#000000").trim()
+  let h = raw.startsWith("#") ? raw : `#${raw}`
+  const core = h.slice(1)
+  if (/^[0-9a-fA-F]{3}$/.test(core)) {
+    const [a, b, c] = core.split("")
+    return `#${a}${a}${b}${b}${c}${c}`.toLowerCase()
+  }
+  if (/^[0-9a-fA-F]{6}/.test(core)) return `#${core.slice(0, 6).toLowerCase()}`
+  return "#000000"
+}
+
+/** Single declaration for sheet cell: solid or gradient */
+function buildSheetCss(c: any): string {
+  if (c.type === "gradient" && c.gradient_data) {
+    const grad = generateGradientCSS(c.gradient_data)
+    return grad ? `background: ${grad};` : `background-color: ${normalizeHexForCss(c.hex)};`
+  }
+  return `background-color: ${normalizeHexForCss(c.hex)};`
 }
 
 /** Helper to generate CSS gradient string */
