@@ -8,17 +8,22 @@ import { Loader2 } from "lucide-react"
 import colorIcon from "@/v2/assets/images/icons/library/color.svg"
 import paletteIcon from "@/v2/assets/images/icons/library/palette.svg"
 import gradientIcon from "@/v2/assets/images/icons/library/gradient.svg"
+import {
+  PALETTE_SIDEBAR_STRIP_BORDER,
+  PALETTE_SIDEBAR_STRIP_HEIGHT_PX,
+  PALETTE_SIDEBAR_STRIP_WIDTH_PX,
+} from "./previewDimensions"
 
-/** Chrome generator library tiles — larger than original 108px; scales inset/type with size. */
-const LIBRARY_SWATCH_PX = 134
-const LIBRARY_K = LIBRARY_SWATCH_PX / 108
-const LIBRARY_INSET = 3.6 * LIBRARY_K
-const LIBRARY_GAP = 3.6 * LIBRARY_K
-const LIBRARY_ITEM_MB = 7.2 * LIBRARY_K
-const LIBRARY_FONT_HEX = Math.round(13 * LIBRARY_K)
-const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_K)
+/** Scale typography/inset from former 134px tiles to match sidebar strip width. */
+const LIBRARY_SCALE = PALETTE_SIDEBAR_STRIP_WIDTH_PX / 134
+const LIBRARY_INSET = 3.6 * LIBRARY_SCALE
+const LIBRARY_GAP = 3.6 * LIBRARY_SCALE
+const LIBRARY_ITEM_MB = 7.2 * LIBRARY_SCALE
+const LIBRARY_FONT_HEX = Math.round(13 * LIBRARY_SCALE)
+const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_SCALE)
 
-const swPx = `${LIBRARY_SWATCH_PX}px`
+const stripHeightPx = `${PALETTE_SIDEBAR_STRIP_HEIGHT_PX}px`
+const stripWidthPx = `${PALETTE_SIDEBAR_STRIP_WIDTH_PX}px`
 
 interface ImportColorsListProps {
   onAddToPalette: (colorData: any, index: number | null, isGradientClick?: boolean) => void
@@ -69,60 +74,63 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
   const textColor = isDark ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 0, 0, 0.8)"
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: `${LIBRARY_GAP}px`,
-        width: swPx,
-      }}
-    >
+    <div className="flex w-full min-w-0 justify-center">
       <div
         style={{
-          minWidth: swPx,
-          height: swPx,
-          position: "relative",
-          overflow: "hidden",
-          boxSizing: "border-box",
-          transition: "border-width 0.3s ease-in-out",
-          cursor: "pointer",
-          backgroundColor: colorData.hex,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "stretch",
+          gap: `${LIBRARY_GAP}px`,
+          width: stripWidthPx,
         }}
       >
         <div
           style={{
-            position: "absolute",
-            top: `${LIBRARY_INSET}px`,
-            left: `${LIBRARY_INSET}px`,
-            right: `${LIBRARY_INSET}px`,
-            bottom: `${LIBRARY_INSET}px`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            color: textColor,
-            fontSize: `${LIBRARY_FONT_HEX}px`,
-            fontWeight: "600",
-            textShadow: isDark
-              ? "0 1px 2px rgba(0,0,0,0.5)"
-              : "0 1px 2px rgba(255,255,255,0.5)",
+            width: stripWidthPx,
+            height: stripHeightPx,
+            position: "relative",
+            overflow: "hidden",
+            boxSizing: "border-box",
+            border: PALETTE_SIDEBAR_STRIP_BORDER,
+            transition: "border-color 0.2s ease-in-out",
+            cursor: "pointer",
+            backgroundColor: colorData.hex,
           }}
         >
-          <span style={{ color: "inherit" }}>{colorData.hex?.toUpperCase()}</span>
-          <br />
-          <span
+          <div
             style={{
-              fontSize: `${LIBRARY_FONT_NAME}px`,
-              color: "inherit",
-              maxWidth: "100%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              position: "absolute",
+              top: `${LIBRARY_INSET}px`,
+              left: `${LIBRARY_INSET}px`,
+              right: `${LIBRARY_INSET}px`,
+              bottom: `${LIBRARY_INSET}px`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "column",
+              color: textColor,
+              fontSize: `${LIBRARY_FONT_HEX}px`,
+              fontWeight: "600",
+              textShadow: isDark
+                ? "0 1px 2px rgba(0,0,0,0.5)"
+                : "0 1px 2px rgba(255,255,255,0.5)",
             }}
           >
-            {colorData.slash_naming || ""}
-          </span>
+            <span style={{ color: "inherit" }}>{colorData.hex?.toUpperCase()}</span>
+            <br />
+            <span
+              style={{
+                fontSize: `${LIBRARY_FONT_NAME}px`,
+                color: "inherit",
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {colorData.slash_naming || ""}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -152,26 +160,27 @@ const GradientPreviewBox = ({ gradientData }: { gradientData: any }) => {
   const gradientCSS = generateGradientCSS(gradientData.gradient_data)
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: `${LIBRARY_GAP}px`,
-        width: swPx,
-      }}
-    >
+    <div className="flex w-full min-w-0 justify-center">
       <div
         style={{
-          minWidth: swPx,
-          height: swPx,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "stretch",
+          gap: `${LIBRARY_GAP}px`,
+          width: stripWidthPx,
+        }}
+      >
+      <div
+        style={{
+          width: stripWidthPx,
+          height: stripHeightPx,
           position: "relative",
           overflow: "hidden",
           boxSizing: "border-box",
-          transition: "border-width 0.3s ease-in-out",
+          border: PALETTE_SIDEBAR_STRIP_BORDER,
+          transition: "border-color 0.2s ease-in-out",
           cursor: "pointer",
           background: gradientCSS || "#ddd",
-          border: "2px solid #e5e5e5",
         }}
       >
         <div
@@ -203,6 +212,7 @@ const GradientPreviewBox = ({ gradientData }: { gradientData: any }) => {
             {gradientData.slash_naming || gradientData.name || "Gradient"}
           </span>
         </div>
+      </div>
       </div>
     </div>
   )
@@ -264,27 +274,25 @@ const LibraryPaletteCard = ({
   const hexList = colors.map((c: any) => getColorHex(c) || "#ccc")
 
   return (
-    <div
-      style={{
-        width: swPx,
-        minWidth: swPx,
-        height: swPx,
-        position: "relative",
-        overflow: "hidden",
-        boxSizing: "border-box",
-        border: "1px solid #e5e5e5",
-        transition: "box-shadow 0.2s, border-color 0.2s",
-        marginBottom: `${LIBRARY_ITEM_MB}px`,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"
-        e.currentTarget.style.borderColor = "#999"
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "none"
-        e.currentTarget.style.borderColor = "#e5e5e5"
-      }}
-    >
+    <div className="flex w-full min-w-0 justify-center">
+      <div
+        style={{
+          width: stripWidthPx,
+          height: stripHeightPx,
+          position: "relative",
+          overflow: "hidden",
+          boxSizing: "border-box",
+          border: PALETTE_SIDEBAR_STRIP_BORDER,
+          transition: "box-shadow 0.2s, filter 0.2s",
+          marginBottom: `${LIBRARY_ITEM_MB}px`,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.12)"
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = "none"
+        }}
+      >
       <div
         style={{
           position: "absolute",
@@ -340,6 +348,7 @@ const LibraryPaletteCard = ({
         }}
       >
         {paletteData.name || "Untitled palette"}
+      </div>
       </div>
     </div>
   )
@@ -588,6 +597,8 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
       <div
         ref={drag}
         style={{
+          width: "100%",
+          minWidth: 0,
           opacity: isDragging ? 0.5 : 1,
           cursor: "grab",
           marginBottom: `${LIBRARY_ITEM_MB}px`,
@@ -705,12 +716,15 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         onChange={(e) => setSearchQuery(e.target.value)}
         className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md flex-shrink-0"
       />
-      <div className="flex-1 overflow-y-auto pr-2 flex flex-col items-center min-h-0">
+      <div
+        className="import-colors-scrollbar flex-1 flex flex-col items-stretch min-h-0 overflow-y-auto"
+        style={{ scrollbarGutter: "stable" }}
+      >
         {currentItems.map((row: LibraryListRow, idx: number) => {
           if (row.kind === "palette") {
             const p = row.palette
             return (
-              <div key={`palette-${p._id}-${idx}`} className="w-full flex justify-center">
+              <div key={`palette-${p._id}-${idx}`} className="w-full min-w-0">
                 <LibraryPaletteCard
                   paletteData={p}
                   colorById={colorById}
@@ -723,7 +737,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           return (
             <div
               key={`color-${c._id ?? c.hex ?? idx}-${idx}`}
-              className="w-full flex justify-center"
+              className="w-full min-w-0"
             >
               <DraggableImportItem colorData={c} />
             </div>

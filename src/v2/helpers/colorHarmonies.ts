@@ -23,6 +23,7 @@ export const resolveHarmonyType = (harmonyType: string): string => {
 }
 
 export const HARMONY_DROPDOWN_ORDER: HarmonyTypeId[] = [
+  HARMONY_TYPES.CUSTOM,
   HARMONY_TYPES.ANALOGOUS,
   HARMONY_TYPES.MONOCHROMATIC,
   HARMONY_TYPES.TRIAD,
@@ -32,7 +33,6 @@ export const HARMONY_DROPDOWN_ORDER: HarmonyTypeId[] = [
   HARMONY_TYPES.SPLIT_COMPLEMENTARY,
   HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY,
   HARMONY_TYPES.SQUARE,
-  HARMONY_TYPES.CUSTOM,
 ]
 
 export const getHarmonyDisplayName = (type: string): string => {
@@ -87,6 +87,20 @@ const extendByHueCycle = (
   return colors.slice(0, colorCount)
 }
 
+const permuteHarmonyToBaseSlot = (
+  hexColors: string[],
+  baseSlotIdx: number,
+  canonBaseIdx: number,
+): string[] => {
+  const n = hexColors.length
+  if (n === 0 || canonBaseIdx < 0 || baseSlotIdx < 0) return hexColors
+  const shift = (((canonBaseIdx - baseSlotIdx) % n) + n) % n
+  return Array.from({ length: n }, (_, i) => hexColors[(i + shift) % n]!)
+}
+
+const splitComplementaryCanonicalBaseIndex = (colorCount: number) =>
+  colorCount >= 4 ? 2 : 0
+
 export const generateHarmonyColors = (
   baseColorHex: string,
   harmonyType: string,
@@ -126,29 +140,61 @@ export const generateHarmonyColors = (
         const hue = isComplement ? baseHue + 180 : baseHue
         const lightnessVariation =
           colorCount > 2 ? (i / (colorCount - 1)) * 0.2 - 0.1 : 0
-        const lightness = Math.max(0.1, Math.min(0.9, baseLight + lightnessVariation))
+        const lightness = Math.max(
+          0.1,
+          Math.min(0.9, baseLight + lightnessVariation),
+        )
         colors.push(hexAtHsl(hue, baseSat, lightness))
       }
       return colors
     }
 
     case HARMONY_TYPES.SPLIT_COMPLEMENTARY: {
-      const offsets = [0, 150, 210]
+      const offsetsClassic = [0, 150, 210]
       if (colorCount === 1) return [baseColorHex]
-      if (colorCount <= 3) {
-        return Array.from({ length: colorCount }, (_, i) =>
-          hexAtHsl(baseHue + offsets[i], baseSat, baseLight),
-        )
+      if (colorCount === 2) {
+        return [baseColorHex, hexAtHsl(baseHue + 150, baseSat, baseLight)]
       }
+      if (colorCount === 3) {
+        return offsetsClassic.map((o) => hexAtHsl(baseHue + o, baseSat, baseLight))
+      }
+
+      const warmHueHigh = normalizeHue(baseHue + 186)
+      const warmHueLow = normalizeHue(baseHue + 171)
+      const darkSat = Math.min(Math.max(baseSat * 0.149, 0.06), 0.22)
+      const darkLight = Math.min(Math.max(baseLight * 0.558, 0.32), 0.48)
+      const warmHexHigh = hexAtHsl(warmHueHigh, baseSat, baseLight)
+      const warmHexLow = hexAtHsl(warmHueLow, baseSat, baseLight)
+      const darkBaseHex = hexAtHsl(baseHue, darkSat, darkLight)
+      const mixedWarm = tinycolor.mix(warmHexHigh, warmHexLow, 50)
+      const mwHsl = mixedWarm.toHsl()
+      const darkWarmHue =
+        typeof mwHsl.h === "number" && !Number.isNaN(mwHsl.h)
+          ? mwHsl.h
+          : normalizeHue((warmHueHigh + warmHueLow) / 2)
+      const darkWarmHex = hexAtHsl(darkWarmHue, darkSat, darkLight)
+
+      if (colorCount === 4) {
+        return [warmHexHigh, warmHexLow, baseColorHex, darkBaseHex]
+      }
+      if (colorCount === 5) {
+        return [warmHexHigh, warmHexLow, baseColorHex, darkBaseHex, darkWarmHex]
+      }
+
+      const coreFive = [
+        warmHexHigh,
+        warmHexLow,
+        baseColorHex,
+        darkBaseHex,
+        darkWarmHex,
+      ]
       return extendByHueCycle(
-        Array.from({ length: 3 }, (_, i) =>
-          hexAtHsl(baseHue + offsets[i], baseSat, baseLight),
-        ),
+        coreFive,
         colorCount,
         baseHue,
         baseSat,
         baseLight,
-        offsets,
+        [186, 171, 0],
       )
     }
 
@@ -209,7 +255,14 @@ export const generateHarmonyColors = (
         hexAtHsl(baseHue + offsetsFour[i], baseSat, baseLight),
       )
       if (colorCount <= 4) return core
-      return extendByHueCycle(core, colorCount, baseHue, baseSat, baseLight, offsetsFour)
+      return extendByHueCycle(
+        core,
+        colorCount,
+        baseHue,
+        baseSat,
+        baseLight,
+        offsetsFour,
+      )
     }
 
     case HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY: {
@@ -237,7 +290,14 @@ export const generateHarmonyColors = (
         hexAtHsl(baseHue + offsetsFive[i], baseSat, baseLight),
       )
       if (colorCount <= 5) return core
-      return extendByHueCycle(core, colorCount, baseHue, baseSat, baseLight, offsetsFive)
+      return extendByHueCycle(
+        core,
+        colorCount,
+        baseHue,
+        baseSat,
+        baseLight,
+        offsetsFive,
+      )
     }
 
     case HARMONY_TYPES.SHADES: {
@@ -253,7 +313,10 @@ export const generateHarmonyColors = (
       return Array.from({ length: colorCount }, (_, i) => {
         const lightness = 0.15 + (i / (colorCount - 1)) * 0.7
         const saturationFactor = 1 - Math.abs(i / (colorCount - 1) - 0.5) * 0.3
-        const saturation = Math.max(0.3, Math.min(1, baseSat * saturationFactor))
+        const saturation = Math.max(
+          0.3,
+          Math.min(1, baseSat * saturationFactor),
+        )
         return hexAtHsl(baseHue, saturation, lightness)
       })
     }
@@ -276,7 +339,19 @@ export function applyHarmonyToPalette<T extends { hex?: string }>(
   const baseColor = colors[baseColorIndex]
   if (!baseColor || !baseColor.hex) return colors
 
-  const harmonyHexColors = generateHarmonyColors(baseColor.hex, type, colors.length)
+  let harmonyHexColors = generateHarmonyColors(
+    baseColor.hex,
+    type,
+    colors.length,
+  )
+
+  if (type === HARMONY_TYPES.SPLIT_COMPLEMENTARY) {
+    harmonyHexColors = permuteHarmonyToBaseSlot(
+      harmonyHexColors,
+      baseColorIndex,
+      splitComplementaryCanonicalBaseIndex(colors.length),
+    )
+  }
 
   return colors.map((color, index) => {
     const newHex = harmonyHexColors[index] || color.hex

@@ -270,9 +270,17 @@ const PaletteHistory = ({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <Collapse defaultActiveKey={[todayKey]} ghost>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <div
+        className="import-colors-scrollbar"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          scrollbarGutter: "stable",
+        }}
+      >
+        <Collapse defaultActiveKey={[todayKey]} ghost className="palette-history-collapse">
           {groupedSnapshots.map((group) => (
             <Panel
               key={group.dateKey}
@@ -290,7 +298,7 @@ const PaletteHistory = ({
             >
               <List
                 dataSource={group.displaySnapshots}
-                style={{ padding: "0px 1px" }}
+                style={{ padding: 0 }}
                 renderItem={(snapshot: any) => (
                   <List.Item
                     style={{
@@ -299,7 +307,7 @@ const PaletteHistory = ({
                       borderRadius: "2px",
                       transition: "background-color 0.2s",
                       marginBottom: "2px",
-                      padding: "0px 1px",
+                      padding: 0,
                     }}
                     onMouseEnter={(e) => {
                       ;(e.currentTarget as HTMLDivElement).style.backgroundColor = "#f5f5f5"
@@ -315,7 +323,7 @@ const PaletteHistory = ({
                           {new Date(snapshot.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
-                      <SimplePaletteBox colors={snapshot.colors} style={{ height: "95px" }} />
+                      <SimplePaletteBox colors={snapshot.colors} />
                     </div>
                   </List.Item>
                 )}

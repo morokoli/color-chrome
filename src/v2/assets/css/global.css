@@ -28,7 +28,7 @@
 }
 
 body {
-  font-family: 'Montserrat Regular 400';
+  font-family: "Montserrat Regular 400";
 }
 
 .range-container {
@@ -68,8 +68,10 @@ body {
 } */
 
 @font-face {
-  font-family: 'Montserrat Regular 400';
-  src: local('Montserrat Regular'), url('../fonts/Montserrat-Regular.ttf') format('truetype');
+  font-family: "Montserrat Regular 400";
+  src:
+    local("Montserrat Regular"),
+    url("../fonts/Montserrat-Regular.ttf") format("truetype");
 }
 
 .arrow {
@@ -93,12 +95,17 @@ body {
 /* color history */
 
 .color-history {
-  background: conic-gradient(from 90deg at 1px 1px, #e2e8f0 90deg, #0000 0) -1px -1px / 21px 22px;
+  background: conic-gradient(
+      from 90deg at 1px 1px,
+      #e2e8f0 90deg,
+      #0000 0
+    ) -1px -1px /
+    21px 22px;
   background-color: #caccd0;
 }
 
 /* n+78 after all colors not visible */
-.color-history-container div:nth-child(n+78):not(.delete-square) {
+.color-history-container div:nth-child(n + 78):not(.delete-square) {
   display: none;
 }
 
@@ -116,7 +123,7 @@ body {
 
 .delete-square::before,
 .delete-square::after {
-  content: '';
+  content: "";
   top: 50%;
   left: 50%;
   width: 150%;
@@ -180,7 +187,6 @@ input[type="checkbox"]:checked::before {
   transform: scale(1.8);
 }
 
-
 .photoshop-picker {
   background: #fff !important;
   border-radius: 0 !important;
@@ -189,31 +195,53 @@ input[type="checkbox"]:checked::before {
 }
 
 /* header */
-.photoshop-picker>div:nth-child(1) {
+.photoshop-picker > div:nth-child(1) {
   display: none;
 }
 
-.photoshop-picker>div:nth-child(2)>div:nth-child(3) {
+.photoshop-picker > div:nth-child(2) > div:nth-child(3) {
   width: 240px !important;
 }
 
-.photoshop-picker>div:nth-child(2)>div:nth-child(3)>div>div:nth-child(1) {
+.photoshop-picker
+  > div:nth-child(2)
+  > div:nth-child(3)
+  > div
+  > div:nth-child(1) {
   margin-left: 20px;
 }
 
 /* hsv and rgb */
-.photoshop-picker>div:nth-child(2)>div:nth-child(3)>div>div:nth-child(2)>div:nth-child(3) {
+.photoshop-picker
+  > div:nth-child(2)
+  > div:nth-child(3)
+  > div
+  > div:nth-child(2)
+  > div:nth-child(3) {
   top: 125px;
   left: 320px;
   position: absolute !important;
 }
 
-.photoshop-picker>div:nth-child(2)>div:nth-child(3)>div>div:nth-child(2)>div:nth-child(3)>div:nth-child(10) {
+.photoshop-picker
+  > div:nth-child(2)
+  > div:nth-child(3)
+  > div
+  > div:nth-child(2)
+  > div:nth-child(3)
+  > div:nth-child(10) {
   top: 7px !important;
   right: 0 !important;
 }
 
-.photoshop-picker>div:nth-child(2)>div:nth-child(3)>div>div:nth-child(2)>div:nth-child(3)>div:nth-child(10)>div {
+.photoshop-picker
+  > div:nth-child(2)
+  > div:nth-child(3)
+  > div
+  > div:nth-child(2)
+  > div:nth-child(3)
+  > div:nth-child(10)
+  > div {
   height: 27px !important;
 }
 
@@ -297,4 +325,13 @@ input[type="checkbox"]:checked::before {
   border: 2px solid #000 !important;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
   z-index: 10 !important;
+}
+
+/* Generator sidebars: History strips share Library lane width (antd collapse default padding skews inner width) */
+.palette-history-collapse .ant-collapse-header {
+  padding-inline: 0 !important;
+}
+.palette-history-collapse .ant-collapse-content-box {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }

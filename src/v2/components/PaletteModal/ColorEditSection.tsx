@@ -166,7 +166,8 @@ const ColorEditSection = ({
     onColorChange(newColor, idx)
   }
 
-  const showHarmonyDropdown = onHarmonyChange && allColors && allColors.length > 1
+  const showHarmonyDropdown =
+    onHarmonyChange && allColors && allColors.length > 1
   const showReapplyHarmony =
     onReapplyHarmony &&
     harmonyType !== HARMONY_TYPES.CUSTOM &&
@@ -187,7 +188,7 @@ const ColorEditSection = ({
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          gap: 14,
+          gap: 0,
           width: "100%",
           marginBottom: showHarmonyDropdown ? 22 : 14,
           boxSizing: "border-box",
@@ -211,7 +212,11 @@ const ColorEditSection = ({
               size={WHEEL_PX}
             />
           ) : (
-            <ColorPicker value={getColorHex(colorObject)} onChange={handleHexChange} inline />
+            <ColorPicker
+              value={getColorHex(colorObject)}
+              onChange={handleHexChange}
+              inline
+            />
           )}
         </div>
         <div
@@ -394,7 +399,10 @@ const ColorEditSection = ({
                       height: "12px",
                       backgroundColor: cellColor,
                       boxSizing: "border-box",
-                      border: hex === getColorHex(colorObject) ? "2px solid black" : "none",
+                      border:
+                        hex === getColorHex(colorObject)
+                          ? "2px solid black"
+                          : "none",
                       cursor: "pointer",
                     }}
                   />
@@ -418,8 +426,10 @@ const ColorEditSection = ({
             </DialogTitle>
             <DialogDescription className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               Pick a rule. Colors rebuild from your{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-100">selected swatch</span>.
-              Choose Custom to edit each color freely.
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                selected swatch
+              </span>
+              . Choose Custom to edit each color freely.
             </DialogDescription>
           </DialogHeader>
           <div
@@ -446,7 +456,9 @@ const ColorEditSection = ({
                 >
                   <span>{label}</span>
                   {selected ? (
-                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">Active</span>
+                    <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                      Active
+                    </span>
                   ) : null}
                 </button>
               )
@@ -479,7 +491,8 @@ const ColorEditSection = ({
             }}
             onFocus={(e) => {
               e.currentTarget.style.borderColor = "#4096ff"
-              e.currentTarget.style.boxShadow = "0 0 0 2px rgba(5, 145, 255, 0.1)"
+              e.currentTarget.style.boxShadow =
+                "0 0 0 2px rgba(5, 145, 255, 0.1)"
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = "#d9d9d9"
@@ -545,7 +558,8 @@ const ColorEditSection = ({
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "#4096ff"
-                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(5, 145, 255, 0.1)"
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 2px rgba(5, 145, 255, 0.1)"
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = "#d9d9d9"
@@ -567,7 +581,8 @@ const ColorEditSection = ({
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "#4096ff"
-                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(5, 145, 255, 0.1)"
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 2px rgba(5, 145, 255, 0.1)"
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = "#d9d9d9"
@@ -588,7 +603,8 @@ const ColorEditSection = ({
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "#4096ff"
-                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(5, 145, 255, 0.1)"
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 2px rgba(5, 145, 255, 0.1)"
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = "#d9d9d9"

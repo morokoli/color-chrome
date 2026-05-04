@@ -12,7 +12,6 @@ import {
   applyHarmonyToPalette,
   getHarmonyDisplayName,
 } from "@/v2/helpers/colorHarmonies"
-import { CollapsibleBoxHorizontal } from "@/v2/components/CollapsibleBoxHorizontal"
 import ColorsSection from "./ColorsSection"
 import ColorEditSection from "./ColorEditSection"
 import FormInputs from "./FormInputs"
@@ -22,6 +21,10 @@ import PaletteHistory from "./PaletteHistory"
 import { useGetFolders } from "@/v2/api/folders.api"
 import GradientEditor, { generateFigmaGradientData } from "./GradientEditor"
 import GradientPropertiesForm from "./GradientPropertiesForm"
+import {
+  PALETTE_SIDEBAR_COLUMN_WIDTH_PX,
+  PALETTE_SIDEBAR_SHELL_PADDING_PX,
+} from "./previewDimensions"
 
 /** Folder IDs that contain this color (by id or populated `colors` hex), for Color Info multi-select. */
 function collectFolderIdsForColor(color: any, folders: any[] | undefined): string[] {
@@ -191,7 +194,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     initialPaletteData = null,
     initialTags = null,
     onSuccess,
-    hidePrimaryActionButton: _hidePrimaryActionButton = false,
+    hidePrimaryActionButton = false,
     hideHeader = false,
     externalColorMode,
     externalActiveTab,
@@ -226,7 +229,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   // Use external state if provided, otherwise use internal
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab
   const colorMode = externalColorMode !== undefined ? externalColorMode : internalColorMode
-  
+
+  const sideColumnPx = PALETTE_SIDEBAR_COLUMN_WIDTH_PX
+  const libraryLanePx = activeTab === "create" ? sideColumnPx : 0
+  const historyLanePx = activeTab === "create" && colorMode === "solid" ? sideColumnPx : 0
+
   const handleSetActiveTab = (tab: "create" | "info") => {
     if (externalActiveTab !== undefined && onActiveTabChange) {
       onActiveTabChange(tab)
@@ -1094,7 +1101,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         position: "relative",
         display: "flex",
         flexDirection: "column",
-        width: activeTab === "create" ? "1200px" : "800px",
+        width: hideHeader ? "100%" : activeTab === "create" ? "1200px" : "800px",
         transition: "all 0.3s ease",
         maxHeight: "90vh",
         overflow: "hidden",
@@ -1102,44 +1109,69 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     >
       <div
         style={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: `${libraryLanePx}px minmax(0, 1fr) ${historyLanePx}px`,
           flex: 1,
-          overflowY: "auto",
+          minHeight: 0,
+          overflow: "hidden",
         }}
       >
-        {/* Left Side Section - Import */}
-        <CollapsibleBoxHorizontal
-          isOpen={activeTab === "create"}
-          maxWidth="190px"
-          className="import-colors-scrollbar"
-        >
-          <div
-            style={{
-              padding: "16px",
-              borderRight: "1px solid #f0f0f0",
-              backgroundColor: "#fafafa",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              flex: 1,
-            }}
-          >
-            <div style={{ flex: 1, overflow: "hidden", minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <ImportColorsList
-                onAddToPalette={handleAddColorToPalette}
-                onAddPaletteToPalette={handleAddPaletteToPalette}
-              />
-            </div>
-          </div>
-        </CollapsibleBoxHorizontal>
-
-        {/* Main Content */}
+        {/* Left — Library (fixed symmetric lane) */}
         <div
           style={{
-            flex: 1,
+            gridColumn: 1,
+            minWidth: 0,
+            overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            padding: activeTab === "create" ? "0 6px" : "0 16px",
+            borderRight: libraryLanePx > 0 ? "1px solid #f0f0f0" : "none",
+          }}
+        >
+          {libraryLanePx > 0 ? (
+            <div
+              style={{
+                width: sideColumnPx,
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                boxSizing: "border-box",
+                padding: PALETTE_SIDEBAR_SHELL_PADDING_PX,
+                backgroundColor: "#fafafa",
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <ImportColorsList
+                  onAddToPalette={handleAddColorToPalette}
+                  onAddPaletteToPalette={handleAddPaletteToPalette}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Main editor */}
+        <div
+          style={{
+            gridColumn: 2,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            padding: hideHeader
+              ? activeTab === "create"
+                ? "0 4px"
+                : "0 12px"
+              : activeTab === "create"
+                ? "0 6px"
+                : "0 16px",
           }}
         >
           {/* <div
@@ -1368,82 +1400,96 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           </div>
         </div>
 
-        {/* Right Side Section - History (always visible) */}
-        <CollapsibleBoxHorizontal
-          isOpen={activeTab === "create" && colorMode === "solid"}
-          maxWidth="170px"
+        {/* Right — Version history (same lane width as Library) */}
+        <div
+          style={{
+            gridColumn: 3,
+            minWidth: 0,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            borderLeft: historyLanePx > 0 ? "1px solid #f0f0f0" : "none",
+          }}
         >
-          <div
-            style={{
-              padding: "10px",
-              borderLeft: "1px solid #f0f0f0",
-              height: "100%",
-              backgroundColor: "#fafafa",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-              <h3 style={{ margin: 0, fontSize: "12px", fontWeight: 500 }}>Versions</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-                <button
-                  onClick={handleUndo}
-                  title="Undo (Ctrl+Z)"
-                  disabled={!canUndo}
-                  style={{
-                    padding: "2px 4px",
-                    minWidth: "auto",
-                    opacity: canUndo ? 1 : 0.4,
-                    border: "none",
-                    background: "transparent",
-                    cursor: canUndo ? "pointer" : "not-allowed",
-                    borderRadius: "2px",
-                  }}
-                  onMouseEnter={(e) => canUndo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
-                >
-                  <Undo2 style={{ width: "12px", height: "12px" }} />
-                </button>
-                <button
-                  onClick={handleRedo}
-                  title="Redo (Ctrl+Shift+Z)"
-                  disabled={!canRedo}
-                  style={{
-                    padding: "2px 4px",
-                    minWidth: "auto",
-                    opacity: canRedo ? 1 : 0.4,
-                    border: "none",
-                    background: "transparent",
-                    cursor: canRedo ? "pointer" : "not-allowed",
-                    borderRadius: "2px",
-                  }}
-                  onMouseEnter={(e) => canRedo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
-                >
-                  <Redo2 style={{ width: "12px", height: "12px" }} />
-                </button>
+          {historyLanePx > 0 ? (
+            <div
+              style={{
+                width: sideColumnPx,
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                boxSizing: "border-box",
+                padding: PALETTE_SIDEBAR_SHELL_PADDING_PX,
+                backgroundColor: "#fafafa",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", flexShrink: 0 }}>
+                <h3 style={{ margin: 0, fontSize: "12px", fontWeight: 500 }}>Versions</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                  <button
+                    onClick={handleUndo}
+                    title="Undo (Ctrl+Z)"
+                    disabled={!canUndo}
+                    style={{
+                      padding: "2px 4px",
+                      minWidth: "auto",
+                      opacity: canUndo ? 1 : 0.4,
+                      border: "none",
+                      background: "transparent",
+                      cursor: canUndo ? "pointer" : "not-allowed",
+                      borderRadius: "2px",
+                    }}
+                    onMouseEnter={(e) => canUndo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
+                  >
+                    <Undo2 style={{ width: "12px", height: "12px" }} />
+                  </button>
+                  <button
+                    onClick={handleRedo}
+                    title="Redo (Ctrl+Shift+Z)"
+                    disabled={!canRedo}
+                    style={{
+                      padding: "2px 4px",
+                      minWidth: "auto",
+                      opacity: canRedo ? 1 : 0.4,
+                      border: "none",
+                      background: "transparent",
+                      cursor: canRedo ? "pointer" : "not-allowed",
+                      borderRadius: "2px",
+                    }}
+                    onMouseEnter={(e) => canRedo && ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#eee")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent")}
+                  >
+                    <Redo2 style={{ width: "12px", height: "12px" }} />
+                  </button>
+                </div>
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <PaletteHistory
+                  currentColors={colors}
+                  paletteId={paletteId}
+                  onApplySnapshot={handleApplySnapshot}
+                  onUndoStateChange={handleUndoStateChange}
+                  onUndoRef={undoRef}
+                  onRedoRef={redoRef}
+                />
               </div>
             </div>
-            <div style={{ fontSize: "10px", color: "#666", marginBottom: "8px", marginTop: "0px" }}>
-              <p style={{ margin: 0 }}>
-                Previous iterations of your {isPalette ? "palette" : "color"}
-              </p>
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-              <PaletteHistory
-                currentColors={colors}
-                paletteId={paletteId}
-                onApplySnapshot={handleApplySnapshot}
-                onUndoStateChange={handleUndoStateChange}
-                onUndoRef={undoRef}
-                onRedoRef={redoRef}
-              />
-            </div>
-          </div>
-        </CollapsibleBoxHorizontal>
+          ) : null}
+        </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer — hidden in Generator embed (parent supplies actions) */}
+      {!hideHeader ? (
       <div
         style={{
           display: "flex",
@@ -1455,7 +1501,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         }}
       >
         <div>
-          {isPalette && !isEditing && colorPickerIndex !== null && !props.hidePrimaryActionButton && (
+          {isPalette && !isEditing && colorPickerIndex !== null && !hidePrimaryActionButton && (
             <button
               onClick={handleSaveSelectedColor}
               disabled={saveInProgress}
@@ -1477,6 +1523,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         </div>
         <div />
       </div>
+      ) : null}
     </div>
   )
 })

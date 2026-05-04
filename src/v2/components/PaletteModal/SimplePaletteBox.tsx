@@ -1,4 +1,9 @@
 import { Flex } from "antd"
+import {
+  PALETTE_SIDEBAR_STRIP_BORDER,
+  PALETTE_SIDEBAR_STRIP_HEIGHT_PX,
+  PALETTE_SIDEBAR_STRIP_WIDTH_PX,
+} from "./previewDimensions"
 
 const isColorDark = (color: string) => {
   const hex = color.replace("#", "")
@@ -26,10 +31,13 @@ const SimplePaletteBox = ({
   return (
     <Flex
       style={{
-        width: "100%",
-        height: "200px",
-        border: "1px solid black",
+        width: `${PALETTE_SIDEBAR_STRIP_WIDTH_PX}px`,
+        height: `${PALETTE_SIDEBAR_STRIP_HEIGHT_PX}px`,
+        border: PALETTE_SIDEBAR_STRIP_BORDER,
         overflow: "hidden",
+        boxSizing: "border-box",
+        marginLeft: "auto",
+        marginRight: "auto",
         ...(style || {}),
       }}
     >

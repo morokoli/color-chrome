@@ -2,7 +2,12 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import tinycolor from "tinycolor2"
 import { HARMONY_TYPES } from "@/v2/helpers/colorHarmonies"
 
-type PaletteColor = { hex: string; rgb?: unknown; hsl?: unknown; [k: string]: unknown }
+type PaletteColor = {
+  hex: string
+  rgb?: unknown
+  hsl?: unknown
+  [k: string]: unknown
+}
 
 /** Circular harmony wheel (same behavior as colorappfrontend ColorWheel.jsx); `size` fits Generator picker column. */
 const ColorWheel = ({
@@ -75,7 +80,11 @@ const ColorWheel = ({
     }
   }
 
-  const coordsToHsl = (x: number, y: number, currentHsl: { l?: number } | undefined) => {
+  const coordsToHsl = (
+    x: number,
+    y: number,
+    currentHsl: { l?: number } | undefined,
+  ) => {
     const dx = x - centerX
     const dy = y - centerY
     const distance = Math.sqrt(dx * dx + dy * dy)
@@ -158,7 +167,11 @@ const ColorWheel = ({
           left: 0,
           zIndex: 0,
           borderRadius: "50%",
-          cursor: readOnly ? "default" : draggingIndex !== null ? "grabbing" : "default",
+          cursor: readOnly
+            ? "default"
+            : draggingIndex !== null
+              ? "grabbing"
+              : "default",
           pointerEvents: readOnly ? "none" : "auto",
         }}
       />
@@ -201,14 +214,19 @@ const ColorWheel = ({
         const isActive = index === activeColorIndex
         const isHovered = index === hoveredIndex
         const isDragging = index === draggingIndex
-        const distFromCenter = Math.hypot(coords.x - centerX, coords.y - centerY)
+        const distFromCenter = Math.hypot(
+          coords.x - centerX,
+          coords.y - centerY,
+        )
         const brightness = tinycolor(color.hex).getBrightness()
         const textColor = brightness > 128 ? "#000" : "#fff"
 
         return (
           <div
             key={`marker-${index}`}
-            onMouseDown={readOnly ? undefined : (e) => handlePointerDown(e, index)}
+            onMouseDown={
+              readOnly ? undefined : (e) => handlePointerDown(e, index)
+            }
             onMouseEnter={readOnly ? undefined : () => setHoveredIndex(index)}
             onMouseLeave={readOnly ? undefined : () => setHoveredIndex(null)}
             style={{
@@ -219,7 +237,9 @@ const ColorWheel = ({
               height: markerRadius * 2,
               borderRadius: "50%",
               backgroundColor: color.hex,
-              border: isActive ? "2px solid #fff" : "2px solid rgba(0, 0, 0, 0.3)",
+              border: isActive
+                ? "2px solid #fff"
+                : "2px solid rgba(0, 0, 0, 0.3)",
               boxShadow: isActive
                 ? "0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 4px rgba(0, 0, 0, 0.25)"
                 : "0 1px 3px rgba(0, 0, 0, 0.25)",
@@ -230,8 +250,14 @@ const ColorWheel = ({
                   : isActive || isHovered
                     ? "scale(1.25)"
                     : "scale(1)",
-              transition: isDragging ? "none" : "transform 0.15s ease, box-shadow 0.15s ease",
-              zIndex: isActive ? 100 : isDragging ? 90 : 10 + Math.round(distFromCenter * 2),
+              transition: isDragging
+                ? "none"
+                : "transform 0.15s ease, box-shadow 0.15s ease",
+              zIndex: isActive
+                ? 100
+                : isDragging
+                  ? 90
+                  : 10 + Math.round(distFromCenter * 2),
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -250,7 +276,11 @@ const ColorWheel = ({
                   transform: "translate(-50%, -50%)",
                 }}
               >
-                <path d="M5 2 L8 8 L5 7 L2 8 Z" fill={textColor} stroke="none" />
+                <path
+                  d="M5 2 L8 8 L5 7 L2 8 Z"
+                  fill={textColor}
+                  stroke="none"
+                />
               </svg>
             )}
           </div>
