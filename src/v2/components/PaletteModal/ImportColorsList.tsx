@@ -19,8 +19,9 @@ const LIBRARY_SCALE = PALETTE_SIDEBAR_STRIP_WIDTH_PX / 134
 const LIBRARY_INSET = 3.6 * LIBRARY_SCALE
 const LIBRARY_GAP = 3.6 * LIBRARY_SCALE
 const LIBRARY_ITEM_MB = 7.2 * LIBRARY_SCALE
-const LIBRARY_FONT_HEX = Math.round(13 * LIBRARY_SCALE)
-const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_SCALE)
+const LIBRARY_FONT_BUMP_PX = 4
+const LIBRARY_FONT_HEX = Math.round(13 * LIBRARY_SCALE) + LIBRARY_FONT_BUMP_PX
+const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_SCALE) + LIBRARY_FONT_BUMP_PX
 
 const stripHeightPx = `${PALETTE_SIDEBAR_STRIP_HEIGHT_PX}px`
 const stripWidthPx = `${PALETTE_SIDEBAR_STRIP_WIDTH_PX}px`
@@ -117,19 +118,24 @@ const SimpleColorBox = ({ colorData }: { colorData: any }) => {
             }}
           >
             <span style={{ color: "inherit" }}>{colorData.hex?.toUpperCase()}</span>
-            <br />
-            <span
-              style={{
-                fontSize: `${LIBRARY_FONT_NAME}px`,
-                color: "inherit",
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {colorData.slash_naming || ""}
-            </span>
+            {colorData.slash_naming && (
+              <>
+                <br />
+                <span
+                  title={String(colorData.slash_naming || "")}
+                  style={{
+                    fontSize: `${LIBRARY_FONT_NAME}px`,
+                    color: "inherit",
+                    maxWidth: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {colorData.slash_naming || ""}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -170,49 +176,50 @@ const GradientPreviewBox = ({ gradientData }: { gradientData: any }) => {
           width: stripWidthPx,
         }}
       >
-      <div
-        style={{
-          width: stripWidthPx,
-          height: stripHeightPx,
-          position: "relative",
-          overflow: "hidden",
-          boxSizing: "border-box",
-          border: PALETTE_SIDEBAR_STRIP_BORDER,
-          transition: "border-color 0.2s ease-in-out",
-          cursor: "pointer",
-          background: gradientCSS || "#ddd",
-        }}
-      >
         <div
           style={{
-            position: "absolute",
-            top: `${LIBRARY_INSET}px`,
-            left: `${LIBRARY_INSET}px`,
-            right: `${LIBRARY_INSET}px`,
-            bottom: `${LIBRARY_INSET}px`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            color: "#fff",
-            fontSize: `${LIBRARY_FONT_HEX}px`,
-            fontWeight: "600",
-            textShadow: "0 1px 3px rgba(0,0,0,0.8)",
+            width: stripWidthPx,
+            height: stripHeightPx,
+            position: "relative",
+            overflow: "hidden",
+            boxSizing: "border-box",
+            border: PALETTE_SIDEBAR_STRIP_BORDER,
+            transition: "border-color 0.2s ease-in-out",
+            cursor: "pointer",
+            background: gradientCSS || "#ddd",
           }}
         >
-          <span
+          <div
             style={{
-              fontSize: `${LIBRARY_FONT_NAME}px`,
-              maxWidth: "100%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              position: "absolute",
+              top: `${LIBRARY_INSET}px`,
+              left: `${LIBRARY_INSET}px`,
+              right: `${LIBRARY_INSET}px`,
+              bottom: `${LIBRARY_INSET}px`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "column",
+              color: "#fff",
+              fontSize: `${LIBRARY_FONT_HEX}px`,
+              fontWeight: "600",
+              textShadow: "0 1px 3px rgba(0,0,0,0.8)",
             }}
           >
-            {gradientData.slash_naming || gradientData.name || "Gradient"}
-          </span>
+            <span
+              title={String(gradientData.slash_naming || gradientData.name || "Gradient")}
+              style={{
+                fontSize: `${LIBRARY_FONT_NAME}px`,
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {gradientData.slash_naming || gradientData.name || "Gradient"}
+            </span>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   )
@@ -293,62 +300,63 @@ const LibraryPaletteCard = ({
           e.currentTarget.style.boxShadow = "none"
         }}
       >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          flexDirection: "row",
-        }}
-      >
-        {hexList.length > 0 ? (
-          hexList.map((_, i: number) => (
-            <DraggablePaletteColorStrip
-              key={i}
-              colorData={colors[i]}
-              onAddColor={() => onAddColor(colors[i])}
-            />
-          ))
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              backgroundColor: "#f0f0f0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "10px",
-              color: "#999",
-            }}
-          >
-            No colors
-          </div>
-        )}
-      </div>
-      <div
-        role="button"
-        tabIndex={0}
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          padding: "4px 6px",
-          maxWidth: "90%",
-          fontSize: "11px",
-          fontWeight: 600,
-          color: "rgba(255, 255, 255, 0.95)",
-          textShadow: "0 1px 2px rgba(0,0,0,0.6)",
-          textAlign: "center",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          cursor: "pointer",
-          pointerEvents: "none",
-        }}
-      >
-        {paletteData.name || "Untitled palette"}
-      </div>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          {hexList.length > 0 ? (
+            hexList.map((_, i: number) => (
+              <DraggablePaletteColorStrip
+                key={i}
+                colorData={colors[i]}
+                onAddColor={() => onAddColor(colors[i])}
+              />
+            ))
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                backgroundColor: "#f0f0f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "10px",
+                color: "#999",
+              }}
+            >
+              No colors
+            </div>
+          )}
+        </div>
+        <div
+          role="button"
+          tabIndex={0}
+          title={String(paletteData.name || "Untitled palette")}
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            padding: "4px 6px",
+            maxWidth: "90%",
+            fontSize: "11px",
+            fontWeight: 600,
+            color: "rgba(255, 255, 255, 0.95)",
+            textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+            textAlign: "center",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+            pointerEvents: "none",
+          }}
+        >
+          {paletteData.name || "Untitled palette"}
+        </div>
       </div>
     </div>
   )
@@ -434,40 +442,40 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         searchQuery.length === 0
           ? items
           : items.filter((item: any) => {
-              const q = searchQuery.toLowerCase()
-              if (item.type === "gradient" && item.gradient_data) {
+            const q = searchQuery.toLowerCase()
+            if (item.type === "gradient" && item.gradient_data) {
+              return (
+                (item.name && item.name.toLowerCase().includes(q)) ||
+                (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
+                (item.comments && item.comments.toLowerCase().includes(q))
+              )
+            }
+            if (item.hex && item.type !== "palette" && item.type !== "gradient") {
+              return (
+                (item.hex && item.hex.toLowerCase().includes(q)) ||
+                (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
+                (item.comments && item.comments.toLowerCase().includes(q))
+              )
+            }
+            if (item.type === "palette" || item.colorIds) {
+              const resolved = getResolvedPaletteColors(item, colorById)
+              if (resolved.length === 1) {
+                const c = resolved[0]
                 return (
                   (item.name && item.name.toLowerCase().includes(q)) ||
-                  (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
-                  (item.comments && item.comments.toLowerCase().includes(q))
+                  (item.description && item.description.toLowerCase().includes(q)) ||
+                  (c.hex && String(c.hex).toLowerCase().includes(q)) ||
+                  (c.slash_naming && String(c.slash_naming).toLowerCase().includes(q)) ||
+                  (c.comments && String(c.comments).toLowerCase().includes(q))
                 )
               }
-              if (item.hex && item.type !== "palette" && item.type !== "gradient") {
-                return (
-                  (item.hex && item.hex.toLowerCase().includes(q)) ||
-                  (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
-                  (item.comments && item.comments.toLowerCase().includes(q))
-                )
-              }
-              if (item.type === "palette" || item.colorIds) {
-                const resolved = getResolvedPaletteColors(item, colorById)
-                if (resolved.length === 1) {
-                  const c = resolved[0]
-                  return (
-                    (item.name && item.name.toLowerCase().includes(q)) ||
-                    (item.description && item.description.toLowerCase().includes(q)) ||
-                    (c.hex && String(c.hex).toLowerCase().includes(q)) ||
-                    (c.slash_naming && String(c.slash_naming).toLowerCase().includes(q)) ||
-                    (c.comments && String(c.comments).toLowerCase().includes(q))
-                  )
-                }
-                return (
-                  (item.name && item.name.toLowerCase().includes(q)) ||
-                  (item.description && item.description.toLowerCase().includes(q))
-                )
-              }
-              return false
-            })
+              return (
+                (item.name && item.name.toLowerCase().includes(q)) ||
+                (item.description && item.description.toLowerCase().includes(q))
+              )
+            }
+            return false
+          })
 
       const rows: LibraryListRow[] = []
       const seenColorKeys = new Set<string>()
@@ -588,6 +596,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     const [{ isDragging }, drag] = useDrag({
       type: ITEM_TYPE,
       item: { colorData, type: ITEM_TYPE },
+      canDrag: () => !isGradient,
       collect: (monitor) => ({
         isDragging: monitor.isDragging(),
       }),

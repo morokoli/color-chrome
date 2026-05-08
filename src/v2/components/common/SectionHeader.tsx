@@ -9,8 +9,10 @@ export interface SectionHeaderProps {
   onPickColor?: () => void
   onPickColorFromBrowser?: () => void
   extraRight?: React.ReactNode
+  extraRightClassName?: string
   /** Optional class for the header container */
   className?: string
+  containerClassName?: string
 }
 
 const SectionHeader: FC<SectionHeaderProps> = ({
@@ -20,6 +22,8 @@ const SectionHeader: FC<SectionHeaderProps> = ({
   onPickColorFromBrowser,
   extraRight,
   className = "",
+  extraRightClassName = "",
+  containerClassName = "",
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [headingHover, setHeadingHover] = useState(false)
@@ -44,7 +48,7 @@ const SectionHeader: FC<SectionHeaderProps> = ({
     <div
       className={`flex items-center justify-between px-3 py-2 border-b border-gray-200 flex-shrink-0 ${className}`}
     >
-      <div className="flex items-center gap-2 min-w-0 flex-1 relative" ref={dropdownRef}>
+      <div className={`flex items-center gap-2 min-w-0 flex-1 relative ${containerClassName}`} ref={dropdownRef}>
         <button
           onClick={() => setTab(null)}
           className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
@@ -97,7 +101,7 @@ const SectionHeader: FC<SectionHeaderProps> = ({
           </div>
         )}
       </div>
-      {extraRight != null && <div className="flex items-center flex-shrink-0">{extraRight}</div>}
+      {extraRight != null && <div className={`flex items-center flex-shrink-0 ${extraRightClassName}`}>{extraRight}</div>}
     </div>
   )
 }

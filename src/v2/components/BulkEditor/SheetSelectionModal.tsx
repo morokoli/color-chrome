@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { X, Plus } from "lucide-react"
+import { X, Plus, ExternalLink } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useAPI } from "@/v2/hooks/useAPI"
@@ -20,6 +20,24 @@ export type SheetSelection = {
   spreadsheetId: string
   sheetId: number
   sheetName: string
+}
+
+function googleSheetEditUrl(spreadsheetId: string, sheetId: number): string {
+  const base = config.spreadsheet.baseURL.replace(/\/$/, "")
+  return `${base}/${spreadsheetId}/edit#gid=${sheetId}`
+}
+
+function openUrlInBackgroundTab(url: string) {
+  try {
+    if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+      chrome.tabs.create({ url, active: false })
+      return
+    }
+  } catch {
+    // fall through to window.open
+  }
+  // Best-effort fallback (may focus the new tab depending on browser settings).
+  window.open(url, "_blank", "noopener,noreferrer")
 }
 
 interface SheetSelectionModalProps {
@@ -183,6 +201,24 @@ export const SheetSelectionModal = ({
             width="100%"
             isSearchable
             checkboxAtEnd
+            getSearchText={(sheet) => sheet.displayName}
+            renderTrailingActions={(sheet) => (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  openUrlInBackgroundTab(
+                    googleSheetEditUrl(sheet.spreadsheetId, sheet.sheetId),
+                  )
+                }}
+                title="Open in Google Sheets"
+                className="inline-flex rounded p-0.5 text-gray-500 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                aria-label={`Open ${sheet.displayName} in Google Sheets`}
+              >
+                <ExternalLink size={14} strokeWidth={2} />
+              </button>
+            )}
             usePortal
             emptyMessage={isLoadingUserSheets ? "" : "No sheets yet. Create one below."}
             renderFooter={() => (
@@ -235,11 +271,10 @@ export const SheetSelectionModal = ({
                         type="button"
                         onClick={handleCreateSheet}
                         disabled={isCreatingSheet}
-                        className={`flex-1 h-8 text-[12px] rounded transition-colors ${
-                          !isCreatingSheet
-                            ? "bg-gray-900 text-white hover:bg-gray-800"
-                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        }`}
+                        className={`flex-1 h-8 text-[12px] rounded transition-colors ${!isCreatingSheet
+                          ? "bg-gray-900 text-white hover:bg-gray-800"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          }`}
                       >
                         {isCreatingSheet ? "Creating..." : "Create"}
                       </button>
@@ -262,11 +297,10 @@ export const SheetSelectionModal = ({
           <button
             onClick={handleConfirm}
             disabled={!canConfirm || parentIsLoading}
-            className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-              canConfirm && !parentIsLoading
-                ? "bg-gray-900 text-white hover:bg-gray-800"
-                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
+            className={`flex-1 py-2 text-[12px] rounded transition-colors ${canConfirm && !parentIsLoading
+              ? "bg-gray-900 text-white hover:bg-gray-800"
+              : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
           >
             {parentIsLoading
               ? "Exporting..."

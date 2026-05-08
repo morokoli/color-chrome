@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useCallback, useState, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
@@ -20,6 +20,16 @@ const Right = () => {
   const [tagsInput, setTagsInput] = useState<string>("")
   const [isLoading, setIsLoading] = useState<"save" | null>(null)
   const [isDirty, setIsDirty] = useState(false)
+
+  const commitPendingTag = useCallback(() => {
+    const pending = tagsInput.trim()
+    if (!pending) return
+    setTagsList((prev) => {
+      if (prev.includes(pending)) return prev
+      return [...prev, pending].slice(0, 5)
+    })
+    setTagsInput("")
+  }, [tagsInput])
 
   // Helper function to merge colors, preserving existing values
   const mergeColors = (prev: SelectedColor[], newColors: SelectedColor[]): SelectedColor[] => {
@@ -192,7 +202,12 @@ const Right = () => {
     if (!activeColors.length) return
     const baseParts = nameInput.trim().split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 5)
     const base = baseParts.join(" / ")
-    const tags = tagsList
+    const tags = (() => {
+      const pending = tagsInput.trim()
+      if (!pending) return tagsList
+      if (tagsList.includes(pending)) return tagsList
+      return [...tagsList, pending].slice(0, 5)
+    })()
 
     const limitToFiveParts = (s: string) => {
       const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 5)
@@ -233,6 +248,7 @@ const Right = () => {
       )
     )
     setIsDirty(true)
+    setTagsInput("")
     toast.display("success", `Updated name and tags for ${activeColors.length} color(s)`)
   }
 
@@ -544,6 +560,7 @@ const Right = () => {
                     type="text"
                     value={tagsInput}
                     onChange={(e) => setTagsInput(e.target.value)}
+                    onBlur={commitPendingTag}
                     onKeyDown={(e) => {
                       if ((e.key === 'Enter' || e.key === ',') && tagsInput.trim()) {
                         e.preventDefault()
@@ -566,10 +583,11 @@ const Right = () => {
                 onClick={handleUpdate}
                 disabled={
                   activeColors.length === 0 ||
-                  (!nameInput.trim() && tagsList.length === 0)
+                  (!nameInput.trim() && tagsList.length === 0 && !tagsInput.trim())
                 }
                 className={`w-full px-3 py-2 text-[12px] rounded transition-colors ${
-                  activeColors.length === 0 || (!nameInput.trim() && tagsList.length === 0)
+                  activeColors.length === 0 ||
+                  (!nameInput.trim() && tagsList.length === 0 && !tagsInput.trim())
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-gray-900 text-white hover:bg-gray-800"
                 }`}

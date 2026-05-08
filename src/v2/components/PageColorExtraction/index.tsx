@@ -202,10 +202,7 @@ export const PageColorExtraction = ({
   }, [])
 
   const handleSave = async () => {
-    const { files, selectedFile, user } = state
-    const selectedFileData = files.find(
-      (file) => file.spreadsheetId === selectedFile,
-    )
+    const { user } = state
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
     const url = tabs[0].url
     const rows = selectedColors.map((color) => {
@@ -252,9 +249,10 @@ export const PageColorExtraction = ({
     setSaveStatus("loading")
     try {
       const resp = await addMultipleColorsAsync({
-        spreadsheetId: selectedFile || null,
-        sheetName: selectedFileData?.sheets?.[0]?.name || null,
-        sheetId: selectedFileData?.sheets?.[0]?.id ?? null,
+        // Website Colors should be database-only (no Sheets write).
+        spreadsheetId: null,
+        sheetName: null,
+        sheetId: null,
         rows: rows,
       })
       // Add to history after creation, with DB color IDs so Bulk Editor updates sync to History & Editor
