@@ -248,7 +248,7 @@ const GradientPropertiesForm = ({
       if (url && !url.startsWith("chrome://") && !url.startsWith("chrome-extension://")) {
         handlePropertyChange("url", url)
       }
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   useEffect(() => {
@@ -294,7 +294,7 @@ const GradientPropertiesForm = ({
           boxShadow: "rgba(0, 0, 0, 0.14) 0px 2px 8px, rgba(0, 0, 0, 0.08) 0px 0px 0px 1px",
         }}
       />
-      
+
       {state.user?.jwtToken && (
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Saving to</label>
@@ -447,6 +447,17 @@ const GradientPropertiesForm = ({
       )}
 
       <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>URL</label>
+        <input
+          type="text"
+          value={metadata.url || ""}
+          onChange={(e) => handlePropertyChange("url", e.target.value)}
+          placeholder="Source URL"
+          style={fieldBox}
+        />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Name</label>
         <div
           style={{
@@ -500,7 +511,7 @@ const GradientPropertiesForm = ({
               )}
             </div>
           ))}
-          {nameSegments.length > 0 && (
+          {nameSegments.length > 0 && nameSegments.length < 5 && (
             <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
           )}
           {nameSegments.length < 5 && (
@@ -514,6 +525,11 @@ const GradientPropertiesForm = ({
                   applyNameState([...nameSegments, nameInput], "")
                 } else if (e.key === "Backspace" && !nameInput && nameSegments.length > 0) {
                   applyNameState(nameSegments.slice(0, -1), "")
+                }
+              }}
+              onBlur={() => {
+                if (nameInput.trim()) {
+                  applyNameState([...nameSegments, nameInput], "")
                 }
               }}
               placeholder={
@@ -537,17 +553,6 @@ const GradientPropertiesForm = ({
           Use / to create nested groups (e.g., Gradients/Brand/Hero). Max 5 names
           (4 slashes).
         </p>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>URL</label>
-        <input
-          type="text"
-          value={metadata.url || ""}
-          onChange={(e) => handlePropertyChange("url", e.target.value)}
-          placeholder="Source URL"
-          style={fieldBox}
-        />
       </div>
 
       <div style={{ marginBottom: 12 }}>

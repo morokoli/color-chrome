@@ -8,13 +8,43 @@ import { X } from "lucide-react"
 import { ColorList } from "./ColorList"
 import { SelectedColor } from "@/v2/api/folders.api"
 
+const MAX_SLASH_NAME_PARTS = 5
+
+function normalizeBulkNameSegments(segments: string[]): string[] {
+  return segments
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .slice(0, MAX_SLASH_NAME_PARTS)
+}
+
+function bulkSlashNamingFromState(segments: string[], continuation: string): string {
+  const clean = normalizeBulkNameSegments(segments)
+  const tail = String(continuation || "").trim()
+  const parts = [...clean, ...(tail ? [tail] : [])].slice(0, MAX_SLASH_NAME_PARTS)
+  return parts.join(" / ")
+}
+
+function hydrateBulkNameFieldsFromSlashString(raw: string) {
+  const trimmed = String(raw || "").trim()
+  if (!trimmed) {
+    return { segments: [] as string[], continuation: "" }
+  }
+  const parts = trimmed
+    .split(/\s*\/\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .slice(0, MAX_SLASH_NAME_PARTS)
+  return { segments: parts, continuation: "" }
+}
+
 const Right = () => {
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
   const queryClient = useQueryClient()
   const [selectedColors, setSelectedColors] = useState<SelectedColor[]>([])
   const [activeColors, setActiveColors] = useState<number[]>([])
-  const [nameInput, setNameInput] = useState<string>("")
+  const [nameSegments, setNameSegments] = useState<string[]>([])
+  const [nameSlashInput, setNameSlashInput] = useState<string>("")
   const [nameMode, setNameMode] = useState<"none" | "hex" | "numerator">("none")
   const [tagsList, setTagsList] = useState<string[]>([])
   const [tagsInput, setTagsInput] = useState<string>("")
@@ -30,6 +60,20 @@ const Right = () => {
     })
     setTagsInput("")
   }, [tagsInput])
+
+  const applyBulkNameState = useCallback((segments: string[], inputValue: string) => {
+    setNameSegments(normalizeBulkNameSegments(segments))
+    setNameSlashInput(String(inputValue || ""))
+  }, [])
+
+  const commitPendingNameSlashPart = useCallback(() => {
+    const pending = nameSlashInput.trim()
+    if (!pending) return
+    setNameSegments((prev) =>
+      [...normalizeBulkNameSegments(prev), pending].slice(0, MAX_SLASH_NAME_PARTS)
+    )
+    setNameSlashInput("")
+  }, [nameSlashInput])
 
   // Helper function to merge colors, preserving existing values
   const mergeColors = (prev: SelectedColor[], newColors: SelectedColor[]): SelectedColor[] => {
@@ -124,7 +168,8 @@ const Right = () => {
       const allSelected = activeColors.length === selectedColors.length && selectedColors.length > 0
       if (allSelected) {
         setActiveColors([])
-        setNameInput("")
+        setNameSegments([])
+        setNameSlashInput("")
         setTagsList([])
         setTagsInput("")
       } else {
@@ -139,7 +184,14 @@ const Right = () => {
           const allSameName = selectedColors.every(
             (item) => (item.color.slash_naming || "") === firstSlashNaming
           )
-          setNameInput(allSameName ? firstSlashNaming : "")
+          if (allSameName && firstSlashNaming) {
+            const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(firstSlashNaming)
+            setNameSegments(segments)
+            setNameSlashInput(continuation)
+          } else {
+            setNameSegments([])
+            setNameSlashInput("")
+          }
           const firstTags = selectedColors[0]?.color.tags || []
           if (selectedColors.every(item =>
             JSON.stringify(item.color.tags || []) === JSON.stringify(firstTags)
@@ -160,11 +212,16 @@ const Right = () => {
       setActiveColors(filteredColors)
 
       if (filteredColors.length === 0) {
-        setNameInput("")
+        setNameSegments([])
+        setNameSlashInput("")
         setTagsList([])
         setTagsInput("")
       } else if (filteredColors.length === 1) {
-        setNameInput(selectedColors[filteredColors[0]]?.color.slash_naming || "")
+        const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(
+          selectedColors[filteredColors[0]]?.color.slash_naming || ""
+        )
+        setNameSegments(segments)
+        setNameSlashInput(continuation)
         const tags = selectedColors[filteredColors[0]]?.color.tags || []
         setTagsList(tags)
         setTagsInput("")
@@ -173,7 +230,14 @@ const Right = () => {
         const allSameName = filteredColors.every(
           (idx) => (selectedColors[idx]?.color.slash_naming || "") === firstSlashNaming
         )
-        setNameInput(allSameName ? firstSlashNaming : "")
+        if (allSameName && firstSlashNaming) {
+          const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(firstSlashNaming)
+          setNameSegments(segments)
+          setNameSlashInput(continuation)
+        } else {
+          setNameSegments([])
+          setNameSlashInput("")
+        }
       }
     } else {
       const newActive = [...activeColors, colorId]
@@ -183,7 +247,11 @@ const Right = () => {
         setNameMode('none')
       }
       if (newActive.length === 1) {
-        setNameInput(selectedColors[colorId]?.color.slash_naming || "")
+        const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(
+          selectedColors[colorId]?.color.slash_naming || ""
+        )
+        setNameSegments(segments)
+        setNameSlashInput(continuation)
         const tags = selectedColors[colorId]?.color.tags || []
         setTagsList(tags)
         setTagsInput("")
@@ -192,7 +260,14 @@ const Right = () => {
         const allSameName = newActive.every(
           (idx) => (selectedColors[idx]?.color.slash_naming || "") === firstSlashNaming
         )
-        setNameInput(allSameName ? firstSlashNaming : "")
+        if (allSameName && firstSlashNaming) {
+          const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(firstSlashNaming)
+          setNameSegments(segments)
+          setNameSlashInput(continuation)
+        } else {
+          setNameSegments([])
+          setNameSlashInput("")
+        }
       }
       setActiveColors(newActive)
     }
@@ -200,8 +275,7 @@ const Right = () => {
 
   const handleUpdate = () => {
     if (!activeColors.length) return
-    const baseParts = nameInput.trim().split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 5)
-    const base = baseParts.join(" / ")
+    const base = bulkSlashNamingFromState(nameSegments, nameSlashInput)
     const tags = (() => {
       const pending = tagsInput.trim()
       if (!pending) return tagsList
@@ -210,7 +284,7 @@ const Right = () => {
     })()
 
     const limitToFiveParts = (s: string) => {
-      const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, 5)
+      const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, MAX_SLASH_NAME_PARTS)
       return parts.join(" / ")
     }
     const namingByIndex = new Map<number, string>()
@@ -249,6 +323,9 @@ const Right = () => {
     )
     setIsDirty(true)
     setTagsInput("")
+    const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(base)
+    setNameSegments(segments)
+    setNameSlashInput(continuation)
     toast.display("success", `Updated name and tags for ${activeColors.length} color(s)`)
   }
 
@@ -256,16 +333,14 @@ const Right = () => {
     colorId: number,
     slash_nameInput: string,
   ) => {
-    const hasTrailingSlash = slash_nameInput.trim().endsWith("/")
     let newslash_naming = slash_nameInput
       .replace(/\s+/g, " ")
       .trim()
       .replace(/\s*\/\s*/g, " / ")
     const parts = newslash_naming.split(/\s*\/\s*/).map((p) => p.trim())
     const nonEmpty = parts.filter(Boolean)
-    const limitedParts = nonEmpty.slice(0, 5)
+    const limitedParts = nonEmpty.slice(0, MAX_SLASH_NAME_PARTS)
     newslash_naming = limitedParts.join(" / ")
-    if (hasTrailingSlash && limitedParts.length < 5) newslash_naming += " / "
 
     setSelectedColors(prev => 
       prev.map((item, index) => 
@@ -300,7 +375,8 @@ const Right = () => {
   const clearColors = () => {
     setSelectedColors([])
     setActiveColors([])
-    setNameInput("")
+    setNameSegments([])
+    setNameSlashInput("")
     setTagsList([])
     setTagsInput("")
     setIsDirty(false)
@@ -522,23 +598,60 @@ const Right = () => {
               </div>
             </div>
 
-            {/* Full-width name input */}
-            <div className="mb-3">
-              <input
-                type="text"
-                placeholder="Name (e.g. Brand/Primary/Blue)"
-                value={nameInput}
-                onChange={(e) => {
-                  const val = e.target.value
-                  const parts = val.split("/").map((p) => p.trim())
-                  const nonEmpty = parts.filter(Boolean)
-                  const limited = nonEmpty.slice(0, 5)
-                  let next = limited.join("/")
-                  if (val.trim().endsWith("/") && limited.length < 5) next += "/"
-                  setNameInput(next)
-                }}
-                className="w-full px-3 py-2 text-[12px] border border-gray-200 rounded focus:outline-none focus:border-gray-400"
-              />
+            {/* Slash name — chips per segment (same pattern as tags) */}
+            <div className="w-full px-3 py-2 border border-gray-200 rounded focus-within:border-gray-400 mb-3">
+              <div className="flex flex-wrap gap-1 items-center">
+                {nameSegments.map((segment, idx) => (
+                  <div key={`${segment}-${idx}`} className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 text-gray-800 text-[11px] rounded">
+                      {segment}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          applyBulkNameState(
+                            nameSegments.filter((_, i) => i !== idx),
+                            nameSlashInput
+                          )
+                        }
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                    {idx < nameSegments.length - 1 && (
+                      <span className="text-gray-500 text-[11px] font-semibold">/</span>
+                    )}
+                  </div>
+                ))}
+                {nameSegments.length > 0 && nameSegments.length < MAX_SLASH_NAME_PARTS && (
+                  <span className="text-gray-500 text-[11px] font-semibold">/</span>
+                )}
+                {nameSegments.length < MAX_SLASH_NAME_PARTS && (
+                  <input
+                    type="text"
+                    value={nameSlashInput}
+                    onChange={(e) => applyBulkNameState(nameSegments, e.target.value)}
+                    onBlur={commitPendingNameSlashPart}
+                    onKeyDown={(e) => {
+                      if ((e.key === "/" || e.key === ",") && nameSlashInput.trim()) {
+                        e.preventDefault()
+                        applyBulkNameState(
+                          [...normalizeBulkNameSegments(nameSegments), nameSlashInput.trim()],
+                          ""
+                        )
+                      } else if (e.key === "Backspace" && !nameSlashInput && nameSegments.length > 0) {
+                        applyBulkNameState(nameSegments.slice(0, -1), "")
+                      }
+                    }}
+                    placeholder={
+                      nameSegments.length === 0
+                        ? "Name (type / or , between parts, max 5)"
+                        : ""
+                    }
+                    className="flex-1 min-w-[120px] text-[12px] outline-none bg-transparent"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Tags Chip Input */}
@@ -583,11 +696,17 @@ const Right = () => {
                 onClick={handleUpdate}
                 disabled={
                   activeColors.length === 0 ||
-                  (!nameInput.trim() && tagsList.length === 0 && !tagsInput.trim())
+                  (nameSegments.length === 0 &&
+                    !nameSlashInput.trim() &&
+                    tagsList.length === 0 &&
+                    !tagsInput.trim())
                 }
                 className={`w-full px-3 py-2 text-[12px] rounded transition-colors ${
                   activeColors.length === 0 ||
-                  (!nameInput.trim() && tagsList.length === 0 && !tagsInput.trim())
+                  (nameSegments.length === 0 &&
+                    !nameSlashInput.trim() &&
+                    tagsList.length === 0 &&
+                    !tagsInput.trim())
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-gray-900 text-white hover:bg-gray-800"
                 }`}

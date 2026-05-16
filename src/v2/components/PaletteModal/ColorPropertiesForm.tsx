@@ -458,7 +458,7 @@ const ColorPropertiesForm = ({
               )}
             </div>
           ))}
-          {nameSegments.length > 0 && (
+          {nameSegments.length > 0 && nameSegments.length < 5 && (
             <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
           )}
           {nameSegments.length < 5 && (

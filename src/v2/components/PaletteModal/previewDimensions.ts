@@ -2,8 +2,8 @@
  * Library + Version History use identical preview strips and equal sidebar lanes.
  * Strip width matches measured History layout; column adds shell padding + scrollbar reserve.
  */
-export const PALETTE_SIDEBAR_STRIP_WIDTH_PX = 89
-export const PALETTE_SIDEBAR_STRIP_HEIGHT_PX = 95
+export const PALETTE_SIDEBAR_STRIP_WIDTH_PX = 92
+export const PALETTE_SIDEBAR_STRIP_HEIGHT_PX = 92
 
 export const PALETTE_SIDEBAR_STRIP_BORDER = "1px solid black"
 

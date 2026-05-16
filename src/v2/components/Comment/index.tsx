@@ -1300,7 +1300,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                       )}
                     </div>
                   ))}
-                  {slashSegments.length > 0 && (
+                  {slashSegments.length > 0 && slashSegments.length < 5 && (
                     <span className="text-gray-500 text-[11px] font-semibold">/</span>
                   )}
                   {slashSegments.length < 5 && (

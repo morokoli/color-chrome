@@ -1104,7 +1104,9 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         width: hideHeader ? "100%" : activeTab === "create" ? "1200px" : "800px",
         transition: "all 0.3s ease",
         maxHeight: "90vh",
+        minHeight: 0,
         overflow: "hidden",
+        ...(hideHeader ? { height: "100%" } : {}),
       }}
     >
       <div
@@ -1163,6 +1165,8 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           style={{
             gridColumn: 2,
             minWidth: 0,
+            minHeight: 0,
+            overflow: "hidden",
             display: "flex",
             flexDirection: "column",
             padding: hideHeader
@@ -1296,7 +1300,10 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             </div>
           )}
 
-          <div style={{ flex: 1, overflowY: "auto" }} className="import-colors-scrollbar">
+          <div
+            style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
+            className="import-colors-scrollbar"
+          >
             {activeTab === "create" ? (
               colorMode === "gradient" ? (
                 <GradientEditor

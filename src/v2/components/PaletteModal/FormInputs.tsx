@@ -432,7 +432,7 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
               )}
             </div>
           ))}
-          {paletteNameSegments.length > 0 && (
+          {paletteNameSegments.length > 0 && paletteNameSegments.length < 4 && (
             <span style={{ color: "#8c8c8c", fontWeight: 600 }}>/</span>
           )}
           {paletteNameSegments.length < 4 && (
