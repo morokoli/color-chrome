@@ -87,19 +87,149 @@ const extendByHueCycle = (
   return colors.slice(0, colorCount)
 }
 
-const permuteHarmonyToBaseSlot = (
-  hexColors: string[],
-  baseSlotIdx: number,
-  canonBaseIdx: number,
-): string[] => {
-  const n = hexColors.length
-  if (n === 0 || canonBaseIdx < 0 || baseSlotIdx < 0) return hexColors
-  const shift = (((canonBaseIdx - baseSlotIdx) % n) + n) % n
-  return Array.from({ length: n }, (_, i) => hexColors[(i + shift) % n]!)
+const positiveModulo = (value: number, modulo: number): number =>
+  ((value % modulo) + modulo) % modulo
+
+const getCenteredRelativeIndex = (
+  index: number,
+  baseIndex: number,
+  count: number,
+): number => {
+  const forward = positiveModulo(index - baseIndex, count)
+  return forward > Math.floor(count / 2) ? forward - count : forward
 }
 
-const splitComplementaryCanonicalBaseIndex = (colorCount: number) =>
-  colorCount >= 4 ? 2 : 0
+const getHarmonyOffset = (
+  type: string,
+  index: number,
+  baseIndex: number,
+  count: number,
+): number => {
+  const relative = index - baseIndex
+  const centeredRelative = getCenteredRelativeIndex(index, baseIndex, count)
+
+  switch (type) {
+    case HARMONY_TYPES.ANALOGOUS:
+      return Math.max(-30, Math.min(30, centeredRelative * 15))
+    case HARMONY_TYPES.COMPLEMENTARY:
+      return positiveModulo(relative, 2) === 0 ? 0 : 180
+    case HARMONY_TYPES.SPLIT_COMPLEMENTARY:
+      return [0, 150, 210][positiveModulo(relative, 3)]!
+    case HARMONY_TYPES.TRIAD:
+      return [0, 120, 240][positiveModulo(relative, 3)]!
+    case HARMONY_TYPES.SQUARE:
+      return [0, 90, 180, 270][positiveModulo(relative, 4)]!
+    case HARMONY_TYPES.COMPOUND:
+      return [0, 30, 180, 210][positiveModulo(relative, 4)]!
+    case HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY:
+      return [0, 30, 150, 210, -30][positiveModulo(relative, 5)]!
+    default:
+      return 0
+  }
+}
+
+const getOffsetCycle = (
+  type: string,
+  index: number,
+  baseIndex: number,
+): number => {
+  const relative = Math.abs(index - baseIndex)
+  const period: Record<string, number> = {
+    [HARMONY_TYPES.COMPLEMENTARY]: 2,
+    [HARMONY_TYPES.SPLIT_COMPLEMENTARY]: 3,
+    [HARMONY_TYPES.TRIAD]: 3,
+    [HARMONY_TYPES.SQUARE]: 4,
+    [HARMONY_TYPES.COMPOUND]: 4,
+    [HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY]: 5,
+  }
+
+  return period[type] ? Math.floor(relative / period[type]) : 0
+}
+
+const getCycledLightness = (baseLight: number, cycle: number): number => {
+  if (cycle <= 0) return baseLight
+  const direction = cycle % 2 === 1 ? 1 : -1
+  return Math.max(0.08, Math.min(0.92, baseLight + direction * 0.12))
+}
+
+const interpolateHueTable = (
+  value: number,
+  table: number[][],
+  fromIndex: number,
+  toIndex: number,
+): number => {
+  const hue = normalizeHue(value)
+  for (let i = 0; i < table.length - 1; i += 1) {
+    const a = table[i]!
+    const b = table[i + 1]!
+    if (hue >= a[fromIndex]! && hue <= b[fromIndex]!) {
+      const span = b[fromIndex]! - a[fromIndex]! || 1
+      const t = (hue - a[fromIndex]!) / span
+      return a[toIndex]! + (b[toIndex]! - a[toIndex]!) * t
+    }
+  }
+  return hue
+}
+
+// Adobe Color harmonies use an artist/RYB-style wheel, while exported hex
+// values expose ordinary RGB/HSL hue. This table approximates that wheel.
+const ADOBE_RYB_HUE_TABLE = [
+  [0, 0],
+  [60, 26],
+  [120, 60],
+  [180, 119.5],
+  [240, 220],
+  [300, 250.5],
+  [360, 360],
+]
+
+const rgbHueToAdobeRybHue = (rgbHue: number): number =>
+  interpolateHueTable(rgbHue, ADOBE_RYB_HUE_TABLE, 1, 0)
+
+const adobeRybHueToRgbHue = (rybHue: number): number =>
+  interpolateHueTable(rybHue, ADOBE_RYB_HUE_TABLE, 0, 1)
+
+const rotateAdobeRybHue = (rgbHue: number, rybOffset: number): number =>
+  adobeRybHueToRgbHue(rgbHueToAdobeRybHue(rgbHue) + rybOffset)
+
+const getTriadRole = (
+  index: number,
+  baseIndex: number,
+  count: number,
+): number => {
+  const roleOrder = [0, 240, 120, 0, 240]
+  return roleOrder[positiveModulo(index - baseIndex, count) % roleOrder.length]!
+}
+
+const getAdobeTriadHex = (
+  baseHue: number,
+  baseSat: number,
+  baseLight: number,
+  index: number,
+  baseIndex: number,
+  count: number,
+): string => {
+  const relative = positiveModulo(index - baseIndex, count)
+  const role = relative % 5
+  const hue =
+    role === 3
+      ? baseHue - 0.5
+      : rotateAdobeRybHue(baseHue, getTriadRole(index, baseIndex, count))
+  const saturation =
+    role === 3
+      ? Math.max(0, baseSat * 0.5)
+      : role === 4
+        ? Math.max(0, baseSat / 3)
+        : baseSat
+  const lightness =
+    role === 3
+      ? Math.max(0.08, baseLight - 0.065)
+      : role === 4
+        ? Math.max(0.08, baseLight - 0.141)
+        : baseLight
+
+  return hexAtHsl(hue, saturation, lightness)
+}
 
 export const generateHarmonyColors = (
   baseColorHex: string,
@@ -199,22 +329,10 @@ export const generateHarmonyColors = (
     }
 
     case HARMONY_TYPES.TRIAD: {
-      const offsets = [0, 120, 240]
-      if (colorCount === 1) return [baseColorHex]
-      if (colorCount <= 3) {
-        return Array.from({ length: colorCount }, (_, i) =>
-          hexAtHsl(baseHue + offsets[i], baseSat, baseLight),
-        )
-      }
-      return extendByHueCycle(
-        Array.from({ length: 3 }, (_, i) =>
-          hexAtHsl(baseHue + offsets[i], baseSat, baseLight),
-        ),
-        colorCount,
-        baseHue,
-        baseSat,
-        baseLight,
-        offsets,
+      return Array.from({ length: colorCount }, (_, i) =>
+        i === 0
+          ? baseColor.toHexString()
+          : getAdobeTriadHex(baseHue, baseSat, baseLight, i, 0, colorCount),
       )
     }
 
@@ -339,22 +457,52 @@ export function applyHarmonyToPalette<T extends { hex?: string }>(
   const baseColor = colors[baseColorIndex]
   if (!baseColor || !baseColor.hex) return colors
 
-  let harmonyHexColors = generateHarmonyColors(
-    baseColor.hex,
-    type,
-    colors.length,
-  )
-
-  if (type === HARMONY_TYPES.SPLIT_COMPLEMENTARY) {
-    harmonyHexColors = permuteHarmonyToBaseSlot(
-      harmonyHexColors,
-      baseColorIndex,
-      splitComplementaryCanonicalBaseIndex(colors.length),
-    )
-  }
+  const baseHsl = tinycolor(baseColor.hex).toHsl()
+  const baseHue = safeHue(baseHsl)
+  const baseSat = baseHsl.s
+  const baseLight = baseHsl.l
+  const lastIndex = Math.max(1, colors.length - 1)
 
   return colors.map((color, index) => {
-    const newHex = harmonyHexColors[index] || color.hex
+    if (index === baseColorIndex) {
+      const tc = tinycolor(baseColor.hex)
+      return {
+        ...color,
+        hex: tc.toHexString(),
+        rgb: tc.toRgb(),
+        hsl: tc.toHsl(),
+      }
+    }
+
+    let newHex: string
+
+    if (type === HARMONY_TYPES.SHADES) {
+      const lightness = 0.12 + (index / lastIndex) * 0.76
+      newHex = hexAtHsl(baseHue, baseSat, lightness)
+    } else if (type === HARMONY_TYPES.MONOCHROMATIC) {
+      const lightness = 0.15 + (index / lastIndex) * 0.7
+      const saturationFactor = 1 - Math.abs(index / lastIndex - 0.5) * 0.3
+      const saturation = Math.max(0.3, Math.min(1, baseSat * saturationFactor))
+      newHex = hexAtHsl(baseHue, saturation, lightness)
+    } else if (type === HARMONY_TYPES.TRIAD) {
+      newHex = getAdobeTriadHex(
+        baseHue,
+        baseSat,
+        baseLight,
+        index,
+        baseColorIndex,
+        colors.length,
+      )
+    } else {
+      const offset = getHarmonyOffset(type, index, baseColorIndex, colors.length)
+      const cycle = getOffsetCycle(type, index, baseColorIndex)
+      newHex = hexAtHsl(
+        baseHue + offset,
+        baseSat,
+        getCycledLightness(baseLight, cycle),
+      )
+    }
+
     const tc = tinycolor(newHex)
 
     return {
