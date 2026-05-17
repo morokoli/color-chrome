@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react"
-import { X, Plus, ExternalLink } from "lucide-react"
+import { X, Plus, ExternalLink, Trash2 } from "lucide-react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { MultiSelectDropdown } from "../FigmaManager/MultiSelectDropdown"
 import { useAPI } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import type { DriveFileCreateRequest, DriveFileCreateResponse } from "@/v2/types/api"
+import type { File as SheetFile } from "@/v2/types/general"
 import { useToast } from "@/v2/hooks/useToast"
 import { useGetUserSheets } from "@/v2/api/sheet.api"
 
@@ -55,7 +56,7 @@ export const SheetSelectionModal = ({
 }: SheetSelectionModalProps) => {
   const toast = useToast()
   const { state, dispatch } = useGlobalState()
-  const { files, user } = state
+  const { files, user, hiddenSheetIds } = state
   const [selectedSheets, setSelectedSheets] = useState<SheetOption[]>([])
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [fileName, setFileName] = useState("")
@@ -67,7 +68,14 @@ export const SheetSelectionModal = ({
     if (userSheetsData?.data && Array.isArray(userSheetsData.data)) {
       dispatch({ type: "MERGE_FILES", payload: userSheetsData.data })
     }
-  }, [userSheetsData])
+  }, [dispatch, userSheetsData])
+
+  useEffect(() => {
+    if (hiddenSheetIds.length === 0) return
+    setSelectedSheets((prev) =>
+      prev.filter((sheet) => !hiddenSheetIds.includes(sheet.id))
+    )
+  }, [hiddenSheetIds])
 
   const { call: callCreateSheet, isStatusLoading: isCreatingSheet } = useAPI<
     DriveFileCreateRequest,
@@ -91,12 +99,18 @@ export const SheetSelectionModal = ({
     })
   })
 
+  const visibleSheets = allSheets.filter((sheet) => !hiddenSheetIds.includes(sheet.id))
+
   if (!isOpen) return null
 
   const handleConfirm = () => {
-    if (selectedSheets.length > 0) {
+    const visibleSelectedSheets = selectedSheets.filter(
+      (sheet) => !hiddenSheetIds.includes(sheet.id)
+    )
+
+    if (visibleSelectedSheets.length > 0) {
       onConfirm(
-        selectedSheets.map((s) => ({
+        visibleSelectedSheets.map((s) => ({
           spreadsheetId: s.spreadsheetId,
           sheetId: s.sheetId,
           sheetName: s.sheetName,
@@ -111,7 +125,15 @@ export const SheetSelectionModal = ({
     onClose()
   }
 
-  const canConfirm = selectedSheets.length > 0
+  const canConfirm = selectedSheets.some(
+    (sheet) => !hiddenSheetIds.includes(sheet.id)
+  )
+
+  const handleHideSheet = (sheet: SheetOption) => {
+    setSelectedSheets((prev) => prev.filter((item) => item.id !== sheet.id))
+    dispatch({ type: "HIDE_SHEET_FROM_EXPORT", payload: sheet.id })
+    toast.display("success", "Removed from extension")
+  }
 
   const handleCreateSheet = async () => {
     const trimmedFile = fileName.trim()
@@ -126,7 +148,7 @@ export const SheetSelectionModal = ({
       const data = await callCreateSheet({ fileName: trimmedFile, sheetName: trimmedTab })
       if (!data?.spreadsheetId) throw new Error("Failed to create spreadsheet")
 
-      const fileObj = {
+      const fileObj: SheetFile = {
         fileName: trimmedFile,
         spreadsheetId: data.spreadsheetId,
         sheets: [
@@ -135,14 +157,12 @@ export const SheetSelectionModal = ({
             id: data.sheetId,
           },
         ],
+        colorHistory: [],
       }
 
       dispatch({
         type: "ADD_FILES",
-        payload: {
-          ...(fileObj as any),
-          colorHistory: [],
-        },
+        payload: fileObj,
       })
       dispatch({ type: "SET_SELECTED_FILE", payload: data.spreadsheetId })
 
@@ -185,7 +205,7 @@ export const SheetSelectionModal = ({
           </label>
           <MultiSelectDropdown<SheetOption>
             selected={selectedSheets}
-            items={allSheets}
+            items={visibleSheets}
             keyExtractor={(sheet) => sheet.id}
             renderItem={(sheet) => (
               <span className="text-[12px] truncate">{sheet.displayName}</span>
@@ -203,21 +223,36 @@ export const SheetSelectionModal = ({
             checkboxAtEnd
             getSearchText={(sheet) => sheet.displayName}
             renderTrailingActions={(sheet) => (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  openUrlInBackgroundTab(
-                    googleSheetEditUrl(sheet.spreadsheetId, sheet.sheetId),
-                  )
-                }}
-                title="Open in Google Sheets"
-                className="inline-flex rounded p-0.5 text-gray-500 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                aria-label={`Open ${sheet.displayName} in Google Sheets`}
-              >
-                <ExternalLink size={14} strokeWidth={2} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    openUrlInBackgroundTab(
+                      googleSheetEditUrl(sheet.spreadsheetId, sheet.sheetId),
+                    )
+                  }}
+                  title="Open in Google Sheets"
+                  className="inline-flex rounded p-0.5 text-gray-500 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                  aria-label={`Open ${sheet.displayName} in Google Sheets`}
+                >
+                  <ExternalLink size={14} strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleHideSheet(sheet)
+                  }}
+                  title="Remove from extension"
+                  className="inline-flex rounded p-0.5 text-gray-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+                  aria-label={`Remove ${sheet.displayName} from extension`}
+                >
+                  <Trash2 size={14} strokeWidth={2} />
+                </button>
+              </div>
             )}
             usePortal
             emptyMessage={isLoadingUserSheets ? "" : "No sheets yet. Create one below."}

@@ -8,6 +8,7 @@ export type GlobalState = {
   selectedFile: string | null
   selectedFolders: string[] // Array of folder IDs
   selectedSheets: string[] // Array of sheet IDs (spreadsheetId)
+  hiddenSheetIds: string[] // Sheet picker entries hidden from the extension
   selectedColorsFromFile: {
     color: {
       hex: string

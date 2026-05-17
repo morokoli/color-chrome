@@ -13,6 +13,7 @@ const initState: GlobalState = {
   selectedFile: null,
   selectedFolders: [],
   selectedSheets: [],
+  hiddenSheetIds: [],
   selectedColorsFromFile: [],
 } as const
 
@@ -20,23 +21,32 @@ const initState: GlobalState = {
 const migrateState = (state: GlobalState | null | undefined): GlobalState | null => {
   if (!state) return null
 
+  let nextState: GlobalState = state
+
   // If newColumns is an array (old format), convert to empty object
-  if (Array.isArray(state.newColumns)) {
-    return {
-      ...state,
-      newColumns: {}
+  if (Array.isArray(nextState.newColumns)) {
+    nextState = {
+      ...nextState,
+      newColumns: {},
     }
   }
 
   // Ensure newColumns is an object
-  if (typeof state.newColumns !== 'object' || state.newColumns === null) {
-    return {
-      ...state,
-      newColumns: {}
+  if (typeof nextState.newColumns !== 'object' || nextState.newColumns === null) {
+    nextState = {
+      ...nextState,
+      newColumns: {},
     }
   }
 
-  return state
+  if (!Array.isArray(nextState.hiddenSheetIds)) {
+    nextState = {
+      ...nextState,
+      hiddenSheetIds: [],
+    }
+  }
+
+  return nextState
 }
 
 export const initGlobalState: GlobalState = migrateState(storedState) ?? initState
@@ -54,6 +64,7 @@ export type Action =
   | { type: "ADD_NEW_COLUMN"; payload: { spreadsheetId: string; column: NewColumn } }
   | { type: "REMOVE_NEW_COLUMN"; payload: { spreadsheetId: string; columnName: string } }
   | { type: "SET_SELECTED_FILE"; payload: string }
+  | { type: "HIDE_SHEET_FROM_EXPORT"; payload: string }
   | { type: "SET_PARSED_DATA"; payload: RowData[] }
   | { type: "SET_USER"; payload: GlobalState["user"] }
   | {
@@ -170,6 +181,13 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         draft.selectedFile = action.payload
       })
 
+    case "HIDE_SHEET_FROM_EXPORT":
+      return produce(state, (draft) => {
+        if (!draft.hiddenSheetIds.includes(action.payload)) {
+          draft.hiddenSheetIds.push(action.payload)
+        }
+      })
+
     case "SET_PARSED_DATA":
       return produce(state, (draft) => {
         const payload = action.payload as any[]
@@ -229,6 +247,7 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         draft.files = []
         draft.selectedFile = null
         draft.selectedSheets = []
+        draft.hiddenSheetIds = []
         draft.parsedData = []
         draft.color = null
         draft.colorHistory = []
