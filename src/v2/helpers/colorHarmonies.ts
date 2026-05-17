@@ -365,3 +365,25 @@ export function applyHarmonyToPalette<T extends { hex?: string }>(
     }
   })
 }
+
+export const getDefaultColorCount = (harmonyType: string): number => {
+  const type = resolveHarmonyType(harmonyType)
+  switch (type) {
+    case HARMONY_TYPES.COMPLEMENTARY:
+      return 2
+    case HARMONY_TYPES.SPLIT_COMPLEMENTARY:
+    case HARMONY_TYPES.TRIAD:
+      return 3
+    case HARMONY_TYPES.SQUARE:
+    case HARMONY_TYPES.COMPOUND:
+      return 4
+    case HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY:
+      return 5
+    case HARMONY_TYPES.SHADES:
+    case HARMONY_TYPES.MONOCHROMATIC:
+    case HARMONY_TYPES.ANALOGOUS:
+      return 5
+    default:
+      return 1
+  }
+}

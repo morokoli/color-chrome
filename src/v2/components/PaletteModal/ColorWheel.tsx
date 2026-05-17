@@ -9,12 +9,46 @@ type PaletteColor = {
   [k: string]: unknown
 }
 
+type HslValue = {
+  h: number
+  s: number
+  l: number
+}
+
+const normalizeHue = (hue: number): number => {
+  let normalized = hue % 360
+  if (normalized < 0) normalized += 360
+  return normalized
+}
+
+/** Shortest signed hue difference (degrees) from `from` to `to`. */
+const hueDelta = (from: number, to: number): number => {
+  const a = normalizeHue(from)
+  const b = normalizeHue(to)
+  let d = b - a
+  if (d > 180) d -= 360
+  if (d < -180) d += 360
+  return d
+}
+
+const clamp01 = (x: number): number => Math.max(0, Math.min(1, x))
+
+const safeHsl = (hex: string): HslValue => {
+  const t = tinycolor(hex).toHsl()
+  return {
+    h: typeof t.h === "number" && !Number.isNaN(t.h) ? t.h : 0,
+    s: typeof t.s === "number" && !Number.isNaN(t.s) ? t.s : 0,
+    l: typeof t.l === "number" && !Number.isNaN(t.l) ? t.l : 0.5,
+  }
+}
+
 /** Circular harmony wheel (same behavior as colorappfrontend ColorWheel.jsx); `size` fits Generator picker column. */
 const ColorWheel = ({
   colors = [] as PaletteColor[],
   activeColorIndex = 0,
   harmonyType = HARMONY_TYPES.CUSTOM,
   onColorChange,
+  onHarmonyPaletteChange,
   size = 168,
   readOnly = false,
 }: {
@@ -22,6 +56,7 @@ const ColorWheel = ({
   activeColorIndex?: number
   harmonyType?: string
   onColorChange?: (color: PaletteColor, colorIndex: number) => void
+  onHarmonyPaletteChange?: (colors: PaletteColor[]) => void
   size?: number
   readOnly?: boolean
 }) => {
@@ -99,6 +134,11 @@ const ColorWheel = ({
   colorsRef.current = colors
   const draggingRef = useRef<number | null>(null)
   draggingRef.current = draggingIndex
+  const harmonyTypeRef = useRef(harmonyType)
+  harmonyTypeRef.current = harmonyType
+  const onHarmonyPaletteChangeRef = useRef(onHarmonyPaletteChange)
+  onHarmonyPaletteChangeRef.current = onHarmonyPaletteChange
+  const harmonySnapshotRef = useRef<HslValue[] | null>(null)
 
   const handlePointerMove = useCallback(
     (e: MouseEvent) => {
@@ -111,6 +151,41 @@ const ColorWheel = ({
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       const currentColor = colorsRef.current[idx]
+      if (!currentColor?.hex) return
+
+      const snapshot = harmonySnapshotRef.current
+      const harmonyCb = onHarmonyPaletteChangeRef.current
+      const useHarmony =
+        harmonyTypeRef.current !== HARMONY_TYPES.CUSTOM &&
+        colorsRef.current.length > 1 &&
+        snapshot &&
+        snapshot.length === colorsRef.current.length &&
+        typeof harmonyCb === "function"
+
+      if (useHarmony) {
+        const start = snapshot[idx]
+        const pointerHsl = coordsToHsl(x, y, { l: start.l })
+        const hueForDelta = pointerHsl.s < 0.02 ? start.h : pointerHsl.h
+        const dHue = hueDelta(start.h, hueForDelta)
+
+        const next = colorsRef.current.map((c, i) => {
+          const s = snapshot[i]
+          const h = normalizeHue(s.h + dHue)
+          const sat = i === idx ? clamp01(pointerHsl.s) : s.s
+          const l = s.l
+          const tc = tinycolor({ h, s: sat, l })
+          return {
+            ...c,
+            hex: tc.toHexString(),
+            rgb: tc.toRgb(),
+            hsl: { h, s: sat, l, a: 1 },
+          }
+        })
+
+        harmonyCb(next)
+        return
+      }
+
       const currentHsl = tinycolor(currentColor.hex).toHsl()
       const newHsl = coordsToHsl(x, y, currentHsl)
       const newHex = tinycolor(newHsl).toHexString()
@@ -125,10 +200,16 @@ const ColorWheel = ({
     [readOnly, onColorChange, wheelRadius, centerX, centerY],
   )
 
-  const handlePointerUp = useCallback(() => setDraggingIndex(null), [])
+  const handlePointerUp = useCallback(() => {
+    setDraggingIndex(null)
+    harmonySnapshotRef.current = null
+  }, [])
 
   useEffect(() => {
-    if (readOnly) setDraggingIndex(null)
+    if (readOnly) {
+      setDraggingIndex(null)
+      harmonySnapshotRef.current = null
+    }
   }, [readOnly])
 
   useEffect(() => {
@@ -142,8 +223,17 @@ const ColorWheel = ({
   }, [draggingIndex, readOnly, handlePointerMove, handlePointerUp])
 
   const handlePointerDown = (e: React.MouseEvent, index: number) => {
-    if (readOnly || !onColorChange) return
+    const allowHarmony =
+      harmonyType !== HARMONY_TYPES.CUSTOM &&
+      colors.length > 1 &&
+      typeof onHarmonyPaletteChange === "function"
+    if (readOnly || (!onColorChange && !allowHarmony)) return
     e.preventDefault()
+    if (allowHarmony) {
+      harmonySnapshotRef.current = colors.map((c) => safeHsl(c.hex))
+    } else {
+      harmonySnapshotRef.current = null
+    }
     setDraggingIndex(index)
   }
 

@@ -391,6 +391,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     setColors(newColors)
   }
 
+  const handleHarmonyPaletteChange = (nextColors: any[]) => {
+    if (!Array.isArray(nextColors) || nextColors.length === 0) return
+    setColors(nextColors)
+  }
+
   const handleHarmonyChange = (newHarmonyType: string) => {
     setHarmonyType(newHarmonyType)
   }
@@ -1325,6 +1330,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   allColors={colors}
                   onApplyHarmony={handleApplyHarmony}
                   onReapplyHarmony={handleReapplyHarmony}
+                  onHarmonyPaletteChange={handleHarmonyPaletteChange}
                 />
               )
             ) : (

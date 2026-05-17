@@ -25,9 +25,6 @@ const getColorHex = (color: any) => {
   return color?.hex || "#FFB3B3"
 }
 
-/** Matches original Generator picker column footprint (wheel sized to fit inside scaled box). */
-const WHEEL_PX = 168
-
 interface ColorEditSectionProps {
   selectedColor: any
   onColorChange: (color: any, editIndex?: number) => void
@@ -39,6 +36,7 @@ interface ColorEditSectionProps {
   allColors?: any[]
   onApplyHarmony?: (harmonyType: string) => void
   onReapplyHarmony?: () => void
+  onHarmonyPaletteChange?: (colors: any[]) => void
 }
 
 const ColorEditSection = ({
@@ -51,6 +49,7 @@ const ColorEditSection = ({
   allColors = [],
   onApplyHarmony,
   onReapplyHarmony,
+  onHarmonyPaletteChange,
 }: ColorEditSectionProps) => {
   const toast = useToast()
   const [hslCopied, setHslCopied] = useState(false)
@@ -196,11 +195,12 @@ const ColorEditSection = ({
       >
         <div
           style={{
-            padding: "6px 0px",
-            width: 180,
+            display: "flex",
+            alignItems: "stretch",
+            width: "35%",
+            aspectRatio: 1,
+            gap: 8,
             flexShrink: 0,
-            transform: "scale(0.9)",
-            transformOrigin: "top left",
           }}
         >
           {showColorWheel ? (
@@ -209,7 +209,7 @@ const ColorEditSection = ({
               activeColorIndex={colorPickerIndex}
               harmonyType={harmonyType}
               onColorChange={handleWheelColor}
-              size={WHEEL_PX}
+              onHarmonyPaletteChange={onHarmonyPaletteChange}
             />
           ) : (
             <ColorPicker
