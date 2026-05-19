@@ -400,6 +400,14 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     setHarmonyType(newHarmonyType)
   }
 
+  const harmonizePaletteAfterAdd = (nextColors: typeof colors) => {
+    if (!nextColors || nextColors.length === 0) return nextColors
+    if (harmonyType === HARMONY_TYPES.CUSTOM) return nextColors
+
+    // Keep the first swatch as the base and re-derive the rest of the palette.
+    return applyHarmonyToPalette(nextColors, harmonyType, 0)
+  }
+
   const handleApplyHarmony = (
     harmonyTypeToApply: string,
     { isReapply = false }: { isReapply?: boolean } = {},
@@ -422,11 +430,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
   const handleAddColor = (idx: number) => {
     if (colors.length < 10) {
-      setColors([
+      const nextColors = [
         ...colors.slice(0, idx + 1),
         createDefaultColorObject(),
         ...colors.slice(idx + 1),
-      ])
+      ]
+      setColors(harmonizePaletteAfterAdd(nextColors))
     }
   }
 
@@ -477,14 +486,15 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
         typeof colorData === "string"
           ? createDefaultColorObject(colorData)
           : colorData
+      const nextColors = [...colors]
 
       if (index !== null) {
-        const newColors = [...colors]
-        newColors.splice(index, 0, colorObject)
-        setColors(newColors)
+        nextColors.splice(index, 0, colorObject)
       } else {
-        setColors([...colors, colorObject])
+        nextColors.push(colorObject)
       }
+
+      setColors(harmonizePaletteAfterAdd(nextColors))
     }
   }
 
