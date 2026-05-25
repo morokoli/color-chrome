@@ -10,6 +10,7 @@ import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { useToast } from "@/v2/hooks/useToast"
 import { useClickOutside } from "@/v2/hooks/useClickOutside"
 import { config } from "@/v2/others/config"
+import { openWebAppPlansUpgrade } from "@/v2/helpers/upgrade"
 import { colors } from "@/v2/helpers/colors"
 import SectionHeader from "../common/SectionHeader"
 import { CollapsibleBox } from "../CollapsibleBox"
@@ -421,7 +422,15 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
         setSheetModalOpen(false)
         setSelectedIds(new Set())
       } catch (err: any) {
-        toast.display("error", err?.response?.data?.err || "Failed to export to sheet")
+        if (err?.response?.data?.code === "PLAN_LIMIT") {
+          toast.display(
+            "error",
+            err?.response?.data?.message || "Export limit reached. Upgrade to continue.",
+          )
+          openWebAppPlansUpgrade(state.user?.jwtToken)
+        } else {
+          toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to export to sheet")
+        }
       } finally {
         setExporting(false)
       }

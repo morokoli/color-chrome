@@ -17,7 +17,6 @@ import Comment from "./Comment"
 import MainMenu from "./MainMenu"
 import PickPanel from "./PickPanel"
 import { Show } from "./common/Show"
-import AiGenerator from "./AIGenerator"
 import FigmaManager from "./FigmaManager"
 import { PageColorExtraction } from "./PageColorExtraction"
 import Generator from "./Generator"
@@ -441,15 +440,6 @@ const App = () => {
               copyToClipboard={copyToClipboard}
               lastPickSource={lastPickSource}
               onPickAgain={lastPickSource === "eyedropper" ? handlePickAgainEyedropper : undefined}
-              onPickColor={handlePickColor}
-              onPickColorFromBrowser={handlePickColorFromBrowser}
-            />
-          </Show>
-          <Show if={tab === "AI_GENERATOR"}>
-            <AiGenerator
-              setTab={setTab}
-              selected={selected}
-              copyToClipboard={copyToClipboard}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}
             />

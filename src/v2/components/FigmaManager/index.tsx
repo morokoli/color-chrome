@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react"
 import { Plus, X, ExternalLink } from "lucide-react"
 import { useFigmaBindAccount, useFigmaDeleteAccount, useFigmaGetAccounts } from "@/v2/api/figma.api"
 import { config } from "@/v2/others/config"
+import { openWebAppPlansUpgrade } from "@/v2/helpers/upgrade"
+import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import SectionHeader from "../common/SectionHeader"
 import { DeletionConfirmationModal } from "./DeletionConfirmationModal"
 
@@ -12,6 +14,7 @@ interface Props {
 }
 
 const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
+  const { state } = useGlobalState()
   const { mutateAsync: bindAccountMutation } = useFigmaBindAccount()
   const { mutateAsync: deleteAccountMutation } = useFigmaDeleteAccount()
   const { data: accountsData, isLoading: isAccountsLoading } = useFigmaGetAccounts()
@@ -31,13 +34,23 @@ const FigmaManager: React.FC<Props> = ({ setTab, onPickColor, onPickColorFromBro
   }, [accountsData])
 
   const bindAccount = async () => {
-    const response = await bindAccountMutation()
-    if (response.data.email) {
-      setAccounts([...accounts, response.data.email])
-      chrome.cookies.remove({
-        name: config.cookie.cookieNameFigmaJwt,
-        url: config.api.baseURL,
-      })
+    try {
+      const response = await bindAccountMutation()
+      if (response.data.email) {
+        setAccounts([...accounts, response.data.email])
+        chrome.cookies.remove({
+          name: config.cookie.cookieNameFigmaJwt,
+          url: config.api.baseURL,
+        })
+      }
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: { code?: string; message?: string } } })
+        ?.response?.data
+      if (data?.code === "PLAN_LIMIT") {
+        openWebAppPlansUpgrade(state.user?.jwtToken)
+        return
+      }
+      console.error("Figma bind failed:", err)
     }
   }
 
