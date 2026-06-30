@@ -1,5 +1,5 @@
-import { useState, useMemo, type CSSProperties } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState, useMemo, useEffect, type CSSProperties } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useDrag } from "react-dnd"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
@@ -25,6 +25,7 @@ const LIBRARY_FONT_NAME = Math.round(11 * LIBRARY_SCALE) + LIBRARY_FONT_BUMP_PX
 
 const stripHeightPx = `${PALETTE_SIDEBAR_STRIP_HEIGHT_PX}px`
 const stripWidthPx = `${PALETTE_SIDEBAR_STRIP_WIDTH_PX}px`
+const LIBRARY_PAGE_SIZE = 10
 
 interface ImportColorsListProps {
   onAddToPalette: (colorData: any, index: number | null, isGradientClick?: boolean) => void
@@ -394,10 +395,17 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   const [showColors, setShowColors] = useState(true)
   const [showPalettes, setShowPalettes] = useState(true)
   const [showGradients, setShowGradients] = useState(true)
+  const [page, setPage] = useState(0)
   const { state } = useGlobalState()
+  const searchValue = searchQuery.trim()
 
-  const { data: colorsAndPalettesData, isLoading, error } = useQuery({
-    queryKey: ["colors-and-palettes", {}],
+  useEffect(() => {
+    setPage(0)
+  }, [searchValue, showColors, showPalettes, showGradients])
+
+  const { data: colorsAndPalettesData, isLoading, isFetching, error } = useQuery({
+    queryKey: ["colors-and-palettes", "import-library", searchValue, page],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const response = await axiosInstance.post(
         config.api.endpoints.getColorsAndPalettes,
@@ -405,7 +413,9 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           filters: {},
           grouping: {},
           sorting: { sortBy: "newest", sortOrder: "desc" },
-          searchingValue: "",
+          searchingValue: searchValue,
+          page,
+          pageSize: LIBRARY_PAGE_SIZE,
         },
         {
           headers: {
@@ -419,6 +429,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   })
 
   const rawAll = colorsAndPalettesData?.colors?.["All Colors"] ?? []
+  const pageInfo = colorsAndPalettesData?.pageInfo
   const colorById = useMemo(() => {
     const map = new Map<string, any>()
     rawAll.forEach((item: any) => {
@@ -429,7 +440,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     return map
   }, [rawAll])
 
-  const allItems = useMemo(() => {
+  const currentItems = useMemo(() => {
     try {
       const items = rawAll.filter((item: any) => {
         if (!item) return false
@@ -438,45 +449,6 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         if (item.type === "gradient" && item.gradient_data) return true
         return false
       })
-      const searchFiltered =
-        searchQuery.length === 0
-          ? items
-          : items.filter((item: any) => {
-            const q = searchQuery.toLowerCase()
-            if (item.type === "gradient" && item.gradient_data) {
-              return (
-                (item.name && item.name.toLowerCase().includes(q)) ||
-                (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
-                (item.comments && item.comments.toLowerCase().includes(q))
-              )
-            }
-            if (item.hex && item.type !== "palette" && item.type !== "gradient") {
-              return (
-                (item.hex && item.hex.toLowerCase().includes(q)) ||
-                (item.slash_naming && item.slash_naming.toLowerCase().includes(q)) ||
-                (item.comments && item.comments.toLowerCase().includes(q))
-              )
-            }
-            if (item.type === "palette" || item.colorIds) {
-              const resolved = getResolvedPaletteColors(item, colorById)
-              if (resolved.length === 1) {
-                const c = resolved[0]
-                return (
-                  (item.name && item.name.toLowerCase().includes(q)) ||
-                  (item.description && item.description.toLowerCase().includes(q)) ||
-                  (c.hex && String(c.hex).toLowerCase().includes(q)) ||
-                  (c.slash_naming && String(c.slash_naming).toLowerCase().includes(q)) ||
-                  (c.comments && String(c.comments).toLowerCase().includes(q))
-                )
-              }
-              return (
-                (item.name && item.name.toLowerCase().includes(q)) ||
-                (item.description && item.description.toLowerCase().includes(q))
-              )
-            }
-            return false
-          })
-
       const rows: LibraryListRow[] = []
       const seenColorKeys = new Set<string>()
 
@@ -488,7 +460,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
         rows.push({ kind: "color", color: c, sortAt })
       }
 
-      for (const item of searchFiltered) {
+      for (const item of items) {
         if (isPaletteEntry(item)) {
           const resolved = getResolvedPaletteColors(item, colorById)
           const n = resolved.length
@@ -511,7 +483,47 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
       console.error("Error processing library items:", err)
       return []
     }
-  }, [rawAll, searchQuery, showColors, showPalettes, showGradients, colorById])
+  }, [rawAll, showColors, showPalettes, showGradients, colorById])
+
+  const totalPages = pageInfo ? Math.max(1, Math.ceil(pageInfo.totalRenderedItems / pageInfo.pageSize)) : 1
+  const canGoPrev = page > 0
+  const canGoNext = !!pageInfo?.hasMore
+  const pageLabel = pageInfo ? `Page ${page + 1} of ${totalPages}` : "Page 1"
+  const compactPageLabel = pageInfo ? `${page + 1}/${totalPages}` : "..."
+
+  const paginationFooter = (
+    <div
+      className="grid flex-shrink-0 items-center gap-1 pt-2 mt-2 border-t border-gray-200"
+      style={{ gridTemplateColumns: "1fr auto 1fr", minHeight: 30 }}
+    >
+      <button
+        type="button"
+        onClick={() => setPage((p) => Math.max(0, p - 1))}
+        disabled={!canGoPrev || isLoading || isFetching}
+        aria-label="Previous page"
+        title="Previous page"
+        className="justify-self-start flex items-center justify-center w-6 h-6 rounded border border-gray-200 text-[11px] leading-none text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+      >
+        ←
+      </button>
+      <div
+        className="min-w-0 px-1 text-center text-[11px] leading-none font-medium text-gray-500 tabular-nums truncate"
+        title={pageInfo ? pageLabel : "Loading library..."}
+      >
+        {pageInfo ? compactPageLabel : "..."}
+      </div>
+      <button
+        type="button"
+        onClick={() => setPage((p) => p + 1)}
+        disabled={!canGoNext || isLoading || isFetching}
+        aria-label="Next page"
+        title="Next page"
+        className="justify-self-end flex items-center justify-center w-6 h-6 rounded border border-gray-200 text-[11px] leading-none text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+      >
+        →
+      </button>
+    </div>
+  )
 
   const libraryHeader = (
     <div
@@ -625,7 +637,6 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
     )
   }
 
-  const currentItems = allItems
   const bothTypesOff = !showColors && !showPalettes && !showGradients
 
   if (isLoading) {
@@ -636,6 +647,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
           <div className="text-sm">Loading colors and palettes...</div>
         </div>
+        {paginationFooter}
       </div>
     )
   }
@@ -648,6 +660,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           <div className="text-sm mb-1">Error loading colors</div>
           <div className="text-xs">{String(error)}</div>
         </div>
+        {paginationFooter}
       </div>
     )
   }
@@ -667,12 +680,13 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           Turn on colors, palettes, or gradients
           <div className="text-xs mt-1">Use the filter icons under Library</div>
         </div>
+        {paginationFooter}
       </div>
     )
   }
 
   if (!currentItems.length) {
-    if (searchQuery.length > 0) {
+    if (searchValue.length > 0) {
       return (
         <div className="flex flex-col h-full overflow-hidden min-h-0">
           {libraryHeader}
@@ -686,6 +700,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           <div className="text-center py-5 text-gray-500 flex-1">
             <div className="text-sm mb-2">No colors or palettes found</div>
           </div>
+          {paginationFooter}
         </div>
       )
     }
@@ -701,6 +716,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
             className="w-full h-9 px-3 mb-2 text-[12px] border border-gray-300 rounded-md"
           />
           <div className="text-center py-5 text-gray-500 text-sm flex-1">Nothing matches the current filters</div>
+          {paginationFooter}
         </div>
       )
     }
@@ -711,6 +727,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           <div className="text-sm">No colors or palettes available</div>
           <div className="text-xs mt-1">Add colors or create palettes first</div>
         </div>
+        {paginationFooter}
       </div>
     )
   }
@@ -758,6 +775,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
           </div>
         )}
       </div>
+      {paginationFooter}
     </div>
   )
 }
