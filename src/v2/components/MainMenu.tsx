@@ -10,9 +10,10 @@ interface Props {
   setTab: (tab: string | null) => void
   onPickColor: () => void
   onPickColorFromBrowser: () => void
+  onStartSnapshot: () => void
 }
 
-const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
+const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser, onStartSnapshot }) => {
   const { state, dispatch } = useGlobalState()
 
   const logOutHandler = async () => {
@@ -85,6 +86,7 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
                 const handleClick = () => {
                   if (item.actionKey === "pickColor") onPickColor()
                   else if (item.actionKey === "pickFromBrowser") onPickColorFromBrowser()
+                  else if (item.actionKey === "snapshot") onStartSnapshot()
                   else if (item.menuName != null) setTab(item.menuName)
                 }
                 return (
