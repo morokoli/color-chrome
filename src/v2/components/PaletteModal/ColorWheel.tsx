@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import tinycolor from "tinycolor2"
 import { HARMONY_TYPES } from "@/v2/helpers/colorHarmonies"
 
@@ -68,6 +68,8 @@ const ColorWheel = ({
   const centerY = size / 2
   const wheelRadius = size / 2 - 12
   const markerRadius = 7
+  const geometryRef = useRef({ centerX, centerY, wheelRadius })
+  geometryRef.current = { centerX, centerY, wheelRadius }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -105,33 +107,22 @@ const ColorWheel = ({
   }, [size, centerX, centerY, wheelRadius])
 
   const hslToCoords = (hsl: { h?: number; s?: number; l?: number }) => {
+    const { centerX: cx, centerY: cy, wheelRadius: radius } =
+      geometryRef.current
     const hue = hsl.h || 0
     const saturation = (hsl.s || 0) * 100
     const angle = ((hue - 90) * Math.PI) / 180
-    const distance = (saturation / 100) * wheelRadius
+    const distance = (saturation / 100) * radius
     return {
-      x: centerX + distance * Math.cos(angle),
-      y: centerY + distance * Math.sin(angle),
+      x: cx + distance * Math.cos(angle),
+      y: cy + distance * Math.sin(angle),
     }
-  }
-
-  const coordsToHsl = (
-    x: number,
-    y: number,
-    currentHsl: { l?: number } | undefined,
-  ) => {
-    const dx = x - centerX
-    const dy = y - centerY
-    const distance = Math.sqrt(dx * dx + dy * dy)
-    const clampedDistance = Math.min(distance, wheelRadius)
-    const angle = Math.atan2(dy, dx)
-    const hue = ((angle * 180) / Math.PI + 90 + 360) % 360
-    const saturation = clampedDistance / wheelRadius
-    return { h: hue, s: saturation, l: currentHsl?.l ?? 0.5 }
   }
 
   const colorsRef = useRef(colors)
   colorsRef.current = colors
+  const onColorChangeRef = useRef(onColorChange)
+  onColorChangeRef.current = onColorChange
   const draggingRef = useRef<number | null>(null)
   draggingRef.current = draggingIndex
   const harmonyTypeRef = useRef(harmonyType)
@@ -139,22 +130,44 @@ const ColorWheel = ({
   const onHarmonyPaletteChangeRef = useRef(onHarmonyPaletteChange)
   onHarmonyPaletteChangeRef.current = onHarmonyPaletteChange
   const harmonySnapshotRef = useRef<HslValue[] | null>(null)
+  const pendingMoveRef = useRef<{ clientX: number; clientY: number } | null>(
+    null,
+  )
+  const rafRef = useRef<number | null>(null)
 
-  const handlePointerMove = useCallback(
-    (e: MouseEvent) => {
-      if (readOnly) return
+  const cancelPendingMove = useCallback(() => {
+    pendingMoveRef.current = null
+    if (rafRef.current !== null) {
+      window.cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }, [])
+
+  const handlePointerMove = useCallback((e: MouseEvent) => {
+    pendingMoveRef.current = { clientX: e.clientX, clientY: e.clientY }
+    if (rafRef.current !== null) return
+
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null
+      const pending = pendingMoveRef.current
+      pendingMoveRef.current = null
+      if (!pending) return
+
       const idx = draggingRef.current
       if (idx === null) return
       const canvas = canvasRef.current
       if (!canvas) return
+
       const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const x = pending.clientX - rect.left
+      const y = pending.clientY - rect.top
       const currentColor = colorsRef.current[idx]
       if (!currentColor?.hex) return
 
       const snapshot = harmonySnapshotRef.current
       const harmonyCb = onHarmonyPaletteChangeRef.current
+      const { centerX: cx, centerY: cy, wheelRadius: radius } =
+        geometryRef.current
       const useHarmony =
         harmonyTypeRef.current !== HARMONY_TYPES.CUSTOM &&
         colorsRef.current.length > 1 &&
@@ -164,7 +177,16 @@ const ColorWheel = ({
 
       if (useHarmony) {
         const start = snapshot[idx]
-        const pointerHsl = coordsToHsl(x, y, { l: start.l })
+        const dx = x - cx
+        const dy = y - cy
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const clampedDistance = Math.min(distance, radius)
+        const angle = Math.atan2(dy, dx)
+        const pointerHsl = {
+          h: ((angle * 180) / Math.PI + 90 + 360) % 360,
+          s: clampedDistance / radius,
+          l: start.l,
+        }
         const hueForDelta = pointerHsl.s < 0.02 ? start.h : pointerHsl.h
         const dHue = hueDelta(start.h, hueForDelta)
 
@@ -187,7 +209,16 @@ const ColorWheel = ({
       }
 
       const currentHsl = tinycolor(currentColor.hex).toHsl()
-      const newHsl = coordsToHsl(x, y, currentHsl)
+      const dx = x - cx
+      const dy = y - cy
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const clampedDistance = Math.min(distance, radius)
+      const angle = Math.atan2(dy, dx)
+      const newHsl = {
+        h: ((angle * 180) / Math.PI + 90 + 360) % 360,
+        s: clampedDistance / radius,
+        l: currentHsl.l ?? 0.5,
+      }
       const newHex = tinycolor(newHsl).toHexString()
       const newColor = {
         ...currentColor,
@@ -195,22 +226,23 @@ const ColorWheel = ({
         rgb: tinycolor(newHsl).toRgb(),
         hsl: newHsl,
       }
-      onColorChange?.(newColor, idx)
-    },
-    [readOnly, onColorChange, wheelRadius, centerX, centerY],
-  )
+      onColorChangeRef.current?.(newColor, idx)
+    })
+  }, [])
 
   const handlePointerUp = useCallback(() => {
     setDraggingIndex(null)
     harmonySnapshotRef.current = null
-  }, [])
+    cancelPendingMove()
+  }, [cancelPendingMove])
 
   useEffect(() => {
     if (readOnly) {
       setDraggingIndex(null)
       harmonySnapshotRef.current = null
+      cancelPendingMove()
     }
-  }, [readOnly])
+  }, [cancelPendingMove, readOnly])
 
   useEffect(() => {
     if (readOnly || draggingIndex === null) return
@@ -219,8 +251,15 @@ const ColorWheel = ({
     return () => {
       window.removeEventListener("mousemove", handlePointerMove)
       window.removeEventListener("mouseup", handlePointerUp)
+      cancelPendingMove()
     }
-  }, [draggingIndex, readOnly, handlePointerMove, handlePointerUp])
+  }, [
+    cancelPendingMove,
+    draggingIndex,
+    readOnly,
+    handlePointerMove,
+    handlePointerUp,
+  ])
 
   const handlePointerDown = (e: React.MouseEvent, index: number) => {
     const allowHarmony =
@@ -380,4 +419,4 @@ const ColorWheel = ({
   )
 }
 
-export default ColorWheel
+export default memo(ColorWheel)
