@@ -12,6 +12,7 @@ import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { AddColorResponse } from "@/v2/types/api"
 import { openEyeDropper } from "@/v2/helpers/colorPicker"
+import { startSnapshotCapture } from "@/v2/helpers/snapshot"
 import Copy from "./Copy"
 import Comment from "./Comment"
 import MainMenu from "./MainMenu"
@@ -22,6 +23,7 @@ import { PageColorExtraction } from "./PageColorExtraction"
 import Generator from "./Generator"
 import BulkEditor from "./BulkEditor"
 import { ExportToSheet } from "./ExportToSheet"
+import Snapshot from "./Snapshot"
 
 const queryClient = new QueryClient()
 
@@ -272,6 +274,10 @@ const App = () => {
         setTab(null)
         chrome.storage.local.remove(['pickerCancelled', 'cancelledAt'])
       }
+      if (changes.openTab?.newValue === 'SNAPSHOT') {
+        setTab('SNAPSHOT')
+        chrome.storage.local.remove(['openTab'])
+      }
     }
 
     chrome.storage.onChanged.addListener(handleStorageChange)
@@ -315,7 +321,12 @@ const App = () => {
       apiUrl: config.api.baseURL,
     }
     chrome.storage.local.set({ colorPickerState: payload })
-    chrome.runtime.sendMessage({ type: "COLOR_PICKER_STATE_SYNCED", payload }).catch(() => {})
+    chrome.runtime.sendMessage(
+      { type: "COLOR_PICKER_STATE_SYNCED", payload },
+      () => {
+        void chrome.runtime.lastError
+      },
+    )
   }
 
   const handlePickColor = () => {
@@ -329,6 +340,18 @@ const App = () => {
       } else {
         window.close()
       }
+    })
+  }
+
+  const handleStartSnapshot = () => {
+    syncColorPickerStateForBackground()
+    startSnapshotCapture({
+      onError: (message) => {
+        toastDispatch({
+          type: "DISPLAY",
+          payload: { type: "error", message },
+        })
+      },
     })
   }
 
@@ -431,6 +454,7 @@ const App = () => {
               setTab={setTab}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}
+              onStartSnapshot={handleStartSnapshot}
             />
           </Show>
           <Show if={tab === "PICK_PANEL"}>
@@ -481,6 +505,14 @@ const App = () => {
               setTab={setTab}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
+          </Show>
+          <Show if={tab === "SNAPSHOT"}>
+            <Snapshot
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+              onStartSnapshot={handleStartSnapshot}
             />
           </Show>
           <Show if={tab === "BULK_EDITOR"}>

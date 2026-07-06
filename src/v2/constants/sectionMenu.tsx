@@ -9,9 +9,10 @@ import {
   Palette,
   Edit3,
   Monitor,
+  Camera,
 } from "lucide-react"
 
-export type SectionMenuActionKey = "pickColor" | "pickFromBrowser"
+export type SectionMenuActionKey = "pickColor" | "pickFromBrowser" | "snapshot"
 
 export interface SectionMenuItem {
   title: string
@@ -26,6 +27,7 @@ export interface SectionMenuItem {
 export const SECTION_MENU_ITEMS: SectionMenuItem[] = [
   { title: "Pick Color", Icon: Pipette, actionKey: "pickColor", section: "Color Actions" },
   { title: "Pick Color Outside Browser", Icon: Monitor, actionKey: "pickFromBrowser", section: "Color Actions" },
+  { title: "Snapshot", Icon: Camera, actionKey: "snapshot", section: "Color Actions" },
   { title: "Website Colors", Icon: PanelTop, menuName: "COLOR_EXTRACTION", section: "Color Actions" },
   { title: "Generator", Icon: Palette, menuName: "GENERATOR", section: "Color Actions" },
   // { title: "AI Generator", Icon: Sparkles, menuName: "AI_GENERATOR", section: "Color Actions" },

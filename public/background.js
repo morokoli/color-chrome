@@ -91,7 +91,7 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'COLOR_PICKER_STATE_SYNCED') {
     sendResponse({ ok: true });
-    return true;
+    return;
   }
 
   if (message.type === 'CAPTURE_SCREEN') {
@@ -124,7 +124,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     sendResponse({ success: true });
-    return true;
+    return;
   }
 
   if (message.type === 'COLOR_PICKER_CANCELLED') {
@@ -133,7 +133,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       cancelledAt: Date.now()
     });
     sendResponse({ success: true });
-    return true;
+    return;
   }
 
   if (message.type === 'OPEN_POPUP') {
@@ -144,7 +144,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     }
     sendResponse({ success: true });
-    return true;
+    return;
   }
 
   if (message.type === 'START_COLOR_PICKER') {
@@ -170,5 +170,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     });
     return true;
+  }
+
+  if (message.type === 'START_SNAPSHOT') {
+    const requestedTabId = message.tabId;
+
+    (async () => {
+      let responded = false;
+      const respond = (payload) => {
+        if (responded) return;
+        responded = true;
+        sendResponse(payload);
+      };
+
+      try {
+        let tabId = requestedTabId;
+        if (!tabId) {
+          const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          tabId = tabs[0]?.id;
+        }
+        if (!tabId) {
+          respond({ error: 'No active tab' });
+          return;
+        }
+
+        const tab = await chrome.tabs.get(tabId);
+        if (
+          tab.url?.startsWith('chrome://') ||
+          tab.url?.startsWith('chrome-extension://') ||
+          tab.url?.startsWith('edge://') ||
+          tab.url?.startsWith('about:')
+        ) {
+          respond({ error: 'Cannot capture snapshot on this page' });
+          return;
+        }
+
+        // Acknowledge immediately, then inject (keeps SW alive via return true below)
+        respond({ success: true });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['snapshotCapture.js'],
+        });
+      } catch (error) {
+        console.error('Snapshot injection error:', error);
+        respond({ error: error?.message || String(error) || 'Failed to start snapshot' });
+      }
+    })();
+
+    return true;
+  }
+
+  if (message.type === 'SNAPSHOT_CANCELLED') {
+    sendResponse({ success: true });
+    return;
   }
 });
