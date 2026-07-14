@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { X } from "lucide-react"
+import { isChipSeparatorKey } from "./chipInputKeys"
 
 const fieldBox: React.CSSProperties = {
   width: "100%",
@@ -104,7 +105,7 @@ const DesignTokensInput = ({ value = [], onChange, style }: DesignTokensInputPro
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if ((e.key === "Enter" || e.key === ",") && input.trim()) {
+            if (isChipSeparatorKey(e.key) && input.trim()) {
               e.preventDefault()
               commitToken(input)
             } else if (e.key === "Backspace" && !input && tokens.length > 0) {
@@ -116,7 +117,7 @@ const DesignTokensInput = ({ value = [], onChange, style }: DesignTokensInputPro
           }}
           placeholder={
             tokens.length === 0
-              ? "color.blue.primary.800 (press , or Enter)"
+              ? "color.blue.primary.800 (press , Enter, or Tab)"
               : "Add another token..."
           }
           style={{
