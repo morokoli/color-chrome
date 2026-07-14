@@ -57,6 +57,7 @@ export const config = {
       moveColorsToFolders: "/api/folders/move-colors-to-folders",
       workspaces: "/api/workspaces",
       setActiveWorkspace: "/api/workspaces/active",
+      entitlements: "/api/me/entitlements",
     },
   },
   toast: {

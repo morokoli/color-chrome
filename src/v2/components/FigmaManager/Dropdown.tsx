@@ -23,6 +23,8 @@ interface DropdownProps<T> {
   itemsWhenSearching?: T[]
   /** Smaller trigger height for compact layouts (e.g. main menu) */
   compact?: boolean
+  /** If true, opens dropdown upward instead of downward (avoids clipping near window edge) */
+  openUpward?: boolean
 }
 
 export const Dropdown = <T,>({
@@ -41,12 +43,18 @@ export const Dropdown = <T,>({
   usePortal = false,
   itemsWhenSearching,
   compact = false,
+  openUpward = false,
 }: DropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{
+    top?: number
+    bottom?: number
+    left: number
+    width: number
+  } | null>(null)
 
   // When footer expands (e.g. "Add sheet" form), scroll so it's visible
   useEffect(() => {
@@ -92,15 +100,24 @@ export const Dropdown = <T,>({
   useEffect(() => {
     if (isOpen && dropdownRef.current && usePortal) {
       const rect = dropdownRef.current.getBoundingClientRect()
-      setMenuPosition({
-        top: rect.bottom + 4, // Fixed positioning is relative to viewport
-        left: rect.left,
-        width: rect.width,
-      })
+      const gap = 4
+      if (openUpward) {
+        setMenuPosition({
+          bottom: window.innerHeight - rect.top + gap,
+          left: rect.left,
+          width: rect.width,
+        })
+      } else {
+        setMenuPosition({
+          top: rect.bottom + gap,
+          left: rect.left,
+          width: rect.width,
+        })
+      }
     } else {
       setMenuPosition(null)
     }
-  }, [isOpen, usePortal])
+  }, [isOpen, usePortal, openUpward])
 
   const listForFilter =
     isSearchable && searchTerm.trim() !== "" && itemsWhenSearching !== undefined
@@ -177,9 +194,10 @@ export const Dropdown = <T,>({
           createPortal(
             <div
               ref={menuRef}
-              className={`fixed border border-gray-200 bg-white z-[100] overflow-y-auto rounded shadow-lg ${renderFooter ? "max-h-80" : "max-h-48"}`}
+              className={`fixed border border-gray-200 bg-white z-[100] overflow-y-auto rounded shadow-lg flex flex-col ${renderFooter ? "max-h-80" : "max-h-48"}`}
               style={{
-                top: `${menuPosition.top}px`,
+                ...(menuPosition.top != null ? { top: `${menuPosition.top}px` } : {}),
+                ...(menuPosition.bottom != null ? { bottom: `${menuPosition.bottom}px` } : {}),
                 left: `${menuPosition.left}px`,
                 width: `${menuPosition.width}px`,
               }}
@@ -209,7 +227,11 @@ export const Dropdown = <T,>({
             document.body
           )
         ) : (
-          <div className={`absolute w-full border border-gray-200 mt-1 bg-white z-[60] rounded shadow-lg flex flex-col max-h-48`}>
+          <div
+            className={`absolute w-full border border-gray-200 bg-white z-[60] rounded shadow-lg flex flex-col max-h-48 ${
+              openUpward ? "bottom-full mb-1" : "top-full mt-1"
+            }`}
+          >
             <div className="overflow-y-auto overscroll-contain flex-1">
               {filteredItems.map((item, i) => (
                 <div

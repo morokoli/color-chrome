@@ -18,6 +18,7 @@ import {
   getFolderDepthById,
   getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
+import { isChipSeparatorKey } from "./chipInputKeys"
 
 interface FormInputsProps {
   formData: {
@@ -357,7 +358,7 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
           type="text"
           value={formData.url}
           onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-          placeholder="Source URL (auto-filled from browser)"
+          placeholder="Source URL"
           style={{
             width: "100%",
             padding: "12px 16px",
@@ -442,7 +443,10 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
               value={paletteNameInput}
               onChange={(e) => applyPaletteNameState(paletteNameSegments, e.target.value)}
               onKeyDown={(e) => {
-                if ((e.key === "/" || e.key === ",") && paletteNameInput.trim()) {
+                if (
+                  isChipSeparatorKey(e.key, { includeSlash: true }) &&
+                  paletteNameInput.trim()
+                ) {
                   e.preventDefault()
                   applyPaletteNameState([...paletteNameSegments, paletteNameInput], "")
                 } else if (e.key === "Backspace" && !paletteNameInput && paletteNameSegments.length > 0) {
@@ -456,7 +460,7 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
               }}
               placeholder={
                 paletteNameSegments.length === 0
-                  ? "Palette name segments (type / to create chip, max 4)"
+                  ? "Palette name segments (type / , or Enter to create chip, max 4)"
                   : ""
               }
               style={{
@@ -526,7 +530,7 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === ",") && tagsInput.trim()) {
+                if (isChipSeparatorKey(e.key) && tagsInput.trim()) {
                   e.preventDefault()
                   addTag(tagsInput)
                 } else if (e.key === "Backspace" && !tagsInput && tags.length > 0) {
@@ -536,7 +540,9 @@ const FormInputs = ({ formData, setFormData, tags, setTags, selectedFolderIds, o
               onBlur={() => {
                 if (tagsInput.trim()) addTag(tagsInput)
               }}
-              placeholder={tags.length === 0 ? "Tags (press , or Enter, max 3)" : ""}
+              placeholder={
+                tags.length === 0 ? "Tags (press , Enter, or Tab, max 3)" : ""
+              }
               style={{
                 flex: 1,
                 minWidth: "80px",
