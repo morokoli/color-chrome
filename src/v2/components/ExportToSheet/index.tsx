@@ -244,7 +244,7 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
   const sortConfig = SORT_OPTIONS.find((o) => o.value === sortOption) ?? SORT_OPTIONS[0]
 
   const { data: colorsData, isLoading } = useQuery({
-    queryKey: ["colors-and-palettes-export", "folder", sortConfig.sortBy, sortConfig.sortOrder, searchQuery],
+    queryKey: ["colors-and-palettes-export", state.activeWorkspaceId, "folder", sortConfig.sortBy, sortConfig.sortOrder, searchQuery],
     queryFn: async () => {
       const response = await axiosInstance.post(
         config.api.endpoints.getColorsAndPalettes,
@@ -262,7 +262,7 @@ export const ExportToSheet: React.FC<ExportToSheetProps> = ({
       )
       return response.data?.data ?? response.data
     },
-    enabled: !!state.user?.jwtToken,
+    enabled: !!state.user?.jwtToken && !!state.activeWorkspaceId,
   })
 
   const groupedColors = useMemo(() => {

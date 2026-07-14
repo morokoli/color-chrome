@@ -11,6 +11,8 @@ import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { AddColorResponse } from "@/v2/types/api"
+import { fetchWorkspaces } from "@/v2/api/workspaces.api"
+import { setActiveWorkspaceId as setWorkspaceContextId } from "@/v2/utils/workspaceContext"
 import { openEyeDropper } from "@/v2/helpers/colorPicker"
 import { startSnapshotCapture } from "@/v2/helpers/snapshot"
 import Copy from "./Copy"
@@ -36,6 +38,50 @@ const App = () => {
   const processedColorsRef = useRef<Set<string>>(new Set()) // Track processed colors to prevent duplicates
   const stateRef = useRef(state)
   stateRef.current = state
+
+  const loadWorkspaces = useCallback(async (jwtToken: string) => {
+    try {
+      const { workspaces, activeWorkspaceId } = await fetchWorkspaces(jwtToken)
+      const currentId = stateRef.current.activeWorkspaceId
+
+      dispatch({
+        type: "SET_WORKSPACES",
+        payload: {
+          workspaces,
+          activeWorkspaceId,
+          syncFromBackend: !currentId,
+        },
+      })
+
+      if (!activeWorkspaceId) return
+
+      if (!currentId) {
+        dispatch({ type: "MIGRATE_HISTORY_TO_WORKSPACE", payload: activeWorkspaceId })
+        return
+      }
+
+      if (currentId !== activeWorkspaceId) {
+        dispatch({ type: "SET_ACTIVE_WORKSPACE", payload: activeWorkspaceId })
+        queryClient.invalidateQueries({ queryKey: ["folders"] })
+        queryClient.invalidateQueries({ queryKey: ["all-color-data"] })
+        queryClient.invalidateQueries({ queryKey: ["colors-and-palettes"] })
+      }
+    } catch (err) {
+      console.error("[ColorBoard:App] failed to load workspaces", err)
+    }
+  }, [])
+
+  useEffect(() => {
+    setWorkspaceContextId(state.activeWorkspaceId)
+  }, [state.activeWorkspaceId])
+
+  useEffect(() => {
+    if (!state.user?.jwtToken) {
+      setWorkspaceContextId(null)
+      return
+    }
+    loadWorkspaces(state.user.jwtToken)
+  }, [state.user?.jwtToken, loadWorkspaces])
 
   // Sync parsedData to colorHistory on mount (fixes persisted/corrupted state where lengths differ)
   useEffect(() => {
@@ -313,11 +359,12 @@ const App = () => {
   }, [handlePickedColor])
 
   const syncColorPickerStateForBackground = () => {
-    const { user, selectedFolders } = state
+    const { user, selectedFolders, activeWorkspaceId } = state
     const payload = {
       jwtToken: user?.jwtToken || null,
       selectedFileData: null,
       selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
+      activeWorkspaceId: activeWorkspaceId || null,
       apiUrl: config.api.baseURL,
     }
     chrome.storage.local.set({ colorPickerState: payload })
@@ -424,7 +471,7 @@ const App = () => {
 
   // Sync state to chrome.storage.local for background script access (picked colors saved to selected folders)
   useEffect(() => {
-    const { user, selectedFile, files, selectedFolders } = state
+    const { user, selectedFile, files, selectedFolders, activeWorkspaceId } = state
     const selectedFileData = files.find(file => file.spreadsheetId === selectedFile)
 
     const colorPickerState = {
@@ -436,11 +483,12 @@ const App = () => {
         sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
       } : null,
       selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
+      activeWorkspaceId: activeWorkspaceId || null,
       apiUrl: config.api.baseURL,
     }
 
     chrome.storage.local.set({ colorPickerState })
-  }, [state.user, state.selectedFile, state.files, state.selectedFolders])
+  }, [state.user, state.selectedFile, state.files, state.selectedFolders, state.activeWorkspaceId])
 
   return (
     <QueryClientProvider client={queryClient}>

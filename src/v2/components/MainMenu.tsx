@@ -55,25 +55,25 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser, onSt
   const firstSectionWithHeading = 0
 
   return (
-    <div className="w-[300px] p-4 bg-white rounded-md shadow-sm border border-gray-200">
+    <div className="w-[300px] px-3 pt-2 pb-3 bg-white rounded-md shadow-sm border border-gray-200">
       {/* Menu Sections */}
-      <div className="py-1 mb-2">
+      <div className="mb-1">
         {menuSections.map((section, sectionIndex) => (
           <div key={sectionIndex}>
             {section.title && (
               <div
-                className={`mb-[4px] px-4 ${
+                className={`mb-0.5 px-3 ${
                   sectionIndex === firstSectionWithHeading
                     ? "flex items-center justify-between gap-2"
                     : ""
                 }`}
               >
-                <p className="text-[15px] text-[#7D7D7D]">{section.title}</p>
+                <p className="text-[13px] text-[#7D7D7D]">{section.title}</p>
                 {sectionIndex === firstSectionWithHeading && (
                   <button
                     type="button"
                     onClick={openWebApp}
-                    className="shrink-0 rounded px-3 py-1 text-[12px] font-medium bg-black text-white hover:bg-gray-900 transition-colors"
+                    className="shrink-0 rounded px-2.5 py-0.5 text-[11px] font-medium bg-black text-white hover:bg-gray-900 transition-colors"
                   >
                     Go to library
                   </button>
@@ -93,16 +93,16 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser, onSt
                   <button
                     key={item.title}
                     onClick={handleClick}
-                    className="w-full flex items-center px-4 gap-2.5 py-1.5 text-left hover:bg-gray-100 transition-colors cursor-pointer"
+                    className="w-full flex items-center px-3 gap-2 py-1 text-left hover:bg-gray-100 transition-colors cursor-pointer"
                   >
-                    {Icon && <Icon className="w-4 h-4 text-gray-600" />}
-                    <span className="text-[13px] text-gray-800">{item.title}</span>
+                    {Icon && <Icon className="w-3.5 h-3.5 text-gray-600" />}
+                    <span className="text-[12px] text-gray-800">{item.title}</span>
                   </button>
                 )
               })}
             </div>
             {sectionIndex < menuSections.length - 1 && (
-              <div className="h-px bg-[#9B9B9B] my-2 mx-4" />
+              <div className="h-px bg-[#9B9B9B] my-1.5 mx-3" />
             )}
           </div>
         ))}
@@ -128,14 +128,14 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser, onSt
       {state.user ? (
         <button
           onClick={logOutHandler}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[16px] text-[#CC0000] transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[14px] text-[#CC0000] transition-colors"
         >
           Log Out
         </button>
       ) : (
         <button
           onClick={logInHandler}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[16px] text-gray-700 hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[14px] text-gray-700 hover:bg-gray-50 transition-colors"
         >
           <LogIn className="w-3 h-3" />
           Log In

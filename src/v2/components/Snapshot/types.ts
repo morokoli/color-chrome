@@ -9,6 +9,15 @@ export type SnapshotImageData = {
 export type SnapshotPaletteEntry = {
   id: string
   hex: string
+  /** Optional name (slash naming) */
+  slash_naming?: string
+  /** Optional metadata, aligned with Generator color info fields */
+  url?: string
+  comments?: string
+  ranking?: number
+  tags?: string[]
+  designTokens?: string[]
+  additionalColumns?: Array<{ name: string; value: string }>
   /** Position in image pixel coordinates */
   x: number
   y: number
@@ -24,6 +33,13 @@ export function createPaletteEntry(
   return {
     id: crypto.randomUUID(),
     hex: hex.toUpperCase(),
+    slash_naming: "",
+    url: "",
+    comments: "",
+    ranking: 0,
+    tags: [],
+    designTokens: [],
+    additionalColumns: [],
     x,
     y,
   }

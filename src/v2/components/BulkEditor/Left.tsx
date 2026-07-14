@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { useGetFolders, Folder, Color } from "@/v2/api/folders.api"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
@@ -20,6 +20,11 @@ import {
   getFolderDepthById,
   getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
+import {
+  bulkEditorColorsKey,
+  bulkEditorFoldersKey,
+  bulkEditorNonFolderedKey,
+} from "@/v2/utils/bulkEditorStorage"
 
 // Helper to generate CSS gradient string
 const generateGradientCSS = (gradientData: any) => {
@@ -93,10 +98,11 @@ const Left: React.FC = () => {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
   const [isCreatingLoading, setIsCreatingLoading] = useState(false)
+  const prevWorkspaceIdRef = useRef<string | null>(null)
 
   // Fetch non-foldered colors using all-color-data endpoint which returns full color objects
   const { data: allColorData, isLoading: isLoadingNonFoldered } = useQuery({
-    queryKey: ["all-color-data", includeNonFoldered],
+    queryKey: ["all-color-data", state.activeWorkspaceId, includeNonFoldered],
     queryFn: async () => {
       const response = await axiosInstance.get("/api/database-sheets/all-color-data", {
         headers: {
@@ -129,7 +135,7 @@ const Left: React.FC = () => {
       }
       return data
     },
-    enabled: !!state.user?.jwtToken && includeNonFoldered,
+    enabled: !!state.user?.jwtToken && !!state.activeWorkspaceId && includeNonFoldered,
   })
 
   const nonFolderedColors: Color[] = allColorData?.colorsWithoutFolders || []
@@ -153,9 +159,20 @@ const Left: React.FC = () => {
 
   // Load saved folder selection from localStorage, or default to all folders + non-foldered selected
   useEffect(() => {
+    if (!state.activeWorkspaceId) return
+
+    const workspaceChanged = prevWorkspaceIdRef.current !== state.activeWorkspaceId
+    prevWorkspaceIdRef.current = state.activeWorkspaceId
+
+    if (workspaceChanged) {
+      setSelectedColors(new Map())
+    }
+
     try {
-      const saved = localStorage.getItem('bulk_editor_selected_folders')
-      const savedNonFoldered = localStorage.getItem('bulk_editor_include_non_foldered')
+      const saved = localStorage.getItem(bulkEditorFoldersKey(state.activeWorkspaceId))
+      const savedNonFoldered = localStorage.getItem(
+        bulkEditorNonFolderedKey(state.activeWorkspaceId),
+      )
       const folders = foldersData?.folders || []
       if (saved && folders.length > 0) {
         const savedIds = JSON.parse(saved) as string[]
@@ -172,20 +189,27 @@ const Left: React.FC = () => {
     } catch (e) {
       console.error('Error loading saved folders:', e)
     }
-  }, [foldersData])
+  }, [foldersData, state.activeWorkspaceId])
 
   // Save folder selection to localStorage
   useEffect(() => {
+    if (!state.activeWorkspaceId) return
     if (selectedFolders.length > 0 || includeNonFoldered) {
       if (selectedFolders.length > 0) {
-        localStorage.setItem('bulk_editor_selected_folders', JSON.stringify(selectedFolders.map(f => f._id)))
+        localStorage.setItem(
+          bulkEditorFoldersKey(state.activeWorkspaceId),
+          JSON.stringify(selectedFolders.map(f => f._id)),
+        )
       }
-      localStorage.setItem('bulk_editor_include_non_foldered', String(includeNonFoldered))
+      localStorage.setItem(
+        bulkEditorNonFolderedKey(state.activeWorkspaceId),
+        String(includeNonFoldered),
+      )
     } else {
-      localStorage.removeItem('bulk_editor_selected_folders')
-      localStorage.removeItem('bulk_editor_include_non_foldered')
+      localStorage.removeItem(bulkEditorFoldersKey(state.activeWorkspaceId))
+      localStorage.removeItem(bulkEditorNonFolderedKey(state.activeWorkspaceId))
     }
-  }, [selectedFolders, includeNonFoldered])
+  }, [selectedFolders, includeNonFoldered, state.activeWorkspaceId])
 
   const handleFolderToggle = (folderId: string) => {
     setCollapsedFolders(prev => {
@@ -292,11 +316,11 @@ const Left: React.FC = () => {
       const latestColor = getLatestColor(item)
       return { ...item, color: latestColor }
     })
-    localStorage.setItem('bulk_editor_selected_colors', JSON.stringify(colorsArray))
+    localStorage.setItem(bulkEditorColorsKey(state.activeWorkspaceId), JSON.stringify(colorsArray))
     window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
       detail: { colors: colorsArray }
     }))
-  }, [selectedColors])
+  }, [selectedColors, state.activeWorkspaceId])
 
   // When Right side clears (Clear button), de-select all on the left so checkmarks stay in sync
   useEffect(() => {
@@ -431,7 +455,10 @@ const Left: React.FC = () => {
             
             // Dispatch updated colors to Right component
             const updatedColorsArray = Array.from(updated.values())
-            localStorage.setItem('bulk_editor_selected_colors', JSON.stringify(updatedColorsArray))
+            localStorage.setItem(
+              bulkEditorColorsKey(state.activeWorkspaceId),
+              JSON.stringify(updatedColorsArray),
+            )
             window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
               detail: { colors: updatedColorsArray }
             }))
@@ -446,7 +473,7 @@ const Left: React.FC = () => {
     return () => {
       window.removeEventListener('bulk-editor-folders-refresh', handleRefresh)
     }
-  }, [refetch, selectedFolders])
+  }, [refetch, selectedFolders, state.activeWorkspaceId])
 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
@@ -463,11 +490,14 @@ const Left: React.FC = () => {
         // Save new folder ID to localStorage before refetch so the
         // useEffect([foldersData]) picks it up and keeps it selected
         try {
-          const saved = localStorage.getItem('bulk_editor_selected_folders')
+          const saved = localStorage.getItem(bulkEditorFoldersKey(state.activeWorkspaceId))
           const ids: string[] = saved ? JSON.parse(saved) : []
           if (!ids.includes(folder._id)) {
             ids.push(folder._id)
-            localStorage.setItem('bulk_editor_selected_folders', JSON.stringify(ids))
+            localStorage.setItem(
+              bulkEditorFoldersKey(state.activeWorkspaceId),
+              JSON.stringify(ids),
+            )
           }
         } catch (_) {}
         await queryClient.invalidateQueries({ queryKey: ["folders"] })

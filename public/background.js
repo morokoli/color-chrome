@@ -39,15 +39,20 @@ async function saveColorToDatabase(hexColor, sourceUrl) {
     // Only require JWT token, not selectedFileData
     if (!state || !state.jwtToken) return null;
 
-    const { jwtToken, selectedFileData, selectedFolders, apiUrl } = state;
+    const { jwtToken, selectedFileData, selectedFolders, apiUrl, activeWorkspaceId } = state;
     const folderIds = Array.isArray(selectedFolders) ? selectedFolders : [];
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwtToken}`,
+    };
+    if (activeWorkspaceId) {
+      headers['X-Workspace-Id'] = activeWorkspaceId;
+    }
 
     const addRes = await fetch(`${apiUrl}/api/database-sheets/add-color`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${jwtToken}`,
-      },
+      headers,
       body: JSON.stringify({
         spreadsheetId: selectedFileData?.spreadsheetId || null,
         sheetName: selectedFileData?.sheetName || null,

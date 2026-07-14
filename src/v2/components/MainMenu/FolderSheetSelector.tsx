@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { useToast } from "@/v2/hooks/useToast"
+import { WorkspaceSelector } from "./WorkspaceSelector"
 
 interface FolderSheetSelectorProps {
     selectedFolders: string[]
@@ -216,10 +217,12 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     }, [isCreating, newFolderName, isCreatingLoading, handleCreateFolder])
 
     return (
-        <div className="px-4">
-            <div className="pb-4">
-                <p className="text-[13px] text-gray-800 mb-2">Saving colors to</p>
+        <div className="px-3">
+            <WorkspaceSelector userToken={userToken} />
+            <div className="pb-2">
+                <p className="text-[12px] text-gray-800 mb-1">Saving colors to</p>
                 <MultiSelectDropdown<SelectableItem>
+                    compact
                     selected={selectedItems}
                     items={visibleFolderItems}
                     itemsWhenSearching={allItems}
@@ -230,7 +233,7 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
                             allFolderIds.every((id) => selectedFolders.includes(id))
                         const someSelected = selectedFolders.length > 0 && !allSelected
                         return (
-                            <div className="flex items-center gap-2 px-3 py-2 min-h-10 w-full min-w-0">
+                            <div className="flex items-center gap-2 px-2.5 py-1.5 min-h-8 w-full min-w-0">
                                 <button
                                     type="button"
                                     className="flex items-center justify-center w-5 h-5 shrink-0 text-gray-600 hover:text-gray-900 hover:bg-gray-200/70 rounded-sm focus:outline-none transition-colors"

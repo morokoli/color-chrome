@@ -139,6 +139,7 @@ interface GradientData {
     slash_naming: string
     url: string
     tags: string[]
+    designTokens?: string[]
     comments: string
     ranking: number
   }
@@ -158,6 +159,7 @@ const createDefaultGradient = (): GradientData => ({
     slash_naming: "",
     url: "",
     tags: [],
+    designTokens: [],
     comments: "",
     ranking: 0,
   },
@@ -815,6 +817,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   comments: gradient.metadata.comments || "",
                   slash_naming: gradient.metadata.slash_naming || "",
                   tags: parseTags(gradient.metadata.tags || []),
+                  designTokens: gradient.metadata.designTokens || [],
                   additionalColumns: [],
                   timestamp: timestamp * 1000,
                 },
@@ -843,6 +846,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   comments: gradient.metadata.comments || "",
                   slash_naming: gradient.metadata.slash_naming || "",
                   tags: parseTags(gradient.metadata.tags || []),
+                  designTokens: gradient.metadata.designTokens || [],
                   additionalColumns: [],
                 },
               },
@@ -937,6 +941,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 comments: colorData.comments || "",
                 slash_naming: colorData.slash_naming || "",
                 tags: parseTags(colorData.tags || []),
+                designTokens: colorData.designTokens || [],
                 additionalColumns: colorData.additionalColumns || [],
                 timestamp: timestamp * 1000, // Convert to milliseconds
               },
@@ -977,6 +982,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 comments: colorData.comments || "",
                 slash_naming: colorData.slash_naming || "",
                 tags: parseTags(colorData.tags || []),
+                designTokens: colorData.designTokens || [],
                 additionalColumns: colorData.additionalColumns || [],
               },
             },
@@ -1050,6 +1056,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               originalColor.comments !== color.comments ||
               originalColor.slash_naming !== color.slash_naming ||
               JSON.stringify(originalColor.tags) !== JSON.stringify(color.tags) ||
+              JSON.stringify(originalColor.designTokens) !== JSON.stringify(color.designTokens) ||
               JSON.stringify(originalColor.additionalColumns) !== JSON.stringify(color.additionalColumns)
 
             if (hasChanged) {
@@ -1063,6 +1070,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 comments: color.comments,
                 slash_naming: color.slash_naming,
                 tags: parseTags(color.tags),
+                designTokens: color.designTokens || [],
                 additionalColumns: color.additionalColumns,
               })
             }
@@ -1077,6 +1085,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               comments: color.comments,
               slash_naming: color.slash_naming,
               tags: parseTags(color.tags),
+              designTokens: color.designTokens || [],
               additionalColumns: color.additionalColumns,
             })
           }
@@ -1213,6 +1222,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             comments: colorData.comments || "",
             slash_naming: colorData.slash_naming || "",
             tags: parseTags(colorData.tags || []),
+            designTokens: colorData.designTokens || [],
             additionalColumns: colorData.additionalColumns || [],
           },
         },

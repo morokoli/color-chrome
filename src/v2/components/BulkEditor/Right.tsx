@@ -7,6 +7,8 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { X } from "lucide-react"
 import { ColorList } from "./ColorList"
 import { SelectedColor } from "@/v2/api/folders.api"
+import { selectedColorsShareSameHex } from "@/v2/helpers/bulkEditColorUtils"
+import { bulkEditorColorsKey } from "@/v2/utils/bulkEditorStorage"
 
 const MAX_SLASH_NAME_PARTS = 5
 
@@ -37,6 +39,19 @@ function hydrateBulkNameFieldsFromSlashString(raw: string) {
   return { segments: parts, continuation: "" }
 }
 
+const MAX_DESIGN_TOKEN_DOTS = 4
+
+function normalizeDesignToken(raw: string): string {
+  const trimmed = String(raw || "").trim().toLowerCase()
+  if (!trimmed) return ""
+  const segments = trimmed.split(".")
+  if (segments.length > MAX_DESIGN_TOKEN_DOTS + 1) return ""
+  const valid = segments.every(
+    (segment) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(segment) || /^\d+$/.test(segment)
+  )
+  return valid ? segments.join(".") : ""
+}
+
 const Right = () => {
   const { state, dispatch } = useGlobalState()
   const toast = useToast()
@@ -48,6 +63,8 @@ const Right = () => {
   const [nameMode, setNameMode] = useState<"none" | "hex" | "numerator">("none")
   const [tagsList, setTagsList] = useState<string[]>([])
   const [tagsInput, setTagsInput] = useState<string>("")
+  const [designTokensList, setDesignTokensList] = useState<string[]>([])
+  const [designTokensInput, setDesignTokensInput] = useState<string>("")
   const [isLoading, setIsLoading] = useState<"save" | null>(null)
   const [isDirty, setIsDirty] = useState(false)
 
@@ -60,6 +77,16 @@ const Right = () => {
     })
     setTagsInput("")
   }, [tagsInput])
+
+  const commitPendingDesignToken = useCallback(() => {
+    const token = normalizeDesignToken(designTokensInput)
+    if (!token) return
+    setDesignTokensList((prev) => {
+      if (prev.includes(token)) return prev
+      return [...prev, token]
+    })
+    setDesignTokensInput("")
+  }, [designTokensInput])
 
   const applyBulkNameState = useCallback((segments: string[], inputValue: string) => {
     setNameSegments(normalizeBulkNameSegments(segments))
@@ -81,7 +108,7 @@ const Right = () => {
     if (prev.length === 0) {
       return newColors
     }
-    
+
     // Merge new colors with existing, preserving current values
     return newColors.map(newColor => {
       // Find matching color in previous state by color ID
@@ -94,16 +121,20 @@ const Right = () => {
             ...existingColor.color, // Keep existing
             ...newColor.color,      // Override with new
             // Preserve non-empty values - prefer new if it has content, otherwise keep existing
-            slash_naming: (newColor.color.slash_naming && newColor.color.slash_naming.trim()) 
-              ? newColor.color.slash_naming 
+            slash_naming: (newColor.color.slash_naming && newColor.color.slash_naming.trim())
+              ? newColor.color.slash_naming
               : (existingColor.color.slash_naming || ""),
             comments: (newColor.color.comments && newColor.color.comments.trim())
               ? newColor.color.comments
               : (existingColor.color.comments || ""),
             ranking: newColor.color.ranking ?? existingColor.color.ranking ?? 0,
-            tags: (newColor.color.tags && newColor.color.tags.length > 0) 
-              ? newColor.color.tags 
+            tags: (newColor.color.tags && newColor.color.tags.length > 0)
+              ? newColor.color.tags
               : (existingColor.color.tags || []),
+            designTokens:
+              (newColor.color.designTokens && newColor.color.designTokens.length > 0)
+                ? newColor.color.designTokens
+                : (existingColor.color.designTokens || []),
             additionalColumns: (newColor.color.additionalColumns && newColor.color.additionalColumns.length > 0)
               ? newColor.color.additionalColumns
               : (existingColor.color.additionalColumns || []),
@@ -118,7 +149,7 @@ const Right = () => {
   useEffect(() => {
     const loadColors = () => {
       try {
-        const saved = localStorage.getItem('bulk_editor_selected_colors')
+        const saved = localStorage.getItem(bulkEditorColorsKey(state.activeWorkspaceId))
         if (saved) {
           const colors = JSON.parse(saved) as SelectedColor[]
           setSelectedColors(colors)
@@ -141,7 +172,7 @@ const Right = () => {
     const handleFoldersRefreshed = async () => {
       // Wait a bit for folders to be refetched
       setTimeout(() => {
-        const saved = localStorage.getItem('bulk_editor_selected_colors')
+        const saved = localStorage.getItem(bulkEditorColorsKey(state.activeWorkspaceId))
         if (saved) {
           try {
             const colors = JSON.parse(saved) as SelectedColor[]
@@ -160,7 +191,29 @@ const Right = () => {
       window.removeEventListener('bulk-editor-colors-changed', handleColorsChanged as EventListener)
       window.removeEventListener('bulk-editor-folders-refresh', handleFoldersRefreshed as EventListener)
     }
-  }, [])
+  }, [state.activeWorkspaceId])
+
+  const activeSelection = activeColors
+    .map((idx) => selectedColors[idx])
+    .filter(Boolean)
+  const activeShareSameHex =
+    activeSelection.length > 0 && selectedColorsShareSameHex(activeSelection)
+  const queueShareSameHex = selectedColorsShareSameHex(selectedColors)
+  const canBulkEditDesignTokens = queueShareSameHex || activeShareSameHex
+
+  useEffect(() => {
+    if (!canBulkEditDesignTokens) {
+      setDesignTokensList([])
+      setDesignTokensInput("")
+      return
+    }
+    const sourceItems =
+      activeSelection.length > 0 ? activeSelection : selectedColors
+    const first = sourceItems[0]
+    const tokens = first?.color?.designTokens || []
+    setDesignTokensList(Array.isArray(tokens) ? tokens : [])
+    setDesignTokensInput("")
+  }, [activeColors, selectedColors, canBulkEditDesignTokens])
 
   const handleCheckboxClick = (colorId: number) => {
     // Handling the "Select All" / "Deselect All" button: select all when not all selected, deselect all when all selected
@@ -172,6 +225,8 @@ const Right = () => {
         setNameSlashInput("")
         setTagsList([])
         setTagsInput("")
+        setDesignTokensList([])
+        setDesignTokensInput("")
       } else {
         setActiveColors(selectedColors.map((_, i) => i))
         // If any selected color is a gradient, switch to "none" mode
@@ -282,6 +337,12 @@ const Right = () => {
       if (tagsList.includes(pending)) return tagsList
       return [...tagsList, pending].slice(0, 5)
     })()
+    const designTokens = (() => {
+      const token = normalizeDesignToken(designTokensInput)
+      if (!token) return designTokensList
+      if (designTokensList.includes(token)) return designTokensList
+      return [...designTokensList, token]
+    })()
 
     const limitToFiveParts = (s: string) => {
       const parts = s.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean).slice(0, MAX_SLASH_NAME_PARTS)
@@ -311,22 +372,34 @@ const Right = () => {
       prev.map((item, index) =>
         activeColors.includes(index)
           ? {
-              ...item,
-              color: {
-                ...item.color,
-                slash_naming: namingByIndex.get(index) ?? item.color.slash_naming,
-                tags,
-              },
-            }
+            ...item,
+            color: {
+              ...item.color,
+              slash_naming: namingByIndex.get(index) ?? item.color.slash_naming,
+              tags,
+                designTokens: canBulkEditDesignTokens
+                  ? designTokens
+                  : (item.color.designTokens || []),
+            },
+          }
           : item
       )
     )
     setIsDirty(true)
     setTagsInput("")
+    setTagsList(tags)
+    if (canBulkEditDesignTokens) {
+      setDesignTokensInput("")
+      setDesignTokensList(designTokens)
+    }
     const { segments, continuation } = hydrateBulkNameFieldsFromSlashString(base)
     setNameSegments(segments)
     setNameSlashInput(continuation)
-    toast.display("success", `Updated name and tags for ${activeColors.length} color(s)`)
+    if (canBulkEditDesignTokens) {
+      toast.display("success", `Updated name, tags, and design tokens for ${activeColors.length} color(s)`)
+    } else {
+      toast.display("success", `Updated name and tags for ${activeColors.length} color(s)`)
+    }
   }
 
   const handleManualslash_namingChange = (
@@ -342,16 +415,16 @@ const Right = () => {
     const limitedParts = nonEmpty.slice(0, MAX_SLASH_NAME_PARTS)
     newslash_naming = limitedParts.join(" / ")
 
-    setSelectedColors(prev => 
-      prev.map((item, index) => 
+    setSelectedColors(prev =>
+      prev.map((item, index) =>
         index === colorId
           ? {
-              ...item,
-              color: {
-                ...item.color,
-                slash_naming: newslash_naming,
-              }
+            ...item,
+            color: {
+              ...item.color,
+              slash_naming: newslash_naming,
             }
+          }
           : item
       )
     )
@@ -361,11 +434,11 @@ const Right = () => {
   const handleRemoveColor = (colorId: number) => {
     setSelectedColors(prev => prev.filter((_, index) => index !== colorId))
     setActiveColors(prev => prev.filter(id => id !== colorId).map(id => id > colorId ? id - 1 : id))
-    
+
     // Update localStorage
     const updated = selectedColors.filter((_, index) => index !== colorId)
-    localStorage.setItem('bulk_editor_selected_colors', JSON.stringify(updated))
-    
+    localStorage.setItem(bulkEditorColorsKey(state.activeWorkspaceId), JSON.stringify(updated))
+
     // Dispatch event for Left component
     window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
       detail: { colors: updated }
@@ -379,8 +452,10 @@ const Right = () => {
     setNameSlashInput("")
     setTagsList([])
     setTagsInput("")
+    setDesignTokensList([])
+    setDesignTokensInput("")
     setIsDirty(false)
-    localStorage.removeItem('bulk_editor_selected_colors')
+    localStorage.removeItem(bulkEditorColorsKey(state.activeWorkspaceId))
     window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
       detail: { colors: [] }
     }))
@@ -396,13 +471,14 @@ const Right = () => {
     try {
       const promises = selectedColors.map(async (item, index) => {
         const color = item.color
-        
+
         // Build the row payload based on whether it's a gradient or solid color
         let rowPayload: any = {
           slash_naming: color.slash_naming || "",
           comments: color.comments || "",
           ranking: color.ranking || 0,
           tags: color.tags || [],
+          designTokens: color.designTokens || [],
           additionalColumns: color.additionalColumns || [],
           timestamp: Date.now(),
           url: (color as any).url || "",
@@ -418,14 +494,14 @@ const Right = () => {
           // For solid colors, include hex, rgb, hsl
           rowPayload.type = 'solid'
           rowPayload.hex = color.hex
-          
+
           // Handle rgb conversion
           if (typeof color.rgb === 'string') {
             rowPayload.rgb = color.rgb
           } else if (color.rgb && typeof color.rgb === 'object' && 'r' in color.rgb && 'g' in color.rgb && 'b' in color.rgb) {
             rowPayload.rgb = `rgb(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b})`
           }
-          
+
           // Handle hsl conversion
           if (typeof color.hsl === 'string') {
             rowPayload.hsl = color.hsl
@@ -433,7 +509,7 @@ const Right = () => {
             rowPayload.hsl = `hsl(${color.hsl.h}, ${color.hsl.s}%, ${color.hsl.l}%)`
           }
         }
-        
+
         const response = await axiosInstance.put(
           config.api.endpoints.updateColor,
           {
@@ -453,7 +529,7 @@ const Right = () => {
 
       const results = await Promise.all(promises)
       toast.display("success", `Successfully updated ${selectedColors.length} color(s)`)
-      
+
       // Sync parsedData in global state so History tab shows updated name, tags, etc.
       results.forEach(({ response }) => {
         const serverColor = response?.data?.data?.color || response?.data?.color
@@ -480,7 +556,7 @@ const Right = () => {
           })
         }
       })
-      
+
       // Update colors immediately with server response data to prevent flickering
       // The server response contains the updated color data
       setSelectedColors(prev => {
@@ -496,8 +572,8 @@ const Right = () => {
                 ...item.color, // Keep existing local data
                 ...serverColor, // Override with server data
                 // Ensure critical fields are preserved (prefer server if present and non-empty, otherwise keep existing)
-                slash_naming: (serverColor.slash_naming && serverColor.slash_naming.trim()) 
-                  ? serverColor.slash_naming 
+                slash_naming: (serverColor.slash_naming && serverColor.slash_naming.trim())
+                  ? serverColor.slash_naming
                   : (item.color.slash_naming || ""),
                 comments: (serverColor.comments && serverColor.comments.trim())
                   ? serverColor.comments
@@ -520,21 +596,21 @@ const Right = () => {
           }
           return item
         })
-        
+
         // Update localStorage with updated state
-        localStorage.setItem('bulk_editor_selected_colors', JSON.stringify(updated))
+        localStorage.setItem(bulkEditorColorsKey(state.activeWorkspaceId), JSON.stringify(updated))
         window.dispatchEvent(new CustomEvent('bulk-editor-colors-changed', {
           detail: { colors: updated }
         }))
-        
+
         return updated
       })
-      
+
       // Invalidate and refetch folders (and non-foldered colors) so when user deselects and selects again, names are up to date
       await queryClient.invalidateQueries({ queryKey: ["folders"] })
       await queryClient.refetchQueries({ queryKey: ["folders"] })
       queryClient.invalidateQueries({ queryKey: ["all-color-data"] })
-      
+
       setIsDirty(false)
     } catch (error: any) {
       console.error("Error saving colors:", error)
@@ -555,13 +631,13 @@ const Right = () => {
       ) : (
         <>
           {/* Scrollable Content Area */}
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 min-w-0">
             {/* X color(s) selected — right: None / Add Hex / Add Index radios */}
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-[12px] font-medium text-gray-700">
+            <div className="mb-2 flex flex-wrap items-start justify-between gap-2 min-w-0">
+              <div className="text-[12px] font-medium text-gray-700 shrink-0">
                 {selectedColors.length} color{selectedColors.length !== 1 ? "s" : ""} selected
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
@@ -654,6 +730,41 @@ const Right = () => {
               </div>
             </div>
 
+            {canBulkEditDesignTokens && (
+              <div className="w-full px-3 py-2 border border-gray-200 rounded focus-within:border-gray-400 mb-3">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {designTokensList.map((token, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] rounded">
+                      {token}
+                      <button
+                        type="button"
+                        onClick={() => setDesignTokensList(designTokensList.filter((_, i) => i !== idx))}
+                        className="ml-0.5 text-blue-400 hover:text-blue-600"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={designTokensInput}
+                    onChange={(e) => setDesignTokensInput(e.target.value)}
+                    onBlur={commitPendingDesignToken}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === ",") && designTokensInput.trim()) {
+                        e.preventDefault()
+                        commitPendingDesignToken()
+                      } else if (e.key === "Backspace" && !designTokensInput && designTokensList.length > 0) {
+                        setDesignTokensList(designTokensList.slice(0, -1))
+                      }
+                    }}
+                    placeholder={designTokensList.length === 0 ? "Design tokens (press , or Enter)" : ""}
+                    className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Tags Chip Input */}
             <div className="w-full px-3 py-2 border border-gray-200 rounded focus-within:border-gray-400 mb-3">
               <div className="flex flex-wrap gap-1 items-center">
@@ -699,17 +810,18 @@ const Right = () => {
                   (nameSegments.length === 0 &&
                     !nameSlashInput.trim() &&
                     tagsList.length === 0 &&
-                    !tagsInput.trim())
+                    !tagsInput.trim() &&
+                    (!canBulkEditDesignTokens || (designTokensList.length === 0 && !designTokensInput.trim())))
                 }
-                className={`w-full px-3 py-2 text-[12px] rounded transition-colors ${
-                  activeColors.length === 0 ||
-                  (nameSegments.length === 0 &&
-                    !nameSlashInput.trim() &&
-                    tagsList.length === 0 &&
-                    !tagsInput.trim())
+                className={`w-full px-3 py-2 text-[12px] rounded transition-colors ${activeColors.length === 0 ||
+                    (nameSegments.length === 0 &&
+                      !nameSlashInput.trim() &&
+                      tagsList.length === 0 &&
+                      !tagsInput.trim() &&
+                      (!canBulkEditDesignTokens || (designTokensList.length === 0 && !designTokensInput.trim())))
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-gray-900 text-white hover:bg-gray-800"
-                }`}
+                  }`}
               >
                 Update
               </button>
@@ -740,14 +852,13 @@ const Right = () => {
                     selectedColors.length === 0 ||
                     (activeColors.length === 0 && !isDirty)
                   }
-                  className={`flex-1 py-2 text-[12px] rounded transition-colors ${
-                    isLoading === "save"
+                  className={`flex-1 py-2 text-[12px] rounded transition-colors ${isLoading === "save"
                       ? "bg-gray-600 text-gray-300 cursor-wait"
                       : selectedColors.length === 0 ||
-                          (activeColors.length === 0 && !isDirty)
+                        (activeColors.length === 0 && !isDirty)
                         ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                         : "bg-gray-900 text-white hover:bg-gray-800"
-                  }`}
+                    }`}
                 >
                   {isLoading === "save" ? "Saving..." : "Save Changes"}
                 </button>

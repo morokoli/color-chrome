@@ -10,6 +10,7 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { useToast } from "@/v2/hooks/useToast"
 import { Slider } from "@/components/ui/slider"
+import DesignTokensInput from "./DesignTokensInput"
 import { useFolderTreeExpanded } from "../../hooks/useFolderTreeExpanded"
 import {
   buildParentIdByChildId,
@@ -500,6 +501,11 @@ const ColorPropertiesForm = ({
           Use / to create nested groups (e.g., Colors/Brand/Primary). Max 5 names (4 slashes).
         </p>
       </div>
+
+      <DesignTokensInput
+        value={colorObject?.designTokens || []}
+        onChange={(designTokens) => handlePropertyChange("designTokens", designTokens)}
+      />
 
       <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>

@@ -36,6 +36,8 @@ interface MultiSelectDropdownProps<T> {
   listMaxHeightClass?: string
   /** Whole menu max height when `renderFooter` is set (Tailwind class). Default max-h-[280px]. */
   menuMaxHeightClass?: string
+  /** Smaller trigger height for compact layouts (e.g. main menu) */
+  compact?: boolean
 }
 
 export const MultiSelectDropdown = <T,>({
@@ -61,11 +63,14 @@ export const MultiSelectDropdown = <T,>({
   renderHeaderWithSearch,
   listMaxHeightClass,
   menuMaxHeightClass,
+  compact = false,
 }: MultiSelectDropdownProps<T>) => {
   const footerListMax =
     listMaxHeightClass ?? (renderFooter ? "max-h-[140px]" : "")
   const footerMenuMax =
     menuMaxHeightClass ?? (renderFooter ? "max-h-[280px]" : "")
+  const triggerPadding = compact ? "px-2.5 py-1.5" : "px-3 py-2"
+  const triggerMinH = compact ? "min-h-[32px]" : "min-h-[40px]"
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null)
@@ -307,9 +312,9 @@ export const MultiSelectDropdown = <T,>({
     >
       <CollapsibleBox isOpen={isVisible} maxHeight="120px">
         {isOpen ? (
-          <div className="flex items-center min-h-[40px] border border-gray-200 rounded bg-white">
+          <div className={`flex items-center ${triggerMinH} border border-gray-200 rounded bg-white`}>
             {searchInTriggerWhileOpen && (
-              <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0">
+              <div className={`flex items-center gap-2 ${triggerPadding} flex-1 min-w-0`}>
                 <Search size={14} className="shrink-0 text-gray-500" />
                 <input
                   type="text"
@@ -322,7 +327,7 @@ export const MultiSelectDropdown = <T,>({
               </div>
             )}
             {!searchInTriggerWhileOpen && (
-              <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 overflow-hidden">
+              <div className={`flex items-center gap-2 ${triggerPadding} flex-1 min-w-0 overflow-hidden`}>
                 {selected.length > 0 ? (
                   <span className="text-gray-800 truncate">{renderSelected(selected)}</span>
                 ) : (
@@ -343,7 +348,7 @@ export const MultiSelectDropdown = <T,>({
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="w-full flex items-center gap-2 border border-gray-200 rounded px-3 py-2 min-h-[40px] bg-white hover:border-gray-300 transition-colors text-left"
+            className={`w-full flex items-center gap-2 border border-gray-200 rounded ${triggerPadding} ${triggerMinH} bg-white hover:border-gray-300 transition-colors text-left`}
           >
             <span className="min-w-0 flex-1 truncate text-gray-800">
               {selected.length > 0 ? renderSelected(selected) : <span className="text-gray-400">{placeholder}</span>}
