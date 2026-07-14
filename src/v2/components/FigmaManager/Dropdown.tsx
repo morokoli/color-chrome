@@ -21,6 +21,8 @@ interface DropdownProps<T> {
   usePortal?: boolean
   /** When searching, filter from this list (e.g. full folder list) */
   itemsWhenSearching?: T[]
+  /** Smaller trigger height for compact layouts (e.g. main menu) */
+  compact?: boolean
 }
 
 export const Dropdown = <T,>({
@@ -38,6 +40,7 @@ export const Dropdown = <T,>({
   isVisible = true,
   usePortal = false,
   itemsWhenSearching,
+  compact = false,
 }: DropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -110,6 +113,9 @@ export const Dropdown = <T,>({
     return itemString.includes(searchTerm.toLowerCase())
   })
 
+  const triggerPadding = compact ? "px-2.5 py-1.5" : "px-3 py-2"
+  const triggerMinH = compact ? "min-h-[32px]" : "min-h-[40px]"
+
   return (
     <div
       className={`relative text-[12px] grow`}
@@ -118,9 +124,9 @@ export const Dropdown = <T,>({
     >
       <CollapsibleBox isOpen={isVisible} maxHeight="800px">
         {isOpen ? (
-          <div className="flex items-center min-h-[40px] border border-gray-200 rounded bg-white">
+          <div className={`flex items-center ${triggerMinH} border border-gray-200 rounded bg-white`}>
             {isSearchable && (
-            <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0">
+            <div className={`flex items-center gap-2 ${triggerPadding} flex-1 min-w-0`}>
               <Search size={14} className="shrink-0 text-gray-500" />
               <input
                 type="text"
@@ -133,7 +139,7 @@ export const Dropdown = <T,>({
             </div>
           )}
           {!isSearchable && (
-            <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 overflow-hidden">
+            <div className={`flex items-center gap-2 ${triggerPadding} flex-1 min-w-0 overflow-hidden`}>
               {selected ? (
                 <span className="text-gray-800 truncate">{renderSelected(selected)}</span>
               ) : (
@@ -154,7 +160,7 @@ export const Dropdown = <T,>({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="w-full flex items-center gap-2 border border-gray-200 rounded px-3 py-2 min-h-[40px] bg-white hover:border-gray-300 transition-colors text-left"
+          className={`w-full flex items-center gap-2 border border-gray-200 rounded ${triggerPadding} ${triggerMinH} bg-white hover:border-gray-300 transition-colors text-left`}
         >
           <span className="min-w-0 flex-1 truncate text-gray-800">
             {selected ? renderSelected(selected) : <span className="text-gray-400">{placeholder}</span>}

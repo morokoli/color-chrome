@@ -1,11 +1,23 @@
 import { useRequestStatus } from './useRequestStatus'
 import { config } from '@/v2/others/config'
+import { getActiveWorkspaceId } from '@/v2/utils/workspaceContext'
 import axios, { AxiosError } from 'axios'
 
 export const axiosInstance = axios.create({
   baseURL: config.api.baseURL,
   timeout: config.api.timeout,
   withCredentials: true,
+})
+
+axiosInstance.interceptors.request.use((requestConfig) => {
+  const workspaceId = getActiveWorkspaceId()
+  if (workspaceId) {
+    requestConfig.headers = requestConfig.headers ?? {}
+    if (!requestConfig.headers['X-Workspace-Id']) {
+      requestConfig.headers['X-Workspace-Id'] = workspaceId
+    }
+  }
+  return requestConfig
 })
 
 type APIArguments = {

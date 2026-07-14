@@ -404,7 +404,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
   }, [searchValue, showColors, showPalettes, showGradients])
 
   const { data: colorsAndPalettesData, isLoading, isFetching, error } = useQuery({
-    queryKey: ["colors-and-palettes", "import-library", searchValue, page],
+    queryKey: ["colors-and-palettes", state.activeWorkspaceId, "import-library", searchValue, page],
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const response = await axiosInstance.post(
@@ -425,7 +425,7 @@ const ImportColorsList = ({ onAddToPalette }: ImportColorsListProps) => {
       )
       return response.data.data
     },
-    enabled: !!state.user?.jwtToken,
+    enabled: !!state.user?.jwtToken && !!state.activeWorkspaceId,
   })
 
   const rawAll = colorsAndPalettesData?.colors?.["All Colors"] ?? []

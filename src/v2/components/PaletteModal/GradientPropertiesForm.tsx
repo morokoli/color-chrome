@@ -18,6 +18,7 @@ import {
   getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
 import SingleThumbSlider from "./SingleThumbSlider"
+import DesignTokensInput from "./DesignTokensInput"
 
 interface GradientStop {
   id: string
@@ -31,6 +32,7 @@ interface GradientMetadata {
   slash_naming: string
   url: string
   tags: string[]
+  designTokens?: string[]
   comments: string
   ranking: number
 }
@@ -554,6 +556,11 @@ const GradientPropertiesForm = ({
           (4 slashes).
         </p>
       </div>
+
+      <DesignTokensInput
+        value={metadata?.designTokens || []}
+        onChange={(designTokens) => handlePropertyChange("designTokens", designTokens)}
+      />
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Tags</label>

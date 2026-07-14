@@ -13,6 +13,7 @@ export type ColorType = {
   name: string
   hex: string
   prevalence: number
+  designTokens?: string[]
 }
 
 export type ImportedColor = {
@@ -229,6 +230,7 @@ export const PageColorExtraction = ({
         ranking: "0",
         comments: comments,
         slash_naming: color.name,
+        designTokens: color.designTokens || [],
         additionalColumns: [],
       }
     })

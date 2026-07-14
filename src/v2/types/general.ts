@@ -1,9 +1,24 @@
+export type Workspace = {
+  _id: string
+  name: string
+  isPersonal?: boolean
+  role?: string
+}
+
+export type WorkspaceHistory = {
+  colorHistory: string[]
+  parsedData: RowData[]
+}
+
 export type GlobalState = {
   files: File[]
   color: string | null
   user: AuthUser | null
   parsedData: RowData[]
   colorHistory: string[]
+  activeWorkspaceId: string | null
+  workspaces: Workspace[]
+  historyByWorkspace: Record<string, WorkspaceHistory>
   newColumns: Record<string, NewColumn[]>  // keyed by spreadsheetId
   selectedFile: string | null
   selectedFolders: string[] // Array of folder IDs

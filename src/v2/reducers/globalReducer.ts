@@ -10,6 +10,9 @@ const initState: GlobalState = {
   newColumns: {},
   parsedData: [],
   colorHistory: [],
+  activeWorkspaceId: null,
+  workspaces: [],
+  historyByWorkspace: {},
   selectedFile: null,
   selectedFolders: [],
   selectedSheets: [],
@@ -43,6 +46,30 @@ const migrateState = (state: GlobalState | null | undefined): GlobalState | null
     nextState = {
       ...nextState,
       hiddenSheetIds: [],
+    }
+  }
+
+  if (!Array.isArray(nextState.workspaces)) {
+    nextState = {
+      ...nextState,
+      workspaces: [],
+    }
+  }
+
+  if (nextState.activeWorkspaceId === undefined) {
+    nextState = {
+      ...nextState,
+      activeWorkspaceId: null,
+    }
+  }
+
+  if (
+    typeof nextState.historyByWorkspace !== 'object' ||
+    nextState.historyByWorkspace === null
+  ) {
+    nextState = {
+      ...nextState,
+      historyByWorkspace: {},
     }
   }
 
@@ -95,6 +122,9 @@ export type Action =
     }
   | { type: "SET_SELECTED_FOLDERS"; payload: string[] }
   | { type: "SET_SELECTED_SHEETS"; payload: string[] }
+  | { type: "SET_WORKSPACES"; payload: { workspaces: GlobalState["workspaces"]; activeWorkspaceId: string | null; syncFromBackend?: boolean } }
+  | { type: "SET_ACTIVE_WORKSPACE"; payload: string }
+  | { type: "MIGRATE_HISTORY_TO_WORKSPACE"; payload: string }
   | { type: "UPDATE_PARSED_AT"; payload: { index: number; parsed: any } }
   | { type: "UPDATE_PARSED_BY_COLOR_ID"; payload: { colorId: string; parsed: any } }
   | { type: "UPDATE_COLOR_AT"; payload: { index: number; hex?: string; parsed?: any } }
@@ -254,6 +284,9 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
         draft.newColumns = {}
         draft.selectedColorsFromFile = []
         draft.selectedFolders = []
+        draft.activeWorkspaceId = null
+        draft.workspaces = []
+        draft.historyByWorkspace = {}
       })
 
     case "ADD_FILE_COLOR_HISTORY": {
@@ -350,6 +383,53 @@ export function globalReducer(state: GlobalState, action: Action): GlobalState {
     case "SET_SELECTED_SHEETS":
       return produce(state, (draft) => {
         draft.selectedSheets = action.payload
+      })
+
+    case "SET_WORKSPACES":
+      return produce(state, (draft) => {
+        draft.workspaces = action.payload.workspaces
+        const backendId = action.payload.activeWorkspaceId
+        if (action.payload.syncFromBackend || !draft.activeWorkspaceId) {
+          if (backendId) {
+            draft.activeWorkspaceId = backendId
+          }
+        } else if (!draft.activeWorkspaceId && backendId) {
+          draft.activeWorkspaceId = backendId
+        }
+      })
+
+    case "SET_ACTIVE_WORKSPACE": {
+      const newWorkspaceId = action.payload
+      return produce(state, (draft) => {
+        const oldWorkspaceId = draft.activeWorkspaceId
+        if (oldWorkspaceId && oldWorkspaceId !== newWorkspaceId) {
+          draft.historyByWorkspace[oldWorkspaceId] = {
+            colorHistory: [...draft.colorHistory],
+            parsedData: [...draft.parsedData],
+          }
+        }
+
+        const saved = draft.historyByWorkspace[newWorkspaceId]
+        draft.colorHistory = saved ? [...saved.colorHistory] : []
+        draft.parsedData = saved ? [...saved.parsedData] : []
+        draft.activeWorkspaceId = newWorkspaceId
+        draft.selectedFolders = []
+      })
+    }
+
+    case "MIGRATE_HISTORY_TO_WORKSPACE":
+      return produce(state, (draft) => {
+        const workspaceId = action.payload
+        if (!workspaceId) return
+        const hasHistory =
+          draft.colorHistory.length > 0 || draft.parsedData.length > 0
+        const existing = draft.historyByWorkspace[workspaceId]
+        if (hasHistory && !existing) {
+          draft.historyByWorkspace[workspaceId] = {
+            colorHistory: [...draft.colorHistory],
+            parsedData: [...draft.parsedData],
+          }
+        }
       })
 
     case "UPDATE_PARSED_AT": {
