@@ -25,6 +25,7 @@ export type File = {
   fileName: string
   sheets: Sheet[]
   spreadsheetId: string
+  workspaceId?: string
   colorHistory: string[]
 }
 

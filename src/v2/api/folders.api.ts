@@ -13,6 +13,7 @@ export interface Folder {
   colors?: Color[]
   createdAt?: string
   updatedAt?: string
+  visibility?: "workspace" | "restricted"
 }
 
 export interface Color {
@@ -50,13 +51,14 @@ export interface SelectedColor {
 }
 
 export interface GetFoldersResponse {
+  workspaceId?: string
   folders: Folder[]
 }
 
 export const useGetFolders = (populate: boolean = true) => {
   const { state } = useGlobalState()
   return useQuery<GetFoldersResponse, Error>({
-    queryKey: ["folders", populate],
+    queryKey: ["folders", populate, state.user?.email],
     refetchOnMount: "always",
     queryFn: async () => {
       const response = await axiosInstance.get(config.api.endpoints.getFolders, {

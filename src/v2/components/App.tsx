@@ -10,7 +10,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
-import { AddColorResponse } from "@/v2/types/api"
 import { openEyeDropper } from "@/v2/helpers/colorPicker"
 import Copy from "./Copy"
 import Comment from "./Comment"
@@ -45,7 +44,8 @@ const App = () => {
 
   // Helper to save color to database (no sheet integration)
   const saveColorToDatabase = useCallback(async (hexColor: string, source: string) => {
-    const { user, selectedFolders } = state
+    const { user, selectedFolders, selectedFile, files } = state
+    const selectedFileData = files.find((file) => file.spreadsheetId === selectedFile)
     if (!user?.jwtToken) return
 
     const colorData = {
@@ -69,52 +69,23 @@ const App = () => {
         sheetName: null,
         sheetId: null,
         row: colorData,
+        folderIds: selectedFolders || [],
       },
       {
         headers: {
           Authorization: `Bearer ${user.jwtToken}`,
+          ...(selectedFileData?.workspaceId
+            ? { "X-Workspace-Id": selectedFileData.workspaceId }
+            : {}),
         },
       }
     )
 
-    const colorIdPromise: Promise<string | null> = promise
-      .then((response) => {
-        const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse
-        if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
-          return apiResponse.data.createdColor?._id || null
-        } else if (apiResponse && 'createdColor' in apiResponse) {
-          return (apiResponse as AddColorResponse).createdColor?._id || null
-        }
-        return null
-      })
-      .catch(() => null)
-
-    // Save to selected folders - ensure we always copy to ALL selected folders
-    if (selectedFolders && selectedFolders.length > 0) {
-      // Copy color to ALL selected folders (optimistic - all in parallel)
-      colorIdPromise.then((colorId) => {
-        if (colorId) {
-          // Copy to each selected folder
-          selectedFolders.forEach(folderId => {
-            axiosInstance.post(
-              `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-              { colorId },
-              {
-                headers: {
-                  Authorization: `Bearer ${user.jwtToken}`,
-                },
-              }
-            ).catch(err => {
-              console.error(`Failed to copy color to folder ${folderId}:`, err)
-            })
-          })
-        } else {
-          console.error("Failed to get color ID for folder copying")
-        }
-      }).catch(err => {
-        console.error("Failed to get color ID for folder copying:", err)
-      })
-    }
+    // The backend creates folder-targeted assets atomically when folderIds are
+    // supplied. Never create a workspace asset and then copy it per folder.
+    void promise.catch((error) => {
+      console.error("Failed to save picked color:", error)
+    })
   }, [state])
 
   // Handle picked color from custom magnifier
@@ -409,14 +380,16 @@ const App = () => {
       selectedFile: selectedFile || null,
       selectedFileData: selectedFileData ? {
         spreadsheetId: selectedFileData.spreadsheetId,
+        workspaceId: selectedFileData.workspaceId,
         sheetName: selectedFileData.sheets?.[0]?.name || '',
         sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
       } : null,
+      activeWorkspaceId: selectedFileData?.workspaceId || null,
       selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
       apiUrl: config.api.baseURL,
     }
 
-    chrome.storage.local.set({ colorPickerState })
+    chrome.storage.local.set({ colorPickerState, activeWorkspaceId: selectedFileData?.workspaceId || null })
   }, [state.user, state.selectedFile, state.files, state.selectedFolders])
 
   return (

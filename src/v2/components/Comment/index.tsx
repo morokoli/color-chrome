@@ -104,6 +104,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [currentTabUrl, setCurrentTabUrl] = useState<string>('Manually created')
   const [comment, setComment] = useState<string>('')
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolderLoading, setIsCreatingFolderLoading] = useState(false)
@@ -117,6 +118,12 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const [rankingMixed, setRankingMixed] = useState(false)
   const justSavedRef = useRef(false)
   const lastLoadedDataRef = useRef<string>('')  // Track what data we last loaded
+
+  useEffect(() => {
+    void chrome.storage.local.get("activeWorkspaceId").then((stored) => {
+      setActiveWorkspaceId(typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null)
+    })
+  }, [])
 
   const selectedIndicesSorted = useMemo(
     () => [...selectedColorIndices].sort((a, b) => a - b),
@@ -618,9 +625,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     // Save to database if logged in
     if (state.user?.jwtToken) {
       const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
-      const folderIdsForCreate =
-        selectedFolderIds.length > 0 ? [selectedFolderIds[0]] : []
-      const auth = { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      if (!activeWorkspaceId) throw new Error("Active workspace is required")
+      const auth = { headers: { Authorization: `Bearer ${state.user.jwtToken}`, "X-Workspace-Id": activeWorkspaceId } }
       try {
         const response = await axiosInstance.post(
           config.api.endpoints.addColor,
@@ -640,24 +646,14 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               tags: tagsList,
               additionalColumns: [],
             },
-            folderIds: folderIdsForCreate,
+            folderIds: selectedFolderIds,
           },
           auth
         )
         const apiResponse = response?.data?.data ?? response?.data
         const createdColor = apiResponse?.createdColor
         const newColorId = createdColor?._id ?? createdColor?.id
-        if (newColorId && selectedFolderIds.length > 1) {
-          await Promise.all(
-            selectedFolderIds.slice(1).map((fid) =>
-              axiosInstance.post(
-                `${config.api.endpoints.copyColorToFolder}/${fid}/copy-color`,
-                { colorId: String(newColorId) },
-                auth
-              )
-            )
-          )
-        }
+        if (apiResponse?.err || !createdColor || !newColorId) throw new Error("Malformed color creation response")
         if (createdColor) {
           dispatch({
             type: "ADD_COLOR_HISTORY",
@@ -711,6 +707,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     try {
       const authHeaders = {
         Authorization: `Bearer ${state.user?.jwtToken ?? ""}`,
+        "X-Workspace-Id": activeWorkspaceId || "",
       }
       let anyFolderChange = false
       let lastRowHex = colors.expandHex(editingColor)
@@ -877,14 +874,21 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     })
 
     if (state.user?.jwtToken && colorIdsToDelete.length > 0) {
+      if (!activeWorkspaceId) {
+        toast.display("error", "Active workspace is required")
+        return
+      }
       try {
-        await axiosInstance.post(
+        const response = await axiosInstance.post(
           config.api.endpoints.deleteColors,
           { colorIds: colorIdsToDelete },
-          { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+          { headers: { Authorization: `Bearer ${state.user.jwtToken}`, "X-Workspace-Id": activeWorkspaceId } }
         )
+        if (!response?.data || response.data.err || response.data.success === false || response.data.data?.err) {
+          throw new Error(response.data?.message || response.data?.err || response.data?.data?.err || "Failed to remove from database")
+        }
       } catch (err: any) {
-        toast.display("error", err.response?.data?.error || "Failed to remove from database")
+        toast.display("error", err.response?.data?.message || err.response?.data?.err || err.message || "Failed to remove from database")
         return
       }
       queryClient.invalidateQueries({ queryKey: ["folders"] })

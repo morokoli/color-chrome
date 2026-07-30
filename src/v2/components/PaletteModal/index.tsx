@@ -222,9 +222,21 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [internalColorMode, setInternalColorMode] = useState<GradientMode>("solid")
   const [gradient, setGradient] = useState<GradientData>(createDefaultGradient())
   const [harmonyType, setHarmonyType] = useState<string>(HARMONY_TYPES.CUSTOM)
+
+  useEffect(() => {
+    void chrome.storage.local.get("activeWorkspaceId").then((stored) => {
+      setActiveWorkspaceId(typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null)
+    })
+  }, [])
+
+  const mutationHeaders = {
+    Authorization: `Bearer ${state.user?.jwtToken}`,
+    "X-Workspace-Id": activeWorkspaceId || "",
+  }
 
   // Use external state if provided, otherwise use internal
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab
@@ -634,6 +646,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
     setPrimarySaving(true)
     try {
+      if (!activeWorkspaceId) throw new Error("Active workspace is required")
       if (isActuallySingleColor) {
         if (colorMode === "gradient") {
           const timestamp = Math.floor(Date.now() / 1000)
@@ -647,7 +660,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           }
 
           if (isEditing) {
-            await axiosInstance.put(
+            const response = await axiosInstance.put(
               config.api.endpoints.updateColor,
               {
                 colorId: paletteId,
@@ -668,10 +681,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               },
               {
                 headers: {
-                  Authorization: `Bearer ${state.user?.jwtToken}`,
+                  ...mutationHeaders,
                 },
               }
             )
+            const gradientResult = response?.data?.data ?? response?.data
+            if (gradientResult?.err || !gradientResult?.color) throw new Error("Malformed gradient update response")
             toast.display("success", "Gradient updated!")
           } else {
             const response = await axiosInstance.post(
@@ -680,6 +695,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 spreadsheetId: null,
                 sheetName: null,
                 sheetId: null,
+                folderIds: selectedFolderIds,
                 row: {
                   type: "gradient",
                   gradient_data: gradientDataToSend,
@@ -694,44 +710,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 },
               },
               {
-                headers: {
-                  Authorization: `Bearer ${state.user?.jwtToken}`,
-                },
+                headers: mutationHeaders,
               }
             )
+            const gradientResult = response?.data?.data ?? response?.data
+            if (gradientResult?.err || !gradientResult?.createdColor) throw new Error("Malformed gradient creation response")
             toast.display("success", "Gradient created!")
-
-            if (selectedFolderIds && selectedFolderIds.length > 0) {
-              try {
-                const colorId = response?.data?.data?.createdColor?._id
-                  || response?.data?.createdColor?._id
-                  || response?.data?.data?.colorId
-                  || response?.data?.colorId
-
-                if (colorId) {
-                  await Promise.all(
-                    selectedFolderIds.map((folderId) =>
-                      axiosInstance.post(
-                        `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-                        { colorId },
-                        {
-                          headers: {
-                            Authorization: `Bearer ${state.user?.jwtToken}`,
-                          },
-                        }
-                      ).catch((err) => {
-                        console.error(`Error copying gradient to folder ${folderId}:`, err)
-                        return null
-                      })
-                    )
-                  )
-                  toast.display("success", `Gradient added to ${selectedFolderIds.length} folder${selectedFolderIds.length > 1 ? "s" : ""}`)
-                }
-              } catch (folderErr) {
-                console.error("Error copying gradient to folders:", folderErr)
-                toast.display("error", "Gradient created but failed to add to folders")
-              }
-            }
           }
           onSuccess && onSuccess([gradient])
           return
@@ -769,7 +753,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             hslValue = colorData.hsl || ""
           }
 
-          await axiosInstance.put(
+          const response = await axiosInstance.put(
             config.api.endpoints.updateColor,
             {
               colorId: paletteId,
@@ -788,12 +772,10 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 timestamp: timestamp * 1000, // Convert to milliseconds
               },
             },
-            {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
-              },
-            }
+            { headers: mutationHeaders }
           )
+          const colorResult = response?.data?.data ?? response?.data
+          if (colorResult?.err || !colorResult?.color) throw new Error("Malformed color update response")
           toast.display("success", "Color updated!")
         } else {
           // Don't use sheetUrl when generating - always set to null
@@ -813,6 +795,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               spreadsheetId: null,
               sheetName: null,
               sheetId: null,
+              folderIds: selectedFolderIds,
               row: {
                 timestamp,
                 hex: colorData.hex || "",
@@ -827,49 +810,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 additionalColumns: colorData.additionalColumns || [],
               },
             },
-            {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
-              },
-            }
+            { headers: mutationHeaders }
           )
+          const colorResult = response?.data?.data ?? response?.data
+          if (colorResult?.err || !colorResult?.createdColor) throw new Error("Malformed color creation response")
           toast.display("success", "Color created!")
-
-          // Copy color to selected folders if folders are selected
-          if (selectedFolderIds && selectedFolderIds.length > 0) {
-            try {
-              // Handle different response structures
-              const colorId = response?.data?.data?.createdColor?._id
-                || response?.data?.createdColor?._id
-                || response?.data?.data?.colorId
-                || response?.data?.colorId
-
-              if (colorId) {
-                await Promise.all(
-                  selectedFolderIds.map((folderId) =>
-                    axiosInstance.post(
-                      `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-                      { colorId },
-                      {
-                        headers: {
-                          Authorization: `Bearer ${state.user?.jwtToken}`,
-                        },
-                      }
-                    ).catch(err => {
-                      console.error(`Error copying color to folder ${folderId}:`, err)
-                      return null
-                    })
-                  )
-                )
-                toast.display("success", `Color added to ${selectedFolderIds.length} folder${selectedFolderIds.length > 1 ? 's' : ''}`)
-              } else {
-                console.warn("Color ID not found in response, cannot copy to folders", response?.data)
-              }
-            } catch (folderErr) {
-              console.error("Error copying color to folders:", folderErr)
-              toast.display("error", "Color created but failed to add to folders")
-            }
-          }
         }
         onSuccess && onSuccess(colors)
       } else {
@@ -935,15 +880,12 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             colorIds: existingColorIds,
             newColors: newColors,
             updatedColors: updatedColors,
+            folderIds: selectedFolderIds,
           }
           await axiosInstance.put(
             `${config.api.endpoints.paletteUpdate}/${paletteId}`,
             updateData,
-            {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
-              },
-            }
+            { headers: mutationHeaders }
           )
           toast.display("success", isSingleColor ? "Color updated!" : "Palette updated!")
         } else {
@@ -952,59 +894,18 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             colorIds: existingColorIds,
             newColors: newColors,
             updatedColors: updatedColors,
+            folderIds: selectedFolderIds,
           }
           const response = await axiosInstance.post(
             config.api.endpoints.paletteCreate,
             createData,
             {
-              headers: {
-                Authorization: `Bearer ${state.user?.jwtToken}`,
-              },
+              headers: mutationHeaders,
             }
           )
+          const paletteResult = response?.data?.data ?? response?.data
+          if (paletteResult?.err || !paletteResult?.palette) throw new Error("Malformed palette creation response")
           toast.display("success", isSingleColor ? "Color created!" : "Palette created!")
-
-          // Move palette colors to the selected folder (move = remove from elsewhere, add to selected folder)
-          if (selectedFolderIds && selectedFolderIds.length > 0 && !isEditing) {
-            const data = response?.data?.data ?? response?.data
-            const createdColorList = Array.isArray(data?.createdColors) ? data.createdColors : []
-            const createdIds = createdColorList.map((c: any) => c?._id ?? c).filter(Boolean)
-            const allColorIds = [...existingColorIds, ...createdIds].map(String)
-            const paletteIdFromResponse = data?.palette?._id ?? data?.palette?.id
-            const paletteIdStr = paletteIdFromResponse != null ? String(paletteIdFromResponse) : null
-            const targetFolderId = String(selectedFolderIds[0])
-
-            try {
-              // Move all palette colors to the selected folder (one target; move removes from other folders first)
-              if (allColorIds.length > 0) {
-                await axiosInstance.post(
-                  `${config.api.endpoints.moveColorsToFolder}/${targetFolderId}/move-colors`,
-                  { colorIds: allColorIds, isNotFoldered: false },
-                  {
-                    headers: {
-                      Authorization: `Bearer ${state.user?.jwtToken}`,
-                    },
-                  }
-                )
-              }
-
-              // Add the palette to the same folder (so it shows in colorappfrontend and Generator Library)
-              if (paletteIdStr) {
-                await axiosInstance.post(
-                  `${config.api.endpoints.copyColorToFolder}/${targetFolderId}/add-palette`,
-                  { paletteId: paletteIdStr },
-                  {
-                    headers: {
-                      Authorization: `Bearer ${state.user?.jwtToken}`,
-                    },
-                  }
-                )
-              }
-            } catch (folderErr) {
-              console.error("Error moving palette/colors to folder:", folderErr)
-              toast.display("error", "Palette created but failed to add to folder. You can add it from the web app.")
-            }
-          }
         }
 
         if (!isEditing) {
@@ -1063,11 +964,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             additionalColumns: colorData.additionalColumns || [],
           },
         },
-        {
-          headers: {
-            Authorization: `Bearer ${state.user.jwtToken}`,
-          },
-        }
+            { headers: mutationHeaders }
       )
 
       const result = response?.data?.data ?? response?.data

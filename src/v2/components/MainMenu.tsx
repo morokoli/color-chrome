@@ -1,10 +1,11 @@
-import { FC, useMemo } from "react"
+import { FC, useEffect, useMemo, useState } from "react"
 import { useGlobalState } from "@/v2/hooks/useGlobalState"
 import { eraseAllCookies } from "@/v2/helpers/cookie"
 import { LogIn } from "lucide-react"
 import { SECTION_MENU_ITEMS } from "@/v2/constants/sectionMenu"
 import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
 import { config } from "@/v2/others/config"
+import { fetchWorkspaces, type Workspace } from "@/v2/api/workspaces.api"
 
 interface Props {
   setTab: (tab: string | null) => void
@@ -14,6 +15,47 @@ interface Props {
 
 const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
   const { state, dispatch } = useGlobalState()
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null)
+  const [workspaceAvatarFailed, setWorkspaceAvatarFailed] = useState(false)
+
+  useEffect(() => {
+    const jwtToken = state.user?.jwtToken
+    if (!jwtToken) {
+      setActiveWorkspace(null)
+      return
+    }
+    let cancelled = false
+    const loadWorkspace = async () => {
+      try {
+        const stored = await chrome.storage.local.get("activeWorkspaceId")
+        const workspaceId = typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null
+        const workspaces = await fetchWorkspaces(jwtToken)
+        if (!cancelled) setActiveWorkspace(workspaces.find((item) => item._id === workspaceId) || null)
+      } catch {
+        if (!cancelled) setActiveWorkspace(null)
+      }
+    }
+    void loadWorkspace()
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+      if (areaName === "local" && changes.activeWorkspaceId) void loadWorkspace()
+    }
+    chrome.storage.onChanged.addListener(handleStorageChange)
+    return () => {
+      cancelled = true
+      chrome.storage.onChanged.removeListener(handleStorageChange)
+    }
+  }, [state.user?.jwtToken])
+
+  useEffect(() => {
+    setWorkspaceAvatarFailed(false)
+  }, [activeWorkspace?._id, activeWorkspace?.avatarUrl])
+
+  const workspaceInitials = (workspace: Workspace | null) => {
+    const words = String(workspace?.name || "WS").trim().split(/\s+/).filter(Boolean)
+    return words.length > 1
+      ? `${words[0][0]}${words[1][0]}`.toUpperCase()
+      : (words[0] || "WS").slice(0, 2).toUpperCase()
+  }
 
   const logOutHandler = async () => {
     await eraseAllCookies()
@@ -55,6 +97,23 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
 
   return (
     <div className="w-[300px] p-4 bg-white rounded-md shadow-sm border border-gray-200">
+      {state.user && activeWorkspace && (
+        <div className="flex items-center gap-2 px-4 pb-3 mb-2 border-b border-gray-200">
+          {activeWorkspace.avatarUrl && !workspaceAvatarFailed ? (
+            <img
+              src={activeWorkspace.avatarUrl}
+              alt=""
+              className="w-7 h-7 rounded-md object-cover shrink-0"
+              onError={() => setWorkspaceAvatarFailed(true)}
+            />
+          ) : (
+            <span className="w-7 h-7 rounded-md bg-black text-white text-[10px] font-semibold flex items-center justify-center shrink-0">
+              {workspaceInitials(activeWorkspace)}
+            </span>
+          )}
+          <span className="min-w-0 truncate text-xs font-semibold text-gray-900">{activeWorkspace.name}</span>
+        </div>
+      )}
       {/* Menu Sections */}
       <div className="py-1 mb-2">
         {menuSections.map((section, sectionIndex) => (

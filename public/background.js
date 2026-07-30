@@ -47,6 +47,9 @@ async function saveColorToDatabase(hexColor, sourceUrl) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${jwtToken}`,
+        ...(selectedFileData?.workspaceId
+          ? { 'X-Workspace-Id': selectedFileData.workspaceId }
+          : {}),
       },
       body: JSON.stringify({
         spreadsheetId: selectedFileData?.spreadsheetId || null,

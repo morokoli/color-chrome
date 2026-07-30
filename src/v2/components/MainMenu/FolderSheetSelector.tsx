@@ -1,4 +1,4 @@
-import { FC, useMemo, useState, useCallback } from "react"
+import { FC, useMemo, useState, useCallback, useEffect } from "react"
 import { useFolderTreeExpanded } from "../../hooks/useFolderTreeExpanded"
 import {
   buildParentIdByChildId,
@@ -54,7 +54,7 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
         try {
             const response = await axiosInstance.post(
                 config.api.endpoints.createFolder,
-                { name, colorIds: [], paletteIds: [] },
+                { name, colorIds: [], paletteIds: [], visibility: "workspace" },
                 { headers: { Authorization: `Bearer ${userToken}` } }
             )
             const folder = response.data?.folder ?? response.data
@@ -88,6 +88,13 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     const parentByChildId = useMemo(() => buildParentIdByChildId(folderList), [folderList])
     const allFolderIds = useMemo(() => folderList.map((f) => f._id), [folderList])
     const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
+    useEffect(() => {
+        const allowed = new Set(allFolderIds)
+        const validSelection = selectedFolders.filter((id) => allowed.has(id))
+        if (validSelection.length !== selectedFolders.length) {
+            onFoldersChange(validSelection)
+        }
+    }, [allFolderIds, onFoldersChange, selectedFolders])
     const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
         useFolderTreeExpanded(allFolderIds)
     const visibleFolderIds = useMemo(

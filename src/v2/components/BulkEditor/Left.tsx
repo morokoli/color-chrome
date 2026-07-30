@@ -455,7 +455,7 @@ const Left: React.FC = () => {
     try {
       const response = await axiosInstance.post(
         config.api.endpoints.createFolder,
-        { name, colorIds: [], paletteIds: [] },
+        { name, colorIds: [], paletteIds: [], visibility: "workspace" },
         { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
       )
       const folder = response.data?.folder ?? response.data

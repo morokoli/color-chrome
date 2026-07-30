@@ -8,6 +8,19 @@ export const axiosInstance = axios.create({
   withCredentials: true,
 })
 
+// All extension API calls use the workspace selected by the current file/session.
+// The backend no longer falls back to a default workspace for mutations.
+axiosInstance.interceptors.request.use(async (request) => {
+  if (!request.headers?.["X-Workspace-Id"]) {
+    const stored = await chrome.storage.local.get("activeWorkspaceId")
+    const workspaceId = stored.activeWorkspaceId
+    if (typeof workspaceId === "string" && workspaceId.length > 0) {
+      request.headers["X-Workspace-Id"] = workspaceId
+    }
+  }
+  return request
+})
+
 type APIArguments = {
   url: string
   method: "GET" | "POST" | "PUT" | "DELETE",
