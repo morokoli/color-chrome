@@ -112,7 +112,8 @@ export const FolderSelectionModal = ({
     Map<string, SelectedColorItem>
   >(new Map())
 
-  const { data: foldersData, isLoading: foldersLoading } = useGetFolders(true)
+  const { data: foldersData, isLoading: sourceFoldersLoading } = useGetFolders(true, "read")
+  const { data: destinationFoldersData, isLoading: destinationFoldersLoading } = useGetFolders(true, "write")
 
   const wasOpenRef = useRef(false)
   // When modal opens, initialize selection from props (bulk editor selection); changes inside modal don't affect bulk editor
@@ -175,17 +176,35 @@ export const FolderSelectionModal = ({
     () => buildParentIdByChildId(foldersFlat),
     [foldersFlat],
   )
-  const allFolderIds = useMemo(
-    () => foldersFlat.map((f) => f._id),
-    [foldersFlat],
+  const destinationFoldersFlat = destinationFoldersData?.folders || []
+  const destinationFoldersOrdered = useMemo(
+    () => flattenFoldersHierarchyOrder(destinationFoldersFlat),
+    [destinationFoldersFlat],
   )
-  const existingIdSet = useMemo(() => new Set(allFolderIds), [allFolderIds])
-  const { expandedIds, toggleExpanded, expandAll, collapseAll, allExpanded } =
-    useFolderTreeExpanded(allFolderIds)
-  const visibleFolderIds = useMemo(
-    () => flattenVisibleFolderIdsInOrder(foldersFlat, expandedIds),
-    [foldersFlat, expandedIds],
+  const destinationParentByChildId = useMemo(
+    () => buildParentIdByChildId(destinationFoldersFlat),
+    [destinationFoldersFlat],
   )
+  const destinationAllFolderIds = useMemo(
+    () => destinationFoldersFlat.map((f) => f._id),
+    [destinationFoldersFlat],
+  )
+  const destinationExistingIdSet = useMemo(
+    () => new Set(destinationAllFolderIds),
+    [destinationAllFolderIds],
+  )
+  const {
+    expandedIds: destinationExpandedIds,
+    toggleExpanded: toggleDestinationExpanded,
+    expandAll: expandDestinationAll,
+    collapseAll: collapseDestinationAll,
+    allExpanded: destinationAllExpanded,
+  } = useFolderTreeExpanded(destinationAllFolderIds)
+  const destinationVisibleFolderIds = useMemo(
+    () => flattenVisibleFolderIdsInOrder(destinationFoldersFlat, destinationExpandedIds),
+    [destinationFoldersFlat, destinationExpandedIds],
+  )
+  const foldersLoading = sourceFoldersLoading || destinationFoldersLoading
 
   if (!isOpen) return null
 
@@ -544,21 +563,21 @@ export const FolderSelectionModal = ({
                 Select folder(s) to{" "}
                 {actionType === "copy" ? "copy to" : "move to"}
               </label>
-              {foldersLoading ? (
+              {destinationFoldersLoading ? (
                 <div className="text-center text-gray-500 text-sm py-2">
                   Loading folders...
                 </div>
-              ) : foldersFlat.length === 0 ? (
+              ) : destinationFoldersFlat.length === 0 ? (
                 <div className="text-center text-gray-400 text-sm py-2">
                   No folders available. Create a folder first.
                 </div>
               ) : (
                 <MultiSelectDropdown<string>
                   selected={selectedFolderIds}
-                  items={visibleFolderIds}
-                  itemsWhenSearching={foldersOrdered.map((f) => f._id)}
+                  items={destinationVisibleFolderIds}
+                  itemsWhenSearching={destinationFoldersOrdered.map((f) => f._id)}
                   renderHeader={() => {
-                    const allIds = foldersOrdered.map((f) => f._id)
+                    const allIds = destinationFoldersOrdered.map((f) => f._id)
                     const allSelected =
                       allIds.length > 0 &&
                       selectedFolderIds.length === allIds.length &&
@@ -573,10 +592,14 @@ export const FolderSelectionModal = ({
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            allExpanded ? collapseAll() : expandAll()
+                            destinationAllExpanded
+                              ? collapseDestinationAll()
+                              : expandDestinationAll()
                           }}
                           aria-label={
-                            allExpanded ? "Collapse all" : "Expand all"
+                            destinationAllExpanded
+                              ? "Collapse all"
+                              : "Expand all"
                           }
                         >
                           <svg
@@ -588,7 +611,7 @@ export const FolderSelectionModal = ({
                             strokeWidth="2.25"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            className={`transition-transform duration-150 ${allExpanded ? "rotate-90" : ""}`}
+                            className={`transition-transform duration-150 ${destinationAllExpanded ? "rotate-90" : ""}`}
                             aria-hidden
                           >
                             <path d="M9 18l6-6-6-6" />
@@ -674,24 +697,24 @@ export const FolderSelectionModal = ({
                   }}
                   keyExtractor={(id) => id}
                   renderItem={(folderId) => {
-                    const folder = foldersFlat.find((f) => f._id === folderId)
+                    const folder = destinationFoldersFlat.find((f) => f._id === folderId)
                     return folder ? (
                       <FolderDropdownRow
-                        depth={getFolderDepthById(folderId, parentByChildId)}
+                        depth={getFolderDepthById(folderId, destinationParentByChildId)}
                         name={folder.name}
                         title={
                           getFolderPathLabelById(
                             folderId,
-                            foldersFlat,
-                            parentByChildId,
+                            destinationFoldersFlat,
+                            destinationParentByChildId,
                           ) || folder.name
                         }
                         hasChildren={folderHasChildrenInList(
                           folder,
-                          existingIdSet,
+                          destinationExistingIdSet,
                         )}
-                        expanded={expandedIds.has(folder._id)}
-                        onToggleExpand={() => toggleExpanded(folder._id)}
+                        expanded={destinationExpandedIds.has(folder._id)}
+                        onToggleExpand={() => toggleDestinationExpanded(folder._id)}
                       />
                     ) : (
                       folderId
@@ -700,26 +723,26 @@ export const FolderSelectionModal = ({
                   renderSelected={(selectedIds) => {
                     if (selectedIds.length === 0) return "Select folders"
                     if (selectedIds.length === 1) {
-                      const folder = foldersFlat.find(
+                      const folder = destinationFoldersFlat.find(
                         (f) => f._id === selectedIds[0],
                       )
                       return folder
                         ? getFolderPathLabelById(
                             selectedIds[0],
-                            foldersFlat,
-                            parentByChildId,
+                            destinationFoldersFlat,
+                            destinationParentByChildId,
                           ) || folder.name
                         : selectedIds[0]
                     }
                     return `${selectedIds.length} folders selected`
                   }}
                   getSearchText={(folderId) => {
-                    const folder = foldersFlat.find((f) => f._id === folderId)
+                    const folder = destinationFoldersFlat.find((f) => f._id === folderId)
                     return folder
                       ? getFolderPathLabelById(
                           folderId,
-                          foldersFlat,
-                          parentByChildId,
+                          destinationFoldersFlat,
+                          destinationParentByChildId,
                         ) || folder.name
                       : String(folderId)
                   }}
