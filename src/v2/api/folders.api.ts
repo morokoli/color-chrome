@@ -55,18 +55,22 @@ export interface GetFoldersResponse {
   folders: Folder[]
 }
 
-export const useGetFolders = (populate: boolean = true) => {
+export const useGetFolders = (populate: boolean = true, capability: 'read' | 'write' = 'read') => {
   const { state } = useGlobalState()
   return useQuery<GetFoldersResponse, Error>({
-    queryKey: ["folders", populate, state.user?.email],
+    queryKey: ["folders", populate, capability, state.user?.email],
     refetchOnMount: "always",
     queryFn: async () => {
+      const stored = await chrome.storage.local.get("activeWorkspaceId")
+      const workspaceId = typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null
       const response = await axiosInstance.get(config.api.endpoints.getFolders, {
         headers: {
           Authorization: `Bearer ${state.user?.jwtToken}`,
+          ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
         },
         params: {
           populate: populate ? "colors" : undefined,
+          capability: capability === "write" ? "write" : undefined,
         },
       })
       return response.data
