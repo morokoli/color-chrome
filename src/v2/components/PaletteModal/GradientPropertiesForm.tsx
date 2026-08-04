@@ -18,6 +18,8 @@ import {
   getFolderPathLabelById,
 } from "@/v2/utils/folderDisplayName"
 import SingleThumbSlider from "./SingleThumbSlider"
+import DesignTokensInput from "./DesignTokensInput"
+import { isChipSeparatorKey } from "./chipInputKeys"
 
 interface GradientStop {
   id: string
@@ -31,6 +33,7 @@ interface GradientMetadata {
   slash_naming: string
   url: string
   tags: string[]
+  designTokens?: string[]
   comments: string
   ranking: number
 }
@@ -520,7 +523,7 @@ const GradientPropertiesForm = ({
               value={nameInput}
               onChange={(e) => applyNameState(nameSegments, e.target.value)}
               onKeyDown={(e) => {
-                if ((e.key === "/" || e.key === ",") && nameInput.trim()) {
+                if (isChipSeparatorKey(e.key, { includeSlash: true }) && nameInput.trim()) {
                   e.preventDefault()
                   applyNameState([...nameSegments, nameInput], "")
                 } else if (e.key === "Backspace" && !nameInput && nameSegments.length > 0) {
@@ -534,7 +537,7 @@ const GradientPropertiesForm = ({
               }}
               placeholder={
                 nameSegments.length === 0
-                  ? "Name segments (type / to create chip, max 5)"
+                  ? "Name segments (type / , or Enter to create chip, max 5)"
                   : ""
               }
               style={{
@@ -554,6 +557,11 @@ const GradientPropertiesForm = ({
           (4 slashes).
         </p>
       </div>
+
+      <DesignTokensInput
+        value={metadata?.designTokens || []}
+        onChange={(designTokens) => handlePropertyChange("designTokens", designTokens)}
+      />
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Tags</label>
@@ -607,10 +615,7 @@ const GradientPropertiesForm = ({
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               onKeyDown={(e) => {
-                if (
-                  (e.key === "Enter" || e.key === ",") &&
-                  tagsInput.trim()
-                ) {
+                if (isChipSeparatorKey(e.key) && tagsInput.trim()) {
                   e.preventDefault()
                   const currentTags = metadata?.tags || []
                   const newTag = tagsInput.trim()
@@ -638,7 +643,7 @@ const GradientPropertiesForm = ({
               }}
               placeholder={
                 (metadata?.tags?.length ?? 0) === 0
-                  ? "Tags (press , or Enter, max 3)"
+                  ? "Tags (press , Enter, or Tab, max 3)"
                   : ""
               }
               style={{

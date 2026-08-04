@@ -25,6 +25,7 @@ export interface Color {
   comments?: string
   ranking?: number
   tags?: string[]
+  designTokens?: string[]
   additionalColumns?: Array<{ name: string; value: string }>
   createdAt?: string
   updatedAt?: string
@@ -53,16 +54,60 @@ export interface SelectedColor {
 export interface GetFoldersResponse {
   workspaceId?: string
   folders: Folder[]
+  folderTree?: Folder[]
+}
+
+/** Map API color payloads to client shape (designTokens only). */
+function normalizeColor(raw: Record<string, unknown>): Color {
+  const designTokens = Array.isArray(raw.designTokens)
+    ? (raw.designTokens as string[])
+    : Array.isArray(raw.design_tokens)
+      ? (raw.design_tokens as string[])
+      : []
+
+  const { design_tokens: _omit, ...rest } = raw
+  return {
+    ...(rest as unknown as Color),
+    designTokens,
+  }
+}
+
+function normalizeFolder(raw: Record<string, unknown>): Folder {
+  const colors = Array.isArray(raw.colors)
+    ? raw.colors.map((c) => normalizeColor(c as Record<string, unknown>))
+    : undefined
+  const children = Array.isArray((raw as { children?: unknown[] }).children)
+    ? (raw as { children: Record<string, unknown>[] }).children.map(normalizeFolder)
+    : undefined
+
+  return {
+    ...(raw as unknown as Folder),
+    colors,
+    ...(children ? { children } : {}),
+  } as Folder
+}
+
+function normalizeFoldersResponse(data: GetFoldersResponse): GetFoldersResponse {
+  return {
+    ...data,
+    folders: (data.folders || []).map((f) =>
+      normalizeFolder(f as unknown as Record<string, unknown>),
+    ),
+    folderTree: data.folderTree
+      ? data.folderTree.map((f) =>
+          normalizeFolder(f as unknown as Record<string, unknown>),
+        )
+      : undefined,
+  }
 }
 
 export const useGetFolders = (populate: boolean = true, capability: 'read' | 'write' = 'read') => {
   const { state } = useGlobalState()
+  const workspaceId = state.activeWorkspaceId
   return useQuery<GetFoldersResponse, Error>({
-    queryKey: ["folders", populate, capability, state.user?.email],
+    queryKey: ["folders", workspaceId, populate, capability],
     refetchOnMount: "always",
     queryFn: async () => {
-      const stored = await chrome.storage.local.get("activeWorkspaceId")
-      const workspaceId = typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null
       const response = await axiosInstance.get(config.api.endpoints.getFolders, {
         headers: {
           Authorization: `Bearer ${state.user?.jwtToken}`,
@@ -73,8 +118,8 @@ export const useGetFolders = (populate: boolean = true, capability: 'read' | 'wr
           capability: capability === "write" ? "write" : undefined,
         },
       })
-      return response.data
+      return normalizeFoldersResponse(response.data)
     },
-    enabled: !!state.user?.jwtToken,
+    enabled: !!state.user?.jwtToken && !!workspaceId,
   })
 }

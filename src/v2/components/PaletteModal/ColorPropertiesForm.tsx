@@ -10,6 +10,8 @@ import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { useToast } from "@/v2/hooks/useToast"
 import { Slider } from "@/components/ui/slider"
+import DesignTokensInput from "./DesignTokensInput"
+import { isChipSeparatorKey } from "./chipInputKeys"
 import { useFolderTreeExpanded } from "../../hooks/useFolderTreeExpanded"
 import {
   buildParentIdByChildId,
@@ -384,7 +386,7 @@ const ColorPropertiesForm = ({
           type="text"
           value={colorObject.url || ""}
           onChange={(e) => handlePropertyChange("url", e.target.value)}
-          placeholder="Source URL (auto-filled from browser)"
+          placeholder="Source URL"
           style={{
             width: "100%",
             padding: "12px 16px",
@@ -467,7 +469,7 @@ const ColorPropertiesForm = ({
               value={nameInput}
               onChange={(e) => applyNameState(nameSegments, e.target.value)}
               onKeyDown={(e) => {
-                if ((e.key === "/" || e.key === ",") && nameInput.trim()) {
+                if (isChipSeparatorKey(e.key, { includeSlash: true }) && nameInput.trim()) {
                   e.preventDefault()
                   applyNameState([...nameSegments, nameInput], "")
                 } else if (e.key === "Backspace" && !nameInput && nameSegments.length > 0) {
@@ -481,7 +483,7 @@ const ColorPropertiesForm = ({
               }}
               placeholder={
                 nameSegments.length === 0
-                  ? "Slash naming (type / to create chip, max 5 parts)"
+                  ? "Name segments (type / , or Enter to create chip, max 5)"
                   : ""
               }
               style={{
@@ -500,6 +502,11 @@ const ColorPropertiesForm = ({
           Use / to create nested groups (e.g., Colors/Brand/Primary). Max 5 names (4 slashes).
         </p>
       </div>
+
+      <DesignTokensInput
+        value={colorObject?.designTokens || []}
+        onChange={(designTokens) => handlePropertyChange("designTokens", designTokens)}
+      />
 
       <div style={{ marginBottom: "12px" }}>
         <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 500 }}>
@@ -558,7 +565,7 @@ const ColorPropertiesForm = ({
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === ",") && tagsInput.trim()) {
+                if (isChipSeparatorKey(e.key) && tagsInput.trim()) {
                   e.preventDefault()
                   const currentTags = colorObject?.tags || []
                   const newTag = tagsInput.trim()
@@ -580,7 +587,11 @@ const ColorPropertiesForm = ({
                   }
                 }
               }}
-              placeholder={(colorObject?.tags?.length ?? 0) === 0 ? "Tags (press , or Enter, max 3)" : ""}
+              placeholder={
+                (colorObject?.tags?.length ?? 0) === 0
+                  ? "Tags (press , Enter, or Tab, max 3)"
+                  : ""
+              }
               style={{
                 flex: 1,
                 minWidth: "80px",

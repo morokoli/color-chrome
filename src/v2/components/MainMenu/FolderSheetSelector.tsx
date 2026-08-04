@@ -18,6 +18,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { axiosInstance } from "@/v2/hooks/useAPI"
 import { config } from "@/v2/others/config"
 import { useToast } from "@/v2/hooks/useToast"
+import { useGlobalState } from "@/v2/hooks/useGlobalState"
+import { WorkspaceSelector } from "./WorkspaceSelector"
 
 interface FolderSheetSelectorProps {
     selectedFolders: string[]
@@ -40,6 +42,8 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     onSheetsChange,
     userToken,
 }) => {
+    const { state } = useGlobalState()
+    const activeWorkspaceId = state.activeWorkspaceId
     const { data: foldersData } = useGetFolders(false)
     const queryClient = useQueryClient()
     const toast = useToast()
@@ -50,26 +54,36 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     const handleCreateFolder = useCallback(async () => {
         const name = newFolderName.trim()
         if (!name || !userToken) return
+        if (!activeWorkspaceId) {
+            toast.display("error", "Select a workspace before creating a folder")
+            return
+        }
         setIsCreatingLoading(true)
         try {
             const response = await axiosInstance.post(
                 config.api.endpoints.createFolder,
                 { name, colorIds: [], paletteIds: [], visibility: "workspace" },
-                { headers: { Authorization: `Bearer ${userToken}` } }
+                {
+                    headers: {
+                        Authorization: `Bearer ${userToken}`,
+                        "X-Workspace-Id": activeWorkspaceId,
+                    },
+                }
             )
             const folder = response.data?.folder ?? response.data
-            if (folder?._id) {
-                await queryClient.invalidateQueries({ queryKey: ["folders"] })
-                toast.display("success", "Folder created")
-                setNewFolderName("")
-                setIsCreating(false)
+            if (!folder?._id) {
+                throw new Error("The server returned an invalid folder response")
             }
+            await queryClient.invalidateQueries({ queryKey: ["folders"] })
+            toast.display("success", "Folder created")
+            setNewFolderName("")
+            setIsCreating(false)
         } catch (err: any) {
             toast.display("error", err?.response?.data?.err || err?.response?.data?.message || "Failed to create folder")
         } finally {
             setIsCreatingLoading(false)
         }
-    }, [newFolderName, userToken, queryClient, toast])
+    }, [activeWorkspaceId, newFolderName, userToken, queryClient, toast])
 
     const folderList = useMemo(
         () => flattenFoldersHierarchyOrder(foldersData?.folders ?? []),
@@ -223,10 +237,12 @@ export const FolderSheetSelector: FC<FolderSheetSelectorProps> = ({
     }, [isCreating, newFolderName, isCreatingLoading, handleCreateFolder])
 
     return (
-        <div className="px-4">
-            <div className="pb-4">
-                <p className="text-[13px] text-gray-800 mb-2">Saving colors to</p>
+        <div className="px-3">
+            <WorkspaceSelector userToken={userToken} />
+            <div className="pb-2">
+                <p className="text-[12px] text-gray-800 mb-1">Saving colors to</p>
                 <MultiSelectDropdown<SelectableItem>
+                    compact
                     selected={selectedItems}
                     items={visibleFolderItems}
                     itemsWhenSearching={allItems}

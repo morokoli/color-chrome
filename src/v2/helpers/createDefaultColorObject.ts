@@ -15,6 +15,7 @@ export const createDefaultColorObject = (hex = "#FFB3B3") => {
     comments: "",
     slash_naming: "",
     tags: [] as string[],
+    designTokens: [] as string[],
     additionalColumns: [] as Array<{ name: string; value: string }>,
   }
 }

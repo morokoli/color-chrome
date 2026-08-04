@@ -17,5 +17,12 @@ export default ({ mode }) => {
         "@": path.resolve(process.cwd(), "src"),
       },
     },
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(process.cwd(), "index.html"),
+        },
+      },
+    },
   })  
 }

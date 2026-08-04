@@ -77,6 +77,7 @@ export type AddColorRequest = {
     comments?: string | undefined
     slash_naming: string
     tags: string[]
+    designTokens?: string[]
     additionalColumns: Omit<Column, "id">[]
   }
 }
@@ -95,6 +96,7 @@ export type AddMultipleColorsRequest = {
     comments?: string | undefined
     slash_naming: string
     tags?: string
+    designTokens?: string[]
     additionalColumns: Omit<Column, "id">[]
   }[]
 }
@@ -158,6 +160,7 @@ export type AddColorResponse = {
     comments: string
     slash_naming: string
     tags: string[]
+    designTokens?: string[]
     additionalColumns: Array<{ name: string; value: string }>
     createdAt: Date
     updatedAt: Date

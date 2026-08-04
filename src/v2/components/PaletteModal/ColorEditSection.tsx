@@ -16,8 +16,10 @@ import SingleThumbSlider from "./SingleThumbSlider"
 import ColorWheel from "./ColorWheel"
 import {
   HARMONY_TYPES,
-  HARMONY_DROPDOWN_ORDER,
+  getAvailableHarmoniesForCount,
   getHarmonyDisplayName,
+  getHarmonyUnlockHint,
+  isHarmonyAvailableForCount,
 } from "@/v2/helpers/colorHarmonies"
 
 const getColorHex = (color: any) => {
@@ -150,8 +152,11 @@ const ColorEditSection = ({
     }
   }
 
+  const paletteSwatchCount = allColors?.length ?? 0
   const showColorWheel =
-    harmonyType !== HARMONY_TYPES.CUSTOM && allColors && allColors.length > 1
+    harmonyType !== HARMONY_TYPES.CUSTOM &&
+    paletteSwatchCount > 1 &&
+    isHarmonyAvailableForCount(harmonyType, paletteSwatchCount)
 
   const pickHarmony = (next: string) => {
     onHarmonyChange?.(next)
@@ -166,12 +171,13 @@ const ColorEditSection = ({
   }
 
   const showHarmonyDropdown =
-    onHarmonyChange && allColors && allColors.length > 1
+    onHarmonyChange && paletteSwatchCount > 1
+  const availableHarmonies = getAvailableHarmoniesForCount(paletteSwatchCount)
+  const harmonyUnlockHint = getHarmonyUnlockHint(paletteSwatchCount)
   const showReapplyHarmony =
     onReapplyHarmony &&
     harmonyType !== HARMONY_TYPES.CUSTOM &&
-    allColors &&
-    allColors.length > 1
+    isHarmonyAvailableForCount(harmonyType, paletteSwatchCount)
 
   return (
     <div
@@ -431,13 +437,18 @@ const ColorEditSection = ({
               </span>
               . Choose Custom to edit each color freely.
             </DialogDescription>
+            {harmonyUnlockHint ? (
+              <p className="pt-1 text-[11px] leading-relaxed text-gray-400 dark:text-gray-500">
+                Add swatches to unlock more: {harmonyUnlockHint}.
+              </p>
+            ) : null}
           </DialogHeader>
           <div
             className="max-h-[min(340px,55vh)] overflow-y-auto overscroll-contain bg-white px-2 py-2 dark:bg-gray-950"
             role="listbox"
             aria-label="Harmony presets"
           >
-            {HARMONY_DROPDOWN_ORDER.map((value) => {
+            {availableHarmonies.map((value) => {
               const label = getHarmonyDisplayName(value)
               const selected = harmonyType === value
               return (

@@ -21,6 +21,10 @@ interface DropdownProps<T> {
   usePortal?: boolean
   /** When searching, filter from this list (e.g. full folder list) */
   itemsWhenSearching?: T[]
+  /** Smaller trigger height for compact layouts (e.g. main menu) */
+  compact?: boolean
+  /** If true, opens dropdown upward instead of downward (avoids clipping near window edge) */
+  openUpward?: boolean
 }
 
 export const Dropdown = <T,>({
@@ -38,12 +42,19 @@ export const Dropdown = <T,>({
   isVisible = true,
   usePortal = false,
   itemsWhenSearching,
+  compact = false,
+  openUpward = false,
 }: DropdownProps<T>) => {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const dropdownRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{
+    top?: number
+    bottom?: number
+    left: number
+    width: number
+  } | null>(null)
 
   // When footer expands (e.g. "Add sheet" form), scroll so it's visible
   useEffect(() => {
@@ -89,15 +100,24 @@ export const Dropdown = <T,>({
   useEffect(() => {
     if (isOpen && dropdownRef.current && usePortal) {
       const rect = dropdownRef.current.getBoundingClientRect()
-      setMenuPosition({
-        top: rect.bottom + 4, // Fixed positioning is relative to viewport
-        left: rect.left,
-        width: rect.width,
-      })
+      const gap = 4
+      if (openUpward) {
+        setMenuPosition({
+          bottom: window.innerHeight - rect.top + gap,
+          left: rect.left,
+          width: rect.width,
+        })
+      } else {
+        setMenuPosition({
+          top: rect.bottom + gap,
+          left: rect.left,
+          width: rect.width,
+        })
+      }
     } else {
       setMenuPosition(null)
     }
-  }, [isOpen, usePortal])
+  }, [isOpen, usePortal, openUpward])
 
   const listForFilter =
     isSearchable && searchTerm.trim() !== "" && itemsWhenSearching !== undefined
@@ -110,6 +130,9 @@ export const Dropdown = <T,>({
     return itemString.includes(searchTerm.toLowerCase())
   })
 
+  const triggerPadding = compact ? "px-2.5 py-1.5" : "px-3 py-2"
+  const triggerMinH = compact ? "min-h-[32px]" : "min-h-[40px]"
+
   return (
     <div
       className={`relative text-[12px] grow`}
@@ -118,9 +141,9 @@ export const Dropdown = <T,>({
     >
       <CollapsibleBox isOpen={isVisible} maxHeight="800px">
         {isOpen ? (
-          <div className="flex items-center min-h-[40px] border border-gray-200 rounded bg-white">
+          <div className={`flex items-center ${triggerMinH} border border-gray-200 rounded bg-white`}>
             {isSearchable && (
-            <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0">
+            <div className={`flex items-center gap-2 ${triggerPadding} flex-1 min-w-0`}>
               <Search size={14} className="shrink-0 text-gray-500" />
               <input
                 type="text"
@@ -133,7 +156,7 @@ export const Dropdown = <T,>({
             </div>
           )}
           {!isSearchable && (
-            <div className="flex items-center gap-2 px-3 py-2 flex-1 min-w-0 overflow-hidden">
+            <div className={`flex items-center gap-2 ${triggerPadding} flex-1 min-w-0 overflow-hidden`}>
               {selected ? (
                 <span className="text-gray-800 truncate">{renderSelected(selected)}</span>
               ) : (
@@ -154,7 +177,7 @@ export const Dropdown = <T,>({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="w-full flex items-center gap-2 border border-gray-200 rounded px-3 py-2 min-h-[40px] bg-white hover:border-gray-300 transition-colors text-left"
+          className={`w-full flex items-center gap-2 border border-gray-200 rounded ${triggerPadding} ${triggerMinH} bg-white hover:border-gray-300 transition-colors text-left`}
         >
           <span className="min-w-0 flex-1 truncate text-gray-800">
             {selected ? renderSelected(selected) : <span className="text-gray-400">{placeholder}</span>}
@@ -171,9 +194,10 @@ export const Dropdown = <T,>({
           createPortal(
             <div
               ref={menuRef}
-              className={`fixed border border-gray-200 bg-white z-[100] overflow-y-auto rounded shadow-lg ${renderFooter ? "max-h-80" : "max-h-48"}`}
+              className={`fixed border border-gray-200 bg-white z-[100] overflow-y-auto rounded shadow-lg flex flex-col ${renderFooter ? "max-h-80" : "max-h-48"}`}
               style={{
-                top: `${menuPosition.top}px`,
+                ...(menuPosition.top != null ? { top: `${menuPosition.top}px` } : {}),
+                ...(menuPosition.bottom != null ? { bottom: `${menuPosition.bottom}px` } : {}),
                 left: `${menuPosition.left}px`,
                 width: `${menuPosition.width}px`,
               }}
@@ -203,7 +227,11 @@ export const Dropdown = <T,>({
             document.body
           )
         ) : (
-          <div className={`absolute w-full border border-gray-200 mt-1 bg-white z-[60] rounded shadow-lg flex flex-col max-h-48`}>
+          <div
+            className={`absolute w-full border border-gray-200 bg-white z-[60] rounded shadow-lg flex flex-col max-h-48 ${
+              openUpward ? "bottom-full mb-1" : "top-full mt-1"
+            }`}
+          >
             <div className="overflow-y-auto overscroll-contain flex-1">
               {filteredItems.map((item, i) => (
                 <div

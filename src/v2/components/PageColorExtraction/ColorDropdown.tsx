@@ -138,6 +138,22 @@ export const ColorDropdown = ({
                 })
               }}
             />
+            <input
+              type="text"
+              className="w-full border border-grey p-1 p-y-2 text-sm"
+              placeholder="Design tokens (comma-separated)"
+              value={(color.designTokens || []).join(", ")}
+              onChange={(e) => {
+                const designTokens = e.target.value
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+                handleChangeColor(arrIndex, index, {
+                  ...color,
+                  designTokens,
+                })
+              }}
+            />
             <button
               className="min-w-[40px] h-10 flex items-center justify-center"
               onClick={() => handleDeleteColor(arrIndex, index)}

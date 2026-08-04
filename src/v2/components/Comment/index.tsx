@@ -43,6 +43,35 @@ function tagsEqualAcross(a: unknown, b: unknown): boolean {
   return sa === sb
 }
 
+function normalizeDesignTokensArray(tokens: unknown): string[] {
+  if (Array.isArray(tokens)) {
+    return tokens.map((t) => String(t).trim()).filter(Boolean)
+  }
+  if (typeof tokens === "string" && tokens) {
+    return tokens.split(",").map((t) => t.trim()).filter(Boolean)
+  }
+  return []
+}
+
+function designTokensEqualAcross(a: unknown, b: unknown): boolean {
+  const sa = [...normalizeDesignTokensArray(a)].sort().join("\0")
+  const sb = [...normalizeDesignTokensArray(b)].sort().join("\0")
+  return sa === sb
+}
+
+const MAX_DESIGN_TOKEN_DOTS = 4
+
+function normalizeDesignToken(raw: string): string {
+  const trimmed = String(raw || "").trim().toLowerCase()
+  if (!trimmed) return ""
+  const segments = trimmed.split(".")
+  if (segments.length > MAX_DESIGN_TOKEN_DOTS + 1) return ""
+  const valid = segments.every(
+    (segment) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(segment) || /^\d+$/.test(segment)
+  )
+  return valid ? segments.join(".") : ""
+}
+
 /** Neutral hex for color picker when multiple colors differ (picker still needs a valid color). */
 const MIXED_HEX_FALLBACK = "#bdbdbd"
 
@@ -85,6 +114,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const toast = useToast()
   const queryClient = useQueryClient()
   const { state, dispatch } = useGlobalState()
+  const activeWorkspaceId = state.activeWorkspaceId
   const { colorHistory, parsedData } = state
   const [selectedColorIndices, setSelectedColorIndices] = useState<number[]>([]) // Multi-select
   const [editingColor, setEditingColor] = useState<string>('#ffffff')
@@ -100,11 +130,13 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const slashInternalUpdateRef = useRef(false)
   const [tagsList, setTagsList] = useState<string[]>([])
   const [tagsInput, setTagsInput] = useState<string>('')
+  const [designTokensList, setDesignTokensList] = useState<string[]>([])
+  const [designTokensInput, setDesignTokensInput] = useState<string>("")
+  const [designTokensMixed, setDesignTokensMixed] = useState(false)
   const [colorUrl, setColorUrl] = useState<string>('')
   const [currentTabUrl, setCurrentTabUrl] = useState<string>('Manually created')
   const [comment, setComment] = useState<string>('')
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolderLoading, setIsCreatingFolderLoading] = useState(false)
@@ -119,12 +151,6 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const justSavedRef = useRef(false)
   const lastLoadedDataRef = useRef<string>('')  // Track what data we last loaded
 
-  useEffect(() => {
-    void chrome.storage.local.get("activeWorkspaceId").then((stored) => {
-      setActiveWorkspaceId(typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null)
-    })
-  }, [])
-
   const selectedIndicesSorted = useMemo(
     () => [...selectedColorIndices].sort((a, b) => a - b),
     [selectedColorIndices],
@@ -138,16 +164,17 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     [foldersData?.folders],
   )
   const { data: allColorData } = useQuery({
-    queryKey: ["all-color-data"],
+    queryKey: ["all-color-data", state.activeWorkspaceId],
     queryFn: async () => {
       const response = await axiosInstance.get("/api/database-sheets/all-color-data", {
         headers: {
           Authorization: `Bearer ${state.user?.jwtToken}`,
+          ...(activeWorkspaceId ? { "X-Workspace-Id": activeWorkspaceId } : {}),
         },
       })
       return response.data?.data || response.data
     },
-    enabled: !!state.user?.jwtToken,
+    enabled: !!state.user?.jwtToken && !!state.activeWorkspaceId,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -189,6 +216,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
 
       const nextTags = normalizeTagsArray(latest.tags)
       const prevTags = normalizeTagsArray(p?.tags)
+      const nextDesignTokens = normalizeDesignTokensArray(latest.designTokens)
+      const prevDesignTokens = normalizeDesignTokensArray(p?.designTokens)
       const nextAdditional = latest.additionalColumns ?? latest.additional_columns ?? []
       const prevAdditional = p?.additionalColumns ?? p?.additional_columns ?? []
       const hasDiff =
@@ -198,6 +227,8 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
         String(latest.comments ?? "") !== String(p?.comments ?? "") ||
         String(latest.ranking ?? "") !== String(p?.ranking ?? "") ||
         JSON.stringify(nextTags.sort()) !== JSON.stringify(prevTags.sort()) ||
+        JSON.stringify(nextDesignTokens.sort()) !==
+          JSON.stringify(prevDesignTokens.sort()) ||
         normalizeAdditionalColumnsForCompare(nextAdditional) !==
           normalizeAdditionalColumnsForCompare(prevAdditional)
 
@@ -216,6 +247,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
             comments: latest.comments ?? p?.comments ?? "",
             slash_naming: latest.slash_naming ?? p?.slash_naming ?? "",
             tags: nextTags,
+            designTokens: nextDesignTokens,
             additionalColumns: nextAdditional,
             rgb: latest.rgb ?? p?.rgb,
             hsl: latest.hsl ?? p?.hsl,
@@ -228,26 +260,34 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
     if (!name || !state.user?.jwtToken) return
+    if (!activeWorkspaceId) {
+      toast.display("error", "Select a workspace before creating a folder")
+      return
+    }
     setIsCreatingFolderLoading(true)
     try {
       const response = await axiosInstance.post(
         config.api.endpoints.createFolder,
-        { name, colorIds: [], paletteIds: [] },
-        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+        { name, colorIds: [], paletteIds: [], visibility: "workspace" },
+        {
+          headers: {
+            Authorization: `Bearer ${state.user.jwtToken}`,
+            "X-Workspace-Id": activeWorkspaceId,
+          },
+        }
       )
       const folder = response.data?.folder ?? response.data
-      if (folder?._id) {
-        await queryClient.invalidateQueries({ queryKey: ['folders'] })
-        toast.display('success', 'Folder created')
-        setNewFolderName('')
-        setIsCreatingFolder(false)
-      }
+      if (!folder?._id) throw new Error("Malformed folder creation response")
+      await queryClient.invalidateQueries({ queryKey: ['folders'] })
+      toast.display('success', 'Folder created')
+      setNewFolderName('')
+      setIsCreatingFolder(false)
     } catch (err: any) {
       toast.display('error', err?.response?.data?.err || err?.response?.data?.message || 'Failed to create folder')
     } finally {
       setIsCreatingFolderLoading(false)
     }
-  }, [newFolderName, state.user?.jwtToken, queryClient, toast])
+  }, [activeWorkspaceId, newFolderName, state.user?.jwtToken, queryClient, toast])
 
   const renderFolderFooter = useCallback(() => {
     if (isCreatingFolder) {
@@ -373,7 +413,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       sorted
         .map(
           (i) =>
-            `${i}:${(parsedData[i] as any)?.hex ?? ""}:${(parsedData[i] as any)?.slash_naming ?? ""}:${JSON.stringify((parsedData[i] as any)?.tags ?? [])}`,
+            `${i}:${(parsedData[i] as any)?.hex ?? ""}:${(parsedData[i] as any)?.slash_naming ?? ""}:${JSON.stringify((parsedData[i] as any)?.tags ?? [])}:${JSON.stringify((parsedData[i] as any)?.designTokens ?? [])}`,
         )
         .join("|")
 
@@ -388,6 +428,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     setTagsMixed(false)
     setCommentMixed(false)
     setRankingMixed(false)
+    setDesignTokensMixed(false)
 
     const primary = sorted[0]
     setOriginalColor(colorHistory[primary])
@@ -402,6 +443,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       setTagsList([])
       setTagsMixed(false)
       setTagsInput("")
+      setDesignTokensList([])
+      setDesignTokensInput("")
+      setDesignTokensMixed(false)
       setComment("")
       setCommentMixed(false)
       setColorUrl(currentTabUrl)
@@ -421,6 +465,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       setTagsList([])
       setTagsInput("")
       setTagsMixed(true)
+      setDesignTokensList([])
+      setDesignTokensInput("")
+      setDesignTokensMixed(true)
       setComment("")
       setCommentMixed(true)
       setColorUrl("")
@@ -468,6 +515,22 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       setTagsMixed(true)
     }
     setTagsInput("")
+
+    if (
+      datas.every(
+        (d, j) =>
+          j === 0 ||
+          designTokensEqualAcross(d.designTokens, datas[0].designTokens),
+      )
+    ) {
+      const tokens0 = normalizeDesignTokensArray(datas[0].designTokens)
+      setDesignTokensList(tokens0)
+      setDesignTokensMixed(false)
+    } else {
+      setDesignTokensList([])
+      setDesignTokensMixed(true)
+    }
+    setDesignTokensInput("")
 
     const comments = datas.map((d) => String(d?.comments ?? "").trim())
     if (comments.every((c) => c === comments[0])) {
@@ -625,8 +688,16 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     // Save to database if logged in
     if (state.user?.jwtToken) {
       const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
-      if (!activeWorkspaceId) throw new Error("Active workspace is required")
-      const auth = { headers: { Authorization: `Bearer ${state.user.jwtToken}`, "X-Workspace-Id": activeWorkspaceId } }
+      if (!activeWorkspaceId) {
+        toast.display("error", "Select a workspace before saving this color")
+        return
+      }
+      const auth = {
+        headers: {
+          Authorization: `Bearer ${state.user.jwtToken}`,
+          "X-Workspace-Id": activeWorkspaceId,
+        },
+      }
       try {
         const response = await axiosInstance.post(
           config.api.endpoints.addColor,
@@ -644,6 +715,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               ranking: String(ranking || 0),
               slash_naming: slashNaming,
               tags: tagsList,
+              designTokens: designTokensList,
               additionalColumns: [],
             },
             folderIds: selectedFolderIds,
@@ -653,15 +725,13 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
         const apiResponse = response?.data?.data ?? response?.data
         const createdColor = apiResponse?.createdColor
         const newColorId = createdColor?._id ?? createdColor?.id
-        if (apiResponse?.err || !createdColor || !newColorId) throw new Error("Malformed color creation response")
-        if (createdColor) {
-          dispatch({
-            type: "ADD_COLOR_HISTORY",
-            payload: { hex: normalizedHex, parsed: createdColor },
-          })
-        } else {
-          dispatch({ type: "ADD_COLOR_HISTORY", payload: normalizedHex })
+        if (apiResponse?.err || !createdColor || !newColorId) {
+          throw new Error("Malformed color creation response")
         }
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: { hex: normalizedHex, parsed: createdColor },
+        })
         toast.display("success", "Color saved successfully")
         queryClient.invalidateQueries({ queryKey: ["folders"] })
       } catch {
@@ -703,11 +773,16 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       }
     }
 
+    if (state.user?.jwtToken && !activeWorkspaceId) {
+      toast.display("error", "Select a workspace before updating this color")
+      return
+    }
+
     setUpdateLoading(true)
     try {
       const authHeaders = {
         Authorization: `Bearer ${state.user?.jwtToken ?? ""}`,
-        "X-Workspace-Id": activeWorkspaceId || "",
+        ...(activeWorkspaceId ? { "X-Workspace-Id": activeWorkspaceId } : {}),
       }
       let anyFolderChange = false
       let lastRowHex = colors.expandHex(editingColor)
@@ -735,6 +810,9 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
           comments: commentMixed ? String(data.comments ?? "") : comment,
           ranking: rankingMixed ? Number(data.ranking) || 0 : Number(ranking) || 0,
           tags: tagsMixed ? normalizeTagsArray(data.tags) : tagsList,
+          designTokens: designTokensMixed
+            ? normalizeDesignTokensArray(data.designTokens)
+            : designTokensList,
           additionalColumns: data?.additionalColumns ?? [],
           timestamp: Date.now(),
         }
@@ -763,6 +841,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
             comments: updatedColor.comments,
             ranking: updatedColor.ranking,
             tags: updatedColor.tags,
+            designTokens: updatedColor.designTokens ?? updatedColor.design_tokens ?? [],
             additionalColumns: updatedColor.additionalColumns ?? [],
           }
           dispatch({
@@ -875,20 +954,28 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
 
     if (state.user?.jwtToken && colorIdsToDelete.length > 0) {
       if (!activeWorkspaceId) {
-        toast.display("error", "Active workspace is required")
+        toast.display("error", "Select a workspace before deleting colors")
         return
       }
       try {
-        const response = await axiosInstance.post(
+        await axiosInstance.post(
           config.api.endpoints.deleteColors,
           { colorIds: colorIdsToDelete },
-          { headers: { Authorization: `Bearer ${state.user.jwtToken}`, "X-Workspace-Id": activeWorkspaceId } }
+          {
+            headers: {
+              Authorization: `Bearer ${state.user.jwtToken}`,
+              "X-Workspace-Id": activeWorkspaceId,
+            },
+          }
         )
-        if (!response?.data || response.data.err || response.data.success === false || response.data.data?.err) {
-          throw new Error(response.data?.message || response.data?.err || response.data?.data?.err || "Failed to remove from database")
-        }
       } catch (err: any) {
-        toast.display("error", err.response?.data?.message || err.response?.data?.err || err.message || "Failed to remove from database")
+        toast.display(
+          "error",
+          err?.response?.data?.err ||
+            err?.response?.data?.message ||
+            err?.response?.data?.error ||
+            "Failed to remove from database",
+        )
         return
       }
       queryClient.invalidateQueries({ queryKey: ["folders"] })
@@ -1335,6 +1422,63 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
                       className="flex-1 min-w-[120px] text-[12px] outline-none bg-transparent"
                     />
                   )}
+                </div>
+              </div>
+
+              {/* Design Tokens Chip Input */}
+              <div className="w-full px-2 py-1.5 border border-gray-200 rounded focus-within:border-gray-400">
+                <div className="flex flex-wrap gap-1 items-center">
+                  {designTokensList.map((token, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] rounded">
+                      {token}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDesignTokensMixed(false)
+                          setDesignTokensList(designTokensList.filter((_, i) => i !== idx))
+                        }}
+                        className="ml-0.5 text-blue-400 hover:text-blue-600"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={designTokensInput}
+                    onChange={(e) => setDesignTokensInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === ",") && designTokensInput.trim()) {
+                        e.preventDefault()
+                        const token = normalizeDesignToken(designTokensInput)
+                        if (token && !designTokensList.includes(token)) {
+                          setDesignTokensMixed(false)
+                          setDesignTokensList([...designTokensList, token])
+                        }
+                        setDesignTokensInput("")
+                      } else if (e.key === "Backspace" && !designTokensInput && designTokensList.length > 0) {
+                        setDesignTokensMixed(false)
+                        setDesignTokensList(designTokensList.slice(0, -1))
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!designTokensInput.trim()) return
+                      const token = normalizeDesignToken(designTokensInput)
+                      if (token && !designTokensList.includes(token)) {
+                        setDesignTokensMixed(false)
+                        setDesignTokensList([...designTokensList, token])
+                      }
+                      setDesignTokensInput("")
+                    }}
+                    placeholder={
+                      designTokensList.length === 0
+                        ? designTokensMixed
+                          ? "Multiple values"
+                          : "Design tokens (press , or Enter)"
+                        : ""
+                    }
+                    className="flex-1 min-w-[80px] text-[12px] outline-none bg-transparent"
+                  />
                 </div>
               </div>
 

@@ -78,14 +78,14 @@ export const ColorList = ({
         </div>
       )}
 
-      <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+      <div className="space-y-1.5 min-w-0 overflow-x-hidden">
         {Array.isArray(colors) &&
           colors.map((item, i) => {
             const isSelected = activeColors.includes(i)
             return (
               <div
                 key={`${item.color._id}_${i}`}
-                className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${
+                className={`group flex items-stretch gap-2 p-2 rounded-lg border transition-all min-w-0 ${
                   isSelected
                     ? 'border-gray-300 bg-gray-50'
                     : 'border-gray-100 hover:border-gray-200'
@@ -93,7 +93,7 @@ export const ColorList = ({
               >
                 <button
                   onClick={() => onCheckboxClick(i)}
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                  className={`w-5 h-5 self-center rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                     isSelected
                       ? 'bg-gray-900 border-gray-900'
                       : 'border-gray-300 hover:border-gray-400'
@@ -106,7 +106,7 @@ export const ColorList = ({
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
                       <div
-                        className="w-9 h-9 rounded-md border border-gray-200 flex-shrink-0 cursor-pointer shadow-sm"
+                        className="w-9 h-9 self-center rounded-md border border-gray-200 flex-shrink-0 cursor-pointer shadow-sm"
                         style={getBackgroundStyle(item.color)}
                       />
                     </Tooltip.Trigger>
@@ -174,10 +174,10 @@ export const ColorList = ({
                   </Tooltip.Root>
                 </Tooltip.Provider>
 
-                <div className="flex-grow flex flex-col gap-1">
+                <div className="flex-1 min-w-0 min-h-9 flex flex-col gap-1 self-stretch justify-center">
                   <input
                     type="text"
-                    className="w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-md bg-white focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full h-9 min-w-0 box-border px-2.5 text-[12px] border border-gray-200 rounded-md bg-white focus:outline-none focus:border-gray-400 transition-colors"
                     placeholder="Color name..."
                     value={item.color.slash_naming || ""}
                     onChange={(e) =>
@@ -199,10 +199,13 @@ export const ColorList = ({
                 </div>
 
                 <button
-                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                  type="button"
+                  className="self-center w-6 h-6 flex items-center justify-center rounded-full text-gray-400 opacity-55 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                   onClick={() => onRemoveColor(i)}
+                  aria-label="Remove color"
+                  title="Remove"
                 >
-                  <X size={14} />
+                  <X size={12} strokeWidth={2.5} />
                 </button>
               </div>
             )

@@ -129,7 +129,7 @@ export const FolderSelectionModal = ({
   }, [isOpen, selectedColors])
 
   const { data: allColorData, isLoading: isLoadingNonFoldered } = useQuery({
-    queryKey: ["all-color-data", isOpen],
+    queryKey: ["all-color-data", state.activeWorkspaceId, isOpen],
     queryFn: async () => {
       const response = await axiosInstance.get(
         "/api/database-sheets/all-color-data",
@@ -164,7 +164,7 @@ export const FolderSelectionModal = ({
       }
       return data
     },
-    enabled: isOpen && !!state.user?.jwtToken,
+    enabled: isOpen && !!state.user?.jwtToken && !!state.activeWorkspaceId,
   })
 
   const foldersFlat = foldersData?.folders || []

@@ -5,52 +5,32 @@ import { LogIn } from "lucide-react"
 import { SECTION_MENU_ITEMS } from "@/v2/constants/sectionMenu"
 import { FolderSheetSelector } from "./MainMenu/FolderSheetSelector"
 import { config } from "@/v2/others/config"
-import { fetchWorkspaces, type Workspace } from "@/v2/api/workspaces.api"
 
 interface Props {
   setTab: (tab: string | null) => void
   onPickColor: () => void
   onPickColorFromBrowser: () => void
+  onStartSnapshot: () => void
 }
 
-const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => {
+const MainMenu: FC<Props> = ({
+  setTab,
+  onPickColor,
+  onPickColorFromBrowser,
+  onStartSnapshot,
+}) => {
   const { state, dispatch } = useGlobalState()
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null)
   const [workspaceAvatarFailed, setWorkspaceAvatarFailed] = useState(false)
-
-  useEffect(() => {
-    const jwtToken = state.user?.jwtToken
-    if (!jwtToken) {
-      setActiveWorkspace(null)
-      return
-    }
-    let cancelled = false
-    const loadWorkspace = async () => {
-      try {
-        const stored = await chrome.storage.local.get("activeWorkspaceId")
-        const workspaceId = typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null
-        const workspaces = await fetchWorkspaces(jwtToken)
-        if (!cancelled) setActiveWorkspace(workspaces.find((item) => item._id === workspaceId) || null)
-      } catch {
-        if (!cancelled) setActiveWorkspace(null)
-      }
-    }
-    void loadWorkspace()
-    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
-      if (areaName === "local" && changes.activeWorkspaceId) void loadWorkspace()
-    }
-    chrome.storage.onChanged.addListener(handleStorageChange)
-    return () => {
-      cancelled = true
-      chrome.storage.onChanged.removeListener(handleStorageChange)
-    }
-  }, [state.user?.jwtToken])
+  const activeWorkspace = useMemo(
+    () => state.workspaces.find((workspace) => workspace._id === state.activeWorkspaceId) ?? null,
+    [state.workspaces, state.activeWorkspaceId],
+  )
 
   useEffect(() => {
     setWorkspaceAvatarFailed(false)
   }, [activeWorkspace?._id, activeWorkspace?.avatarUrl])
 
-  const workspaceInitials = (workspace: Workspace | null) => {
+  const workspaceInitials = (workspace: { name?: string } | null) => {
     const words = String(workspace?.name || "WS").trim().split(/\s+/).filter(Boolean)
     return words.length > 1
       ? `${words[0][0]}${words[1][0]}`.toUpperCase()
@@ -144,6 +124,7 @@ const MainMenu: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) =>
                 const handleClick = () => {
                   if (item.actionKey === "pickColor") onPickColor()
                   else if (item.actionKey === "pickFromBrowser") onPickColorFromBrowser()
+                  else if (item.actionKey === "snapshot") onStartSnapshot()
                   else if (item.menuName != null) setTab(item.menuName)
                 }
                 return (

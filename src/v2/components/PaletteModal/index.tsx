@@ -12,6 +12,18 @@ import {
   applyHarmonyToPalette,
   getHarmonyDisplayName,
 } from "@/v2/helpers/colorHarmonies"
+import {
+  harmonizeAfterCountChange,
+  harmonizeAfterInsert,
+  isHarmonyActive,
+  reharmonizePalette,
+  resolveBaseIndexAfterRemove,
+  resolveHarmonyBaseIndex,
+  resolveHarmonyAfterCountChange,
+  resolvePickerIndexAfterMove,
+  shouldBreakHarmonyOnRemove,
+  shouldResetHarmonyAfterCountChange,
+} from "@/v2/helpers/harmonyLifecycle"
 import ColorsSection from "./ColorsSection"
 import ColorEditSection from "./ColorEditSection"
 import FormInputs from "./FormInputs"
@@ -127,6 +139,7 @@ interface GradientData {
     slash_naming: string
     url: string
     tags: string[]
+    designTokens?: string[]
     comments: string
     ranking: number
   }
@@ -146,6 +159,7 @@ const createDefaultGradient = (): GradientData => ({
     slash_naming: "",
     url: "",
     tags: [],
+    designTokens: [],
     comments: "",
     ranking: 0,
   },
@@ -205,6 +219,11 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     onStateChange,
   } = props
   const { state, dispatch } = useGlobalState()
+  const activeWorkspaceId = state.activeWorkspaceId
+  const mutationHeaders = {
+    Authorization: `Bearer ${state.user?.jwtToken ?? ""}`,
+    ...(activeWorkspaceId ? { "X-Workspace-Id": activeWorkspaceId } : {}),
+  }
   const toast = useToast()
   const queryClient = useQueryClient()
   const { data: foldersForColorSync } = useGetFolders(true)
@@ -222,21 +241,9 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([])
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [internalColorMode, setInternalColorMode] = useState<GradientMode>("solid")
   const [gradient, setGradient] = useState<GradientData>(createDefaultGradient())
   const [harmonyType, setHarmonyType] = useState<string>(HARMONY_TYPES.CUSTOM)
-
-  useEffect(() => {
-    void chrome.storage.local.get("activeWorkspaceId").then((stored) => {
-      setActiveWorkspaceId(typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null)
-    })
-  }, [])
-
-  const mutationHeaders = {
-    Authorization: `Bearer ${state.user?.jwtToken}`,
-    "X-Workspace-Id": activeWorkspaceId || "",
-  }
 
   // Use external state if provided, otherwise use internal
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab
@@ -394,10 +401,22 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
   const handleColorChange = (color: any, editIndex?: number) => {
     const idx =
-      typeof editIndex === "number" && editIndex >= 0 && editIndex < colors.length
+      typeof editIndex === "number" &&
+      editIndex >= 0 &&
+      editIndex < colors.length
         ? editIndex
         : colorPickerIndex
     if (idx === null || idx === undefined || !colors[idx]) return
+
+    if (isHarmonyActive(harmonyType) && colors.length > 1) {
+      const newColors = [...colors]
+      newColors[idx] = color
+      const updated = reharmonizePalette(newColors, harmonyType, idx)
+      setColors(updated)
+      setColorPickerIndex(idx)
+      return
+    }
+
     const newColors = [...colors]
     newColors[idx] = color
     setColors(newColors)
@@ -412,26 +431,60 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     setHarmonyType(newHarmonyType)
   }
 
-  const harmonizePaletteAfterAdd = (nextColors: typeof colors) => {
-    if (!nextColors || nextColors.length === 0) return nextColors
-    if (harmonyType === HARMONY_TYPES.CUSTOM) return nextColors
-
-    // Keep the first swatch as the base and re-derive the rest of the palette.
-    return applyHarmonyToPalette(nextColors, harmonyType, 0)
+  const harmonizePaletteAfterAdd = (
+    nextColors: typeof colors,
+    afterIndex: number | null = null,
+  ) => {
+    const baseIndex = resolveHarmonyBaseIndex(
+      colorPickerIndex,
+      nextColors.length,
+    )
+    if (typeof afterIndex === "number" && afterIndex >= 0) {
+      return harmonizeAfterInsert(
+        nextColors,
+        harmonyType,
+        afterIndex,
+        baseIndex,
+      )
+    }
+    return harmonizeAfterCountChange(nextColors, harmonyType, baseIndex)
   }
 
   const handleApplyHarmony = (
     harmonyTypeToApply: string,
     { isReapply = false }: { isReapply?: boolean } = {},
   ) => {
-    if (harmonyTypeToApply === HARMONY_TYPES.CUSTOM || colors.length === 0) return
-    const baseColorIndex = colorPickerIndex !== null ? colorPickerIndex : 0
-    const updatedColors = applyHarmonyToPalette(colors, harmonyTypeToApply, baseColorIndex)
+    if (harmonyTypeToApply === HARMONY_TYPES.CUSTOM || colors.length === 0)
+      return
+    const baseColorIndex = resolveHarmonyBaseIndex(
+      colorPickerIndex,
+      colors.length,
+    )
+    const updatedColors = applyHarmonyToPalette(
+      colors,
+      harmonyTypeToApply,
+      baseColorIndex,
+    )
     setColors(updatedColors)
+    // Complementary / Analogous / Triad / Split / Double Split / Compound / Mono / Shades anchor at strip 0.
+    if (
+      harmonyTypeToApply === HARMONY_TYPES.COMPLEMENTARY ||
+      harmonyTypeToApply === HARMONY_TYPES.ANALOGOUS ||
+      harmonyTypeToApply === HARMONY_TYPES.TRIAD ||
+      harmonyTypeToApply === HARMONY_TYPES.SPLIT_COMPLEMENTARY ||
+      harmonyTypeToApply === HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY ||
+      harmonyTypeToApply === HARMONY_TYPES.COMPOUND ||
+      harmonyTypeToApply === HARMONY_TYPES.MONOCHROMATIC ||
+      harmonyTypeToApply === HARMONY_TYPES.SHADES
+    ) {
+      setColorPickerIndex(0)
+    }
     const name = getHarmonyDisplayName(harmonyTypeToApply)
     toast.display(
       "success",
-      isReapply ? `${name} reapplied using the selected color as base.` : `${name} harmony applied!`,
+      isReapply
+        ? `${name} reapplied using the selected color as base.`
+        : `${name} harmony applied!`,
     )
   }
 
@@ -441,19 +494,88 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
   }
 
   const handleAddColor = (idx: number) => {
-    if (colors.length < 10) {
-      const nextColors = [
-        ...colors.slice(0, idx + 1),
-        createDefaultColorObject(),
-        ...colors.slice(idx + 1),
-      ]
-      setColors(harmonizePaletteAfterAdd(nextColors))
+    if (colors.length >= 10) return
+
+    // Complementary / Analogous / Triad / Split / Double Split / Compound / Mono / Shades: append then reharmonize.
+    if (
+      harmonyType === HARMONY_TYPES.COMPLEMENTARY ||
+      harmonyType === HARMONY_TYPES.ANALOGOUS ||
+      harmonyType === HARMONY_TYPES.TRIAD ||
+      harmonyType === HARMONY_TYPES.SPLIT_COMPLEMENTARY ||
+      harmonyType === HARMONY_TYPES.DOUBLE_SPLIT_COMPLEMENTARY ||
+      harmonyType === HARMONY_TYPES.COMPOUND ||
+      harmonyType === HARMONY_TYPES.MONOCHROMATIC ||
+      harmonyType === HARMONY_TYPES.SHADES
+    ) {
+      const nextColors = [...colors, createDefaultColorObject()]
+      setColors(harmonizePaletteAfterAdd(nextColors, colors.length - 1))
+      return
     }
+
+    const nextColors = [
+      ...colors.slice(0, idx + 1),
+      createDefaultColorObject(),
+      ...colors.slice(idx + 1),
+    ]
+    setColors(harmonizePaletteAfterAdd(nextColors, idx))
   }
 
   const handleRemoveColor = (idx: number) => {
-    setColors(colors.filter((_, i) => i !== idx))
-    setColorPickerIndex(0)
+    const next = colors.filter((_, i) => i !== idx)
+    if (next.length < 2) {
+      setColors(next)
+      setColorPickerIndex(0)
+      setHarmonyType(HARMONY_TYPES.CUSTOM)
+      return
+    }
+
+    // Analogous / Compound: any remove breaks the rule → Custom (keep hexes, no re-layout).
+    if (shouldBreakHarmonyOnRemove(harmonyType)) {
+      const newBase = resolveBaseIndexAfterRemove(
+        idx,
+        resolveHarmonyBaseIndex(colorPickerIndex, colors.length),
+      )
+      setColorPickerIndex(newBase)
+      setHarmonyType(HARMONY_TYPES.CUSTOM)
+      setColors(next)
+      const brokenName =
+        harmonyType === HARMONY_TYPES.COMPOUND ? "Compound" : "Analogous"
+      toast.display(
+        "info",
+        `Switched to Custom — ${brokenName} was broken by removing a color.`,
+      )
+      return
+    }
+
+    const currentBase = resolveHarmonyBaseIndex(
+      colorPickerIndex,
+      colors.length,
+    )
+    const newBase = resolveBaseIndexAfterRemove(idx, currentBase)
+    setColorPickerIndex(newBase)
+
+    const nextHarmony = resolveHarmonyAfterCountChange(
+      harmonyType,
+      next.length,
+    )
+    const harmonyReset = shouldResetHarmonyAfterCountChange(
+      harmonyType,
+      next.length,
+    )
+    setHarmonyType(nextHarmony)
+
+    if (isHarmonyActive(nextHarmony)) {
+      setColors(reharmonizePalette(next, nextHarmony, newBase))
+    } else {
+      setColors(next)
+    }
+
+    if (harmonyReset) {
+      toast.display(
+        "info",
+        "Switched to Custom — not enough swatches for the previous harmony.",
+      )
+    }
   }
 
   const moveColor = (dragIndex: number, hoverIndex: number) => {
@@ -461,7 +583,23 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
     const newColors = [...colors]
     newColors.splice(dragIndex, 1)
     newColors.splice(hoverIndex, 0, dragColor)
-    setColors(newColors)
+
+    const currentBase = resolveHarmonyBaseIndex(
+      colorPickerIndex,
+      colors.length,
+    )
+    const newBase = resolvePickerIndexAfterMove(
+      dragIndex,
+      hoverIndex,
+      currentBase,
+    )
+    setColorPickerIndex(newBase)
+
+    if (isHarmonyActive(harmonyType)) {
+      setColors(reharmonizePalette(newColors, harmonyType, newBase))
+    } else {
+      setColors(newColors)
+    }
   }
 
   const handleAddColorToPalette = (
@@ -502,11 +640,13 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
       if (index !== null) {
         nextColors.splice(index, 0, colorObject)
+        setColors(harmonizePaletteAfterAdd(nextColors, Math.max(0, index - 1)))
       } else {
         nextColors.push(colorObject)
+        setColors(
+          harmonizePaletteAfterAdd(nextColors, nextColors.length - 2),
+        )
       }
-
-      setColors(harmonizePaletteAfterAdd(nextColors))
     }
   }
 
@@ -526,7 +666,15 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
 
     const newColors = [...colors]
     newColors[index] = colorObject
-    setColors(newColors)
+    if (isHarmonyActive(harmonyType) && newColors.length > 1) {
+      const baseIndex = resolveHarmonyBaseIndex(
+        colorPickerIndex,
+        newColors.length,
+      )
+      setColors(reharmonizePalette(newColors, harmonyType, baseIndex))
+    } else {
+      setColors(newColors)
+    }
   }
 
   const handleApplySnapshot = (snapshotColors: any[]) => {
@@ -675,18 +823,17 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   comments: gradient.metadata.comments || "",
                   slash_naming: gradient.metadata.slash_naming || "",
                   tags: parseTags(gradient.metadata.tags || []),
+                  designTokens: gradient.metadata.designTokens || [],
                   additionalColumns: [],
                   timestamp: timestamp * 1000,
                 },
               },
-              {
-                headers: {
-                  ...mutationHeaders,
-                },
-              }
+                { headers: mutationHeaders }
             )
             const gradientResult = response?.data?.data ?? response?.data
-            if (gradientResult?.err || !gradientResult?.color) throw new Error("Malformed gradient update response")
+            if (gradientResult?.err || !gradientResult?.color) {
+              throw new Error("Malformed gradient update response")
+            }
             toast.display("success", "Gradient updated!")
           } else {
             const response = await axiosInstance.post(
@@ -706,15 +853,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                   comments: gradient.metadata.comments || "",
                   slash_naming: gradient.metadata.slash_naming || "",
                   tags: parseTags(gradient.metadata.tags || []),
+                  designTokens: gradient.metadata.designTokens || [],
                   additionalColumns: [],
                 },
               },
-              {
-                headers: mutationHeaders,
-              }
+              { headers: mutationHeaders }
             )
             const gradientResult = response?.data?.data ?? response?.data
-            if (gradientResult?.err || !gradientResult?.createdColor) throw new Error("Malformed gradient creation response")
+            if (gradientResult?.err || !gradientResult?.createdColor) {
+              throw new Error("Malformed gradient creation response")
+            }
             toast.display("success", "Gradient created!")
           }
           onSuccess && onSuccess([gradient])
@@ -768,6 +916,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 comments: colorData.comments || "",
                 slash_naming: colorData.slash_naming || "",
                 tags: parseTags(colorData.tags || []),
+                designTokens: colorData.designTokens || [],
                 additionalColumns: colorData.additionalColumns || [],
                 timestamp: timestamp * 1000, // Convert to milliseconds
               },
@@ -775,7 +924,9 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             { headers: mutationHeaders }
           )
           const colorResult = response?.data?.data ?? response?.data
-          if (colorResult?.err || !colorResult?.color) throw new Error("Malformed color update response")
+          if (colorResult?.err || !colorResult?.color) {
+            throw new Error("Malformed color update response")
+          }
           toast.display("success", "Color updated!")
         } else {
           // Don't use sheetUrl when generating - always set to null
@@ -807,13 +958,16 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 comments: colorData.comments || "",
                 slash_naming: colorData.slash_naming || "",
                 tags: parseTags(colorData.tags || []),
+                designTokens: colorData.designTokens || [],
                 additionalColumns: colorData.additionalColumns || [],
               },
             },
             { headers: mutationHeaders }
           )
           const colorResult = response?.data?.data ?? response?.data
-          if (colorResult?.err || !colorResult?.createdColor) throw new Error("Malformed color creation response")
+          if (colorResult?.err || !colorResult?.createdColor) {
+            throw new Error("Malformed color creation response")
+          }
           toast.display("success", "Color created!")
         }
         onSuccess && onSuccess(colors)
@@ -842,6 +996,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               originalColor.comments !== color.comments ||
               originalColor.slash_naming !== color.slash_naming ||
               JSON.stringify(originalColor.tags) !== JSON.stringify(color.tags) ||
+              JSON.stringify(originalColor.designTokens) !== JSON.stringify(color.designTokens) ||
               JSON.stringify(originalColor.additionalColumns) !== JSON.stringify(color.additionalColumns)
 
             if (hasChanged) {
@@ -855,6 +1010,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
                 comments: color.comments,
                 slash_naming: color.slash_naming,
                 tags: parseTags(color.tags),
+                designTokens: color.designTokens || [],
                 additionalColumns: color.additionalColumns,
               })
             }
@@ -869,6 +1025,7 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
               comments: color.comments,
               slash_naming: color.slash_naming,
               tags: parseTags(color.tags),
+              designTokens: color.designTokens || [],
               additionalColumns: color.additionalColumns,
             })
           }
@@ -882,11 +1039,15 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             updatedColors: updatedColors,
             folderIds: selectedFolderIds,
           }
-          await axiosInstance.put(
+          const response = await axiosInstance.put(
             `${config.api.endpoints.paletteUpdate}/${paletteId}`,
             updateData,
             { headers: mutationHeaders }
           )
+          const paletteResult = response?.data?.data ?? response?.data
+          if (paletteResult?.err || !paletteResult?.palette) {
+            throw new Error("Malformed palette update response")
+          }
           toast.display("success", isSingleColor ? "Color updated!" : "Palette updated!")
         } else {
           const createData = {
@@ -899,13 +1060,14 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
           const response = await axiosInstance.post(
             config.api.endpoints.paletteCreate,
             createData,
-            {
-              headers: mutationHeaders,
-            }
+            { headers: mutationHeaders }
           )
           const paletteResult = response?.data?.data ?? response?.data
-          if (paletteResult?.err || !paletteResult?.palette) throw new Error("Malformed palette creation response")
+          if (paletteResult?.err || !paletteResult?.palette) {
+            throw new Error("Malformed palette creation response")
+          }
           toast.display("success", isSingleColor ? "Color created!" : "Palette created!")
+
         }
 
         if (!isEditing) {
@@ -935,6 +1097,10 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
       toast.display("error", "Please log in to save colors")
       return
     }
+    if (!activeWorkspaceId) {
+      toast.display("error", "Select a workspace before saving colors")
+      return
+    }
 
     setSaveSelectedSaving(true)
     try {
@@ -961,14 +1127,18 @@ const PaletteModal = forwardRef<PaletteModalHandle, PaletteModalProps>((props, r
             comments: colorData.comments || "",
             slash_naming: colorData.slash_naming || "",
             tags: parseTags(colorData.tags || []),
+            designTokens: colorData.designTokens || [],
             additionalColumns: colorData.additionalColumns || [],
           },
         },
-            { headers: mutationHeaders }
+        { headers: mutationHeaders }
       )
 
       const result = response?.data?.data ?? response?.data
       const created = result?.createdColor
+      if (result?.err || !created) {
+        throw new Error("Malformed color creation response")
+      }
       const createdHex = created?.hex ?? colorData.hex
       if (created && createdHex) {
         const parsed = {

@@ -2,12 +2,15 @@ import { FC, useState, useRef, useCallback } from "react"
 import { ArrowLeft, ChevronDown } from "lucide-react"
 import { useClickOutside } from "@/v2/hooks/useClickOutside"
 import { SECTION_MENU_ITEMS } from "@/v2/constants/sectionMenu"
+import { startSnapshotCapture } from "@/v2/helpers/snapshot"
+import { useToast } from "@/v2/hooks/useToast"
 
 export interface SectionHeaderProps {
   title: string
   setTab: (tab: string | null) => void
   onPickColor?: () => void
   onPickColorFromBrowser?: () => void
+  onStartSnapshot?: () => void
   extraRight?: React.ReactNode
   extraRightClassName?: string
   /** Optional class for the header container */
@@ -20,6 +23,7 @@ const SectionHeader: FC<SectionHeaderProps> = ({
   setTab,
   onPickColor,
   onPickColorFromBrowser,
+  onStartSnapshot,
   extraRight,
   className = "",
   extraRightClassName = "",
@@ -28,6 +32,7 @@ const SectionHeader: FC<SectionHeaderProps> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [headingHover, setHeadingHover] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const toast = useToast()
 
   useClickOutside(dropdownRef, useCallback(() => setDropdownOpen(false), []))
 
@@ -36,6 +41,14 @@ const SectionHeader: FC<SectionHeaderProps> = ({
       onPickColor()
     } else if (item.actionKey === "pickFromBrowser" && onPickColorFromBrowser) {
       onPickColorFromBrowser()
+    } else if (item.actionKey === "snapshot") {
+      if (onStartSnapshot) {
+        onStartSnapshot()
+      } else {
+        startSnapshotCapture({
+          onError: (message) => toast.display("error", message),
+        })
+      }
     } else if (item.menuName != null) {
       setTab(item.menuName)
     }

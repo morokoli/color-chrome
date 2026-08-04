@@ -10,7 +10,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
+import { fetchWorkspaces } from "@/v2/api/workspaces.api"
+import { setActiveWorkspaceId as setWorkspaceContextId } from "@/v2/utils/workspaceContext"
 import { openEyeDropper } from "@/v2/helpers/colorPicker"
+import { startSnapshotCapture } from "@/v2/helpers/snapshot"
 import Copy from "./Copy"
 import Comment from "./Comment"
 import MainMenu from "./MainMenu"
@@ -21,6 +24,7 @@ import { PageColorExtraction } from "./PageColorExtraction"
 import Generator from "./Generator"
 import BulkEditor from "./BulkEditor"
 import { ExportToSheet } from "./ExportToSheet"
+import Snapshot from "./Snapshot"
 
 const queryClient = new QueryClient()
 
@@ -34,6 +38,50 @@ const App = () => {
   const stateRef = useRef(state)
   stateRef.current = state
 
+  const loadWorkspaces = useCallback(async (jwtToken: string) => {
+    try {
+      const { workspaces, activeWorkspaceId } = await fetchWorkspaces(jwtToken)
+      const currentId = stateRef.current.activeWorkspaceId
+
+      dispatch({
+        type: "SET_WORKSPACES",
+        payload: {
+          workspaces,
+          activeWorkspaceId,
+          syncFromBackend: !currentId,
+        },
+      })
+
+      if (!activeWorkspaceId) return
+
+      if (!currentId) {
+        dispatch({ type: "MIGRATE_HISTORY_TO_WORKSPACE", payload: activeWorkspaceId })
+        return
+      }
+
+      if (currentId !== activeWorkspaceId) {
+        dispatch({ type: "SET_ACTIVE_WORKSPACE", payload: activeWorkspaceId })
+        queryClient.invalidateQueries({ queryKey: ["folders"] })
+        queryClient.invalidateQueries({ queryKey: ["all-color-data"] })
+        queryClient.invalidateQueries({ queryKey: ["colors-and-palettes"] })
+      }
+    } catch (err) {
+      console.error("[ColorBoard:App] failed to load workspaces", err)
+    }
+  }, [])
+
+  useEffect(() => {
+    setWorkspaceContextId(state.activeWorkspaceId)
+  }, [state.activeWorkspaceId])
+
+  useEffect(() => {
+    if (!state.user?.jwtToken) {
+      setWorkspaceContextId(null)
+      return
+    }
+    loadWorkspaces(state.user.jwtToken)
+  }, [state.user?.jwtToken, loadWorkspaces])
+
   // Sync parsedData to colorHistory on mount (fixes persisted/corrupted state where lengths differ)
   useEffect(() => {
     if (state.colorHistory.length !== state.parsedData.length) {
@@ -44,9 +92,8 @@ const App = () => {
 
   // Helper to save color to database (no sheet integration)
   const saveColorToDatabase = useCallback(async (hexColor: string, source: string) => {
-    const { user, selectedFolders, selectedFile, files } = state
-    const selectedFileData = files.find((file) => file.spreadsheetId === selectedFile)
-    if (!user?.jwtToken) return
+    const { user, selectedFolders, activeWorkspaceId } = state
+    if (!user?.jwtToken || !activeWorkspaceId) return
 
     const colorData = {
       timestamp: new Date().valueOf(),
@@ -69,20 +116,18 @@ const App = () => {
         sheetName: null,
         sheetId: null,
         row: colorData,
-        folderIds: selectedFolders || [],
+        folderIds: Array.isArray(selectedFolders) ? selectedFolders : [],
       },
       {
         headers: {
           Authorization: `Bearer ${user.jwtToken}`,
-          ...(selectedFileData?.workspaceId
-            ? { "X-Workspace-Id": selectedFileData.workspaceId }
-            : {}),
+          "X-Workspace-Id": activeWorkspaceId,
         },
       }
     )
 
-    // The backend creates folder-targeted assets atomically when folderIds are
-    // supplied. Never create a workspace asset and then copy it per folder.
+    // Folder-targeted creation is atomic on the backend. Do not create the
+    // asset first and then issue follow-up copy requests per folder.
     void promise.catch((error) => {
       console.error("Failed to save picked color:", error)
     })
@@ -243,6 +288,10 @@ const App = () => {
         setTab(null)
         chrome.storage.local.remove(['pickerCancelled', 'cancelledAt'])
       }
+      if (changes.openTab?.newValue === 'SNAPSHOT') {
+        setTab('SNAPSHOT')
+        chrome.storage.local.remove(['openTab'])
+      }
     }
 
     chrome.storage.onChanged.addListener(handleStorageChange)
@@ -278,15 +327,21 @@ const App = () => {
   }, [handlePickedColor])
 
   const syncColorPickerStateForBackground = () => {
-    const { user, selectedFolders } = state
+    const { user, selectedFolders, activeWorkspaceId } = state
     const payload = {
       jwtToken: user?.jwtToken || null,
       selectedFileData: null,
       selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
+      activeWorkspaceId: activeWorkspaceId || null,
       apiUrl: config.api.baseURL,
     }
     chrome.storage.local.set({ colorPickerState: payload })
-    chrome.runtime.sendMessage({ type: "COLOR_PICKER_STATE_SYNCED", payload }).catch(() => {})
+    chrome.runtime.sendMessage(
+      { type: "COLOR_PICKER_STATE_SYNCED", payload },
+      () => {
+        void chrome.runtime.lastError
+      },
+    )
   }
 
   const handlePickColor = () => {
@@ -300,6 +355,18 @@ const App = () => {
       } else {
         window.close()
       }
+    })
+  }
+
+  const handleStartSnapshot = () => {
+    syncColorPickerStateForBackground()
+    startSnapshotCapture({
+      onError: (message) => {
+        toastDispatch({
+          type: "DISPLAY",
+          payload: { type: "error", message },
+        })
+      },
     })
   }
 
@@ -372,7 +439,7 @@ const App = () => {
 
   // Sync state to chrome.storage.local for background script access (picked colors saved to selected folders)
   useEffect(() => {
-    const { user, selectedFile, files, selectedFolders } = state
+    const { user, selectedFile, files, selectedFolders, activeWorkspaceId } = state
     const selectedFileData = files.find(file => file.spreadsheetId === selectedFile)
 
     const colorPickerState = {
@@ -380,17 +447,16 @@ const App = () => {
       selectedFile: selectedFile || null,
       selectedFileData: selectedFileData ? {
         spreadsheetId: selectedFileData.spreadsheetId,
-        workspaceId: selectedFileData.workspaceId,
         sheetName: selectedFileData.sheets?.[0]?.name || '',
         sheetId: selectedFileData.sheets?.[0]?.id ?? 0,
       } : null,
-      activeWorkspaceId: selectedFileData?.workspaceId || null,
       selectedFolders: selectedFolders && selectedFolders.length > 0 ? selectedFolders : [],
+      activeWorkspaceId: activeWorkspaceId || null,
       apiUrl: config.api.baseURL,
     }
 
-    chrome.storage.local.set({ colorPickerState, activeWorkspaceId: selectedFileData?.workspaceId || null })
-  }, [state.user, state.selectedFile, state.files, state.selectedFolders])
+    chrome.storage.local.set({ colorPickerState })
+  }, [state.user, state.selectedFile, state.files, state.selectedFolders, state.activeWorkspaceId])
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -404,6 +470,7 @@ const App = () => {
               setTab={setTab}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}
+              onStartSnapshot={handleStartSnapshot}
             />
           </Show>
           <Show if={tab === "PICK_PANEL"}>
@@ -454,6 +521,14 @@ const App = () => {
               setTab={setTab}
               onPickColor={handlePickColor}
               onPickColorFromBrowser={handlePickColorFromBrowser}
+            />
+          </Show>
+          <Show if={tab === "SNAPSHOT"}>
+            <Snapshot
+              setTab={setTab}
+              onPickColor={handlePickColor}
+              onPickColorFromBrowser={handlePickColorFromBrowser}
+              onStartSnapshot={handleStartSnapshot}
             />
           </Show>
           <Show if={tab === "BULK_EDITOR"}>
