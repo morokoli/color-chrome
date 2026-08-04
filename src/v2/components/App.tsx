@@ -10,7 +10,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { colors } from "@/v2/helpers/colors"
 import { config } from "@/v2/others/config"
 import { axiosInstance } from "@/v2/hooks/useAPI"
-import { AddColorResponse } from "@/v2/types/api"
 import { fetchWorkspaces } from "@/v2/api/workspaces.api"
 import { setActiveWorkspaceId as setWorkspaceContextId } from "@/v2/utils/workspaceContext"
 import { openEyeDropper } from "@/v2/helpers/colorPicker"
@@ -93,8 +92,8 @@ const App = () => {
 
   // Helper to save color to database (no sheet integration)
   const saveColorToDatabase = useCallback(async (hexColor: string, source: string) => {
-    const { user, selectedFolders } = state
-    if (!user?.jwtToken) return
+    const { user, selectedFolders, activeWorkspaceId } = state
+    if (!user?.jwtToken || !activeWorkspaceId) return
 
     const colorData = {
       timestamp: new Date().valueOf(),
@@ -117,52 +116,21 @@ const App = () => {
         sheetName: null,
         sheetId: null,
         row: colorData,
+        folderIds: Array.isArray(selectedFolders) ? selectedFolders : [],
       },
       {
         headers: {
           Authorization: `Bearer ${user.jwtToken}`,
+          "X-Workspace-Id": activeWorkspaceId,
         },
       }
     )
 
-    const colorIdPromise: Promise<string | null> = promise
-      .then((response) => {
-        const apiResponse = response?.data as { success?: boolean; data?: AddColorResponse } | AddColorResponse
-        if (apiResponse && 'success' in apiResponse && apiResponse.success && apiResponse.data) {
-          return apiResponse.data.createdColor?._id || null
-        } else if (apiResponse && 'createdColor' in apiResponse) {
-          return (apiResponse as AddColorResponse).createdColor?._id || null
-        }
-        return null
-      })
-      .catch(() => null)
-
-    // Save to selected folders - ensure we always copy to ALL selected folders
-    if (selectedFolders && selectedFolders.length > 0) {
-      // Copy color to ALL selected folders (optimistic - all in parallel)
-      colorIdPromise.then((colorId) => {
-        if (colorId) {
-          // Copy to each selected folder
-          selectedFolders.forEach(folderId => {
-            axiosInstance.post(
-              `${config.api.endpoints.copyColorToFolder}/${folderId}/copy-color`,
-              { colorId },
-              {
-                headers: {
-                  Authorization: `Bearer ${user.jwtToken}`,
-                },
-              }
-            ).catch(err => {
-              console.error(`Failed to copy color to folder ${folderId}:`, err)
-            })
-          })
-        } else {
-          console.error("Failed to get color ID for folder copying")
-        }
-      }).catch(err => {
-        console.error("Failed to get color ID for folder copying:", err)
-      })
-    }
+    // Folder-targeted creation is atomic on the backend. Do not create the
+    // asset first and then issue follow-up copy requests per folder.
+    void promise.catch((error) => {
+      console.error("Failed to save picked color:", error)
+    })
   }, [state])
 
   // Handle picked color from custom magnifier

@@ -114,6 +114,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const toast = useToast()
   const queryClient = useQueryClient()
   const { state, dispatch } = useGlobalState()
+  const activeWorkspaceId = state.activeWorkspaceId
   const { colorHistory, parsedData } = state
   const [selectedColorIndices, setSelectedColorIndices] = useState<number[]>([]) // Multi-select
   const [editingColor, setEditingColor] = useState<string>('#ffffff')
@@ -168,6 +169,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       const response = await axiosInstance.get("/api/database-sheets/all-color-data", {
         headers: {
           Authorization: `Bearer ${state.user?.jwtToken}`,
+          ...(activeWorkspaceId ? { "X-Workspace-Id": activeWorkspaceId } : {}),
         },
       })
       return response.data?.data || response.data
@@ -258,26 +260,34 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
     if (!name || !state.user?.jwtToken) return
+    if (!activeWorkspaceId) {
+      toast.display("error", "Select a workspace before creating a folder")
+      return
+    }
     setIsCreatingFolderLoading(true)
     try {
       const response = await axiosInstance.post(
         config.api.endpoints.createFolder,
-        { name, colorIds: [], paletteIds: [] },
-        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+        { name, colorIds: [], paletteIds: [], visibility: "workspace" },
+        {
+          headers: {
+            Authorization: `Bearer ${state.user.jwtToken}`,
+            "X-Workspace-Id": activeWorkspaceId,
+          },
+        }
       )
       const folder = response.data?.folder ?? response.data
-      if (folder?._id) {
-        await queryClient.invalidateQueries({ queryKey: ['folders'] })
-        toast.display('success', 'Folder created')
-        setNewFolderName('')
-        setIsCreatingFolder(false)
-      }
+      if (!folder?._id) throw new Error("Malformed folder creation response")
+      await queryClient.invalidateQueries({ queryKey: ['folders'] })
+      toast.display('success', 'Folder created')
+      setNewFolderName('')
+      setIsCreatingFolder(false)
     } catch (err: any) {
       toast.display('error', err?.response?.data?.err || err?.response?.data?.message || 'Failed to create folder')
     } finally {
       setIsCreatingFolderLoading(false)
     }
-  }, [newFolderName, state.user?.jwtToken, queryClient, toast])
+  }, [activeWorkspaceId, newFolderName, state.user?.jwtToken, queryClient, toast])
 
   const renderFolderFooter = useCallback(() => {
     if (isCreatingFolder) {
@@ -678,9 +688,16 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     // Save to database if logged in
     if (state.user?.jwtToken) {
       const finalUrl = colorUrl === 'Manually created' ? 'Manually Added' : (colorUrl || currentTabUrl)
-      const folderIdsForCreate =
-        selectedFolderIds.length > 0 ? [selectedFolderIds[0]] : []
-      const auth = { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+      if (!activeWorkspaceId) {
+        toast.display("error", "Select a workspace before saving this color")
+        return
+      }
+      const auth = {
+        headers: {
+          Authorization: `Bearer ${state.user.jwtToken}`,
+          "X-Workspace-Id": activeWorkspaceId,
+        },
+      }
       try {
         const response = await axiosInstance.post(
           config.api.endpoints.addColor,
@@ -701,32 +718,20 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
               designTokens: designTokensList,
               additionalColumns: [],
             },
-            folderIds: folderIdsForCreate,
+            folderIds: selectedFolderIds,
           },
           auth
         )
         const apiResponse = response?.data?.data ?? response?.data
         const createdColor = apiResponse?.createdColor
         const newColorId = createdColor?._id ?? createdColor?.id
-        if (newColorId && selectedFolderIds.length > 1) {
-          await Promise.all(
-            selectedFolderIds.slice(1).map((fid) =>
-              axiosInstance.post(
-                `${config.api.endpoints.copyColorToFolder}/${fid}/copy-color`,
-                { colorId: String(newColorId) },
-                auth
-              )
-            )
-          )
+        if (apiResponse?.err || !createdColor || !newColorId) {
+          throw new Error("Malformed color creation response")
         }
-        if (createdColor) {
-          dispatch({
-            type: "ADD_COLOR_HISTORY",
-            payload: { hex: normalizedHex, parsed: createdColor },
-          })
-        } else {
-          dispatch({ type: "ADD_COLOR_HISTORY", payload: normalizedHex })
-        }
+        dispatch({
+          type: "ADD_COLOR_HISTORY",
+          payload: { hex: normalizedHex, parsed: createdColor },
+        })
         toast.display("success", "Color saved successfully")
         queryClient.invalidateQueries({ queryKey: ["folders"] })
       } catch {
@@ -768,10 +773,16 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
       }
     }
 
+    if (state.user?.jwtToken && !activeWorkspaceId) {
+      toast.display("error", "Select a workspace before updating this color")
+      return
+    }
+
     setUpdateLoading(true)
     try {
       const authHeaders = {
         Authorization: `Bearer ${state.user?.jwtToken ?? ""}`,
+        ...(activeWorkspaceId ? { "X-Workspace-Id": activeWorkspaceId } : {}),
       }
       let anyFolderChange = false
       let lastRowHex = colors.expandHex(editingColor)
@@ -830,6 +841,7 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
             comments: updatedColor.comments,
             ranking: updatedColor.ranking,
             tags: updatedColor.tags,
+            designTokens: updatedColor.designTokens ?? updatedColor.design_tokens ?? [],
             additionalColumns: updatedColor.additionalColumns ?? [],
           }
           dispatch({
@@ -941,14 +953,29 @@ const Comment: FC<Props> = ({ setTab, onPickColor, onPickColorFromBrowser }) => 
     })
 
     if (state.user?.jwtToken && colorIdsToDelete.length > 0) {
+      if (!activeWorkspaceId) {
+        toast.display("error", "Select a workspace before deleting colors")
+        return
+      }
       try {
         await axiosInstance.post(
           config.api.endpoints.deleteColors,
           { colorIds: colorIdsToDelete },
-          { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+          {
+            headers: {
+              Authorization: `Bearer ${state.user.jwtToken}`,
+              "X-Workspace-Id": activeWorkspaceId,
+            },
+          }
         )
       } catch (err: any) {
-        toast.display("error", err.response?.data?.error || "Failed to remove from database")
+        toast.display(
+          "error",
+          err?.response?.data?.err ||
+            err?.response?.data?.message ||
+            err?.response?.data?.error ||
+            "Failed to remove from database",
+        )
         return
       }
       queryClient.invalidateQueries({ queryKey: ["folders"] })

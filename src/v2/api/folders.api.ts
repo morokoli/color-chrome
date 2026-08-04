@@ -13,6 +13,7 @@ export interface Folder {
   colors?: Color[]
   createdAt?: string
   updatedAt?: string
+  visibility?: "workspace" | "restricted"
 }
 
 export interface Color {
@@ -51,6 +52,7 @@ export interface SelectedColor {
 }
 
 export interface GetFoldersResponse {
+  workspaceId?: string
   folders: Folder[]
   folderTree?: Folder[]
 }
@@ -99,19 +101,21 @@ function normalizeFoldersResponse(data: GetFoldersResponse): GetFoldersResponse 
   }
 }
 
-export const useGetFolders = (populate: boolean = true) => {
+export const useGetFolders = (populate: boolean = true, capability: 'read' | 'write' = 'read') => {
   const { state } = useGlobalState()
   const workspaceId = state.activeWorkspaceId
   return useQuery<GetFoldersResponse, Error>({
-    queryKey: ["folders", workspaceId, populate],
+    queryKey: ["folders", workspaceId, populate, capability],
     refetchOnMount: "always",
     queryFn: async () => {
       const response = await axiosInstance.get(config.api.endpoints.getFolders, {
         headers: {
           Authorization: `Bearer ${state.user?.jwtToken}`,
+          ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
         },
         params: {
           populate: populate ? "colors" : undefined,
+          capability: capability === "write" ? "write" : undefined,
         },
       })
       return normalizeFoldersResponse(response.data)

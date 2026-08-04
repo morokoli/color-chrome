@@ -79,6 +79,31 @@ interface SelectedColor {
 // Special ID for non-foldered option in dropdown
 const NON_FOLDERED_ID = "__non_foldered__"
 
+type MutationData = Record<string, unknown>
+
+const asMutationData = (value: unknown): MutationData | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  return value as MutationData
+}
+
+const assertMutationResponse = (
+  response: { data?: unknown },
+  fallbackMessage: string,
+): MutationData => {
+  const envelope = asMutationData(response?.data)
+  const data = asMutationData(envelope?.data) ?? envelope
+  const errorValue = data?.err
+  const messageValue = data?.message
+  if (!data || errorValue || data.success === false) {
+    throw new Error(
+      (typeof messageValue === "string" && messageValue) ||
+        (typeof errorValue === "string" && errorValue) ||
+        fallbackMessage,
+    )
+  }
+  return data
+}
+
 // Type for dropdown items (can be folder or non-foldered option)
 type SelectableItem = Folder | { _id: string; name: string; isNonFoldered: true }
 
@@ -87,6 +112,7 @@ const Left: React.FC = () => {
   const toast = useToast()
   const queryClient = useQueryClient()
   const { data: foldersData, isLoading, error, refetch } = useGetFolders(true)
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [selectedFolders, setSelectedFolders] = useState<Folder[]>([])
   const [includeNonFoldered, setIncludeNonFoldered] = useState(false)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
@@ -99,6 +125,14 @@ const Left: React.FC = () => {
   const [newFolderName, setNewFolderName] = useState("")
   const [isCreatingLoading, setIsCreatingLoading] = useState(false)
   const prevWorkspaceIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    void chrome.storage.local.get("activeWorkspaceId").then((stored) => {
+      setActiveWorkspaceId(
+        typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null,
+      )
+    })
+  }, [])
 
   // Fetch non-foldered colors using all-color-data endpoint which returns full color objects
   const { data: allColorData, isLoading: isLoadingNonFoldered } = useQuery({
@@ -478,22 +512,33 @@ const Left: React.FC = () => {
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
     if (!name || !state.user?.jwtToken) return
+    if (!activeWorkspaceId) {
+      toast.display("error", "Select a workspace before creating a folder")
+      return
+    }
     setIsCreatingLoading(true)
     try {
       const response = await axiosInstance.post(
         config.api.endpoints.createFolder,
-        { name, colorIds: [], paletteIds: [] },
-        { headers: { Authorization: `Bearer ${state.user.jwtToken}` } }
+        { name, colorIds: [], paletteIds: [], visibility: "workspace" },
+        {
+          headers: {
+            Authorization: `Bearer ${state.user.jwtToken}`,
+            "X-Workspace-Id": activeWorkspaceId,
+          },
+        },
       )
-      const folder = response.data?.folder ?? response.data
-      if (folder?._id) {
+      const data = assertMutationResponse(response, "Failed to create folder")
+      const folder = asMutationData(data.folder) ?? data
+      const folderId = typeof folder._id === "string" ? folder._id : null
+      if (folderId) {
         // Save new folder ID to localStorage before refetch so the
         // useEffect([foldersData]) picks it up and keeps it selected
         try {
           const saved = localStorage.getItem(bulkEditorFoldersKey(state.activeWorkspaceId))
           const ids: string[] = saved ? JSON.parse(saved) : []
-          if (!ids.includes(folder._id)) {
-            ids.push(folder._id)
+          if (!ids.includes(folderId)) {
+            ids.push(folderId)
             localStorage.setItem(
               bulkEditorFoldersKey(state.activeWorkspaceId),
               JSON.stringify(ids),
@@ -510,7 +555,7 @@ const Left: React.FC = () => {
     } finally {
       setIsCreatingLoading(false)
     }
-  }, [newFolderName, state.user?.jwtToken, queryClient, toast])
+  }, [activeWorkspaceId, newFolderName, state.user?.jwtToken, queryClient, toast])
 
   const renderDropdownFooter = useCallback(() => {
     if (isCreatingFolder) {
@@ -579,34 +624,42 @@ const Left: React.FC = () => {
     if (!folderActionType) return
 
     if (colorsToOperateOn.length === 0 || folderIds.length === 0) return
+    if (!activeWorkspaceId) {
+      toast.display("error", "Select a workspace before changing folder placement")
+      return
+    }
 
     const colorIds = colorsToOperateOn.map((item) => item.color._id)
     setActionLoading(folderActionType)
     try {
       if (folderActionType === "copy") {
-        await axiosInstance.post(
+        const response = await axiosInstance.post(
           config.api.endpoints.copyColorsToFolders,
           { folderIds, colorIds },
           {
             headers: {
               Authorization: `Bearer ${state.user?.jwtToken}`,
+              "X-Workspace-Id": activeWorkspaceId,
             },
-          }
+          },
         )
+        assertMutationResponse(response, "Failed to copy colors")
         toast.display(
           "success",
           `Successfully copied ${colorsToOperateOn.length} color(s) to ${folderIds.length} folder${folderIds.length !== 1 ? "s" : ""}`
         )
       } else if (folderActionType === "move") {
-        await axiosInstance.post(
+        const response = await axiosInstance.post(
           config.api.endpoints.moveColorsToFolders,
           { folderIds, colorIds },
           {
             headers: {
               Authorization: `Bearer ${state.user?.jwtToken}`,
+              "X-Workspace-Id": activeWorkspaceId,
             },
-          }
+          },
         )
+        assertMutationResponse(response, "Failed to move colors")
         toast.display(
           "success",
           `Successfully moved ${colorsToOperateOn.length} color(s) to ${folderIds.length} folder${folderIds.length !== 1 ? "s" : ""}`

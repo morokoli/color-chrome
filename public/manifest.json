@@ -20,6 +20,9 @@
   "cross_origin_opener_policy": {
     "value": "unsafe-none"
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob: https://*.supabase.co;"
+  },
   "action": {
     "default_popup": "index.html",
     "default_title": "Colors with You"

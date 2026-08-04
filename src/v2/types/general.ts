@@ -3,6 +3,7 @@ export type Workspace = {
   name: string
   isPersonal?: boolean
   role?: string
+  avatarUrl?: string | null
 }
 
 export type WorkspaceHistory = {
@@ -40,6 +41,7 @@ export type File = {
   fileName: string
   sheets: Sheet[]
   spreadsheetId: string
+  workspaceId?: string
   colorHistory: string[]
 }
 

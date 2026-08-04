@@ -16,10 +16,12 @@ export const ExtensionContainer: FC<Props> = (props) => {
     const adjustHeight = () => {
       if (!containerRef.current) return
 
-      const snapshotEl = containerRef.current.querySelector(".snapshot-container")
+      const fixedSurface = containerRef.current.querySelector(
+        ".snapshot-container, .generator-container",
+      )
       const root = document.getElementById("root")
 
-      if (snapshotEl) {
+      if (fixedSurface) {
         const fixed = { width: "800px", height: "600px" }
         for (const el of [document.body, document.documentElement, root]) {
           if (!el) continue

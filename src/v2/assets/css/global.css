@@ -336,8 +336,9 @@ input[type="checkbox"]:checked::before {
   padding-right: 0 !important;
 }
 
-/* Snapshot editor: fixed 800×600, no popup scrollbars */
-.snapshot-container {
+/* Fixed 800×600 popup surfaces: no page-level scrollbars */
+.snapshot-container,
+.generator-container {
   overflow: hidden;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -348,8 +349,11 @@ input[type="checkbox"]:checked::before {
 }
 
 body:has(.snapshot-container),
+body:has(.generator-container),
 html:has(.snapshot-container),
-#root:has(.snapshot-container) {
+html:has(.generator-container),
+#root:has(.snapshot-container),
+#root:has(.generator-container) {
   overflow: hidden !important;
   width: 800px !important;
   max-width: 800px !important;
@@ -360,10 +364,13 @@ html:has(.snapshot-container),
   box-sizing: border-box !important;
 }
 
-/* Belt-and-suspenders: never render popup scrollbars on the snapshot page */
+/* Belt-and-suspenders: never render popup scrollbars on fixed surfaces */
 body:has(.snapshot-container)::-webkit-scrollbar,
+body:has(.generator-container)::-webkit-scrollbar,
 html:has(.snapshot-container)::-webkit-scrollbar,
-#root:has(.snapshot-container)::-webkit-scrollbar {
+html:has(.generator-container)::-webkit-scrollbar,
+#root:has(.snapshot-container)::-webkit-scrollbar,
+#root:has(.generator-container)::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   display: none !important;

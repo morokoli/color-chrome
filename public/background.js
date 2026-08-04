@@ -40,15 +40,18 @@ async function saveColorToDatabase(hexColor, sourceUrl) {
     if (!state || !state.jwtToken) return null;
 
     const { jwtToken, selectedFileData, selectedFolders, apiUrl, activeWorkspaceId } = state;
+    const workspaceId = typeof activeWorkspaceId === 'string' ? activeWorkspaceId.trim() : '';
+    if (!workspaceId) {
+      console.warn('[ColorBoard:bg] Cannot save color without an active workspace');
+      return null;
+    }
     const folderIds = Array.isArray(selectedFolders) ? selectedFolders : [];
 
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${jwtToken}`,
+      'X-Workspace-Id': workspaceId,
     };
-    if (activeWorkspaceId) {
-      headers['X-Workspace-Id'] = activeWorkspaceId;
-    }
 
     const addRes = await fetch(`${apiUrl}/api/database-sheets/add-color`, {
       method: 'POST',
