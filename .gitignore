@@ -13,7 +13,6 @@ dist-ssr
 dist/
 
 # Editor directories and files
-.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -29,3 +28,4 @@ temp_auto_push.bat
 temp_interactive_push.bat
 
 
+branch_structure.json
